@@ -270,7 +270,9 @@ async def build_proxies(height: int = 540, project: str | None = None) -> dict:
     """Genera i proxy a bassa risoluzione: rende preview e frame molto piu' rapidi."""
     s = _store(project)
     done = await _off(proxy.ensure, s.project, height)
-    s.save()
+    s.version += 1      # i percorsi dei proxy cambiano le anteprime dell'interfaccia
+    if s.path:
+        s.save()
     return {"generati": len(done), "altezza": height}
 
 
@@ -420,9 +422,10 @@ def set_speed(clip: str, speed: float, keep_duration: bool = False,
     keep_duration=True mantiene la durata in timeline consumando piu'/meno sorgente.
     """
     s = _store(project)
-    c = s.set_speed(clip, speed, keep_duration)
-    if reverse is not None:
-        c = s.set_reverse(clip, reverse)
+    with s.batch():     # velocita' e verso sono un gesto: un undo solo
+        c = s.set_speed(clip, speed, keep_duration)
+        if reverse is not None:
+            c = s.set_reverse(clip, reverse)
     return _clip_view(c)
 
 

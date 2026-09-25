@@ -57,36 +57,43 @@ def cut_ranges(store, clip_id: str, ranges, ripple: bool = True) -> dict:
 
     tolti = 0.0
     rimossi = 0
-    for a, b in sorted(spans, reverse=True):
-        _, corrente = store.clip_or_die(clip_id)
-        if a <= corrente.start + MIN_PIECE and b >= corrente.end - MIN_PIECE:
-            store.remove_clip(clip_id)          # non resta niente da tenere
-            tolti += corrente.duration
+    # tutti i tagli di una clip sono un gesto: un undo solo, e se uno fallisce
+    # la clip torna intera invece di restare mezza tagliata
+    with store.batch():
+        for a, b in sorted(spans, reverse=True):
+            _, corrente = store.clip_or_die(clip_id)
+            if a <= corrente.start + MIN_PIECE and b >= corrente.end - MIN_PIECE:
+                store.remove_clip(clip_id)          # non resta niente da tenere
+                tolti += corrente.duration
+                rimossi += 1
+                return {"tagli": rimossi, "secondi_tolti": round(tolti, 3), "clip": []}
+            if b >= corrente.end - MIN_PIECE:        # taglio in coda
+                d = corrente.end - a
+                nuova = corrente.duration - d
+                if nuova < MIN_PIECE:
+                    continue
+                store.set_clip(clip_id, duration=round(nuova, 3))
+            elif a <= corrente.start + MIN_PIECE:    # taglio in testa
+                d = b - corrente.start
+                nuova = corrente.duration - d
+                if nuova < MIN_PIECE:
+                    continue
+                # d e' tempo di timeline: nella sorgente vale d*speed. E la
+                # clip parte dopo, non prima: senza ripple il resto deve
+                # restare dov'era, a sincrono con le altre tracce.
+                store.set_clip(clip_id, start=round(corrente.start + d, 3),
+                               in_=round(corrente.in_ + d * abs(corrente.speed or 1.0), 3),
+                               duration=round(nuova, 3))
+            else:                                    # taglio interno: due split
+                _, coda = store.split_clip(clip_id, a)
+                store.split_clip(coda.id, b)
+                store.remove_clip(coda.id)
+            tolti += b - a
             rimossi += 1
-            return {"tagli": rimossi, "secondi_tolti": round(tolti, 3), "clip": []}
-        if b >= corrente.end - MIN_PIECE:        # taglio in coda
-            d = corrente.end - a
-            nuova = corrente.duration - d
-            if nuova < MIN_PIECE:
-                continue
-            store.set_clip(clip_id, duration=round(nuova, 3))
-        elif a <= corrente.start + MIN_PIECE:    # taglio in testa
-            d = b - corrente.start
-            nuova = corrente.duration - d
-            if nuova < MIN_PIECE:
-                continue
-            store.set_clip(clip_id, in_=round(corrente.in_ + d, 3),
-                           duration=round(nuova, 3))
-        else:                                    # taglio interno: due split
-            _, coda = store.split_clip(clip_id, a)
-            store.split_clip(coda.id, b)
-            store.remove_clip(coda.id)
-        tolti += b - a
-        rimossi += 1
 
-    if ripple:
-        store.close_gaps(track.id)
-    ids = [c.id for c in store.clip_or_die(clip_id)[0].clips]
+        if ripple:
+            store.close_gaps(track.id)
+        ids = [c.id for c in store.clip_or_die(clip_id)[0].clips]
     return {"tagli": rimossi, "secondi_tolti": round(tolti, 3), "clip": ids}
 
 

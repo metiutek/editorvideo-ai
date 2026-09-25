@@ -19,6 +19,7 @@ dopo (cross-dissolve gratuito).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 from . import effects as fx
@@ -72,6 +73,7 @@ def n(x: float) -> str:
     return s or "0"
 
 
+@lru_cache(maxsize=1)
 def _default_font() -> str | None:
     return next((f for f in DEFAULT_FONTS if Path(f).exists()), None)
 
@@ -158,7 +160,10 @@ def slice_project(project: Project, start: float, end: float) -> Project:
             visible = c.duration - head - tail
             if visible <= 1e-6:
                 continue
-            c.in_ = c.in_ + head * abs(c.speed or 1.0)
+            # all'indietro la sorgente scorre al contrario: tagliare la testa in
+            # timeline accorcia la *fine* del tratto sorgente, tagliare la coda
+            # ne sposta l'inizio
+            c.in_ = c.in_ + (tail if c.reverse else head) * abs(c.speed or 1.0)
             c._slice_origin = clip_origin(c)
             c.start = max(0.0, c.start - start)
             c._slice_offset = clip_offset(c) + head
@@ -444,7 +449,9 @@ class _Builder:
         if not tr or tr.duration <= 0 or not tr.type.startswith("slide"):
             return "0", "0"
         d = min(tr.duration, clip.duration)
-        ts = clip.start + max(0.0, clip.duration - d)
+        # sul canvas: nei segmenti di anteprima la clip puo' essere entrata a
+        # meta', quindi l'inizio vero e' start meno l'offset gia' consumato
+        ts = clip.start - clip_offset(clip) + max(0.0, clip.duration - d)
         p = f"clip((t-{n(ts)})/{n(d)},0,1)"
         return {
             "slide_left": (f"-W*{p}", "0"),
@@ -566,7 +573,12 @@ class _Builder:
         # solo per l'audio, cosi' i due rami restano indipendenti
         idx = self.input_for(clip, media)
         off = clip_offset(clip)
-        f = ["asetpts=PTS-STARTPTS"]
+        f = []
+        if clip.reverse:
+            # il video va all'indietro: l'audio deve seguirlo, se no immagine e
+            # suono raccontano due cose diverse
+            f.append("areverse")
+        f.append("asetpts=PTS-STARTPTS")
         f += _atempo_chain(clip.speed)
         if off > 0:  # come per il video: il tempo locale riparte dall'offset
             f.append(f"asetpts=PTS-STARTPTS+{n(off)}/TB")
@@ -598,13 +610,17 @@ class _Builder:
                      tvar="t", duration=clip.duration, scale=self.scale)
         f.extend(fx.build_chain(clip.effects, ctx, "audio"))
 
-        f.append(f"atrim={n(off)}:{n(off + clip_visible(clip))}")
-        f.append("asetpts=PTS-STARTPTS")
+        # Dissolvenze prima del trim, sul tempo locale che nei segmenti di
+        # anteprima parte dall'offset: come per il video, una clip presa a meta'
+        # non deve ripartire con una dissolvenza d'ingresso, e quella d'uscita
+        # cade dove cade nel render completo.
         if clip.audio.fade_in > 0:
             f.append(f"afade=t=in:st=0:d={n(clip.audio.fade_in)}")
         if clip.audio.fade_out > 0:
             f.append(f"afade=t=out:st={n(max(0.0, clip.duration - clip.audio.fade_out))}"
                      f":d={n(clip.audio.fade_out)}")
+        f.append(f"atrim={n(off)}:{n(off + clip_visible(clip))}")
+        f.append("asetpts=PTS-STARTPTS")
         if clip.start > 1e-6:
             ms = int(round(clip.start * 1000))
             f.append(f"adelay={ms}|{ms}:all=1")

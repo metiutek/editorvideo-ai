@@ -18,6 +18,8 @@ corregge a mano e si annulla con undo. Un sidechain sarebbe una scatola nera.
 
 from __future__ import annotations
 
+import copy
+
 from . import analyze
 from .cleanup import merge_spans
 
@@ -41,25 +43,33 @@ def insert_clip(store, media_id: str, at: float, track_id: str | None = None,
     che ci si aspetta da un insert, non un sovrascrivere.
     """
     m = store.media_or_die(media_id)
-    if track_id is None:
-        track_id = store._default_track("audio" if m.kind == "audio" else "video")
-    track = store.track_for_edit(track_id)
-    dur = duration if duration is not None else max(0.1, m.duration - in_)
+    if duration is not None:
+        dur = duration
+    elif m.duration > 0:
+        dur = max(0.1, m.duration - in_)
+    else:
+        dur = 5.0       # immagine: come add_clip, non un lampo di 0.1s
 
-    a_cavallo = next((c for c in track.clips
-                      if c.start + EPS < at < c.end - EPS), None)
-    if a_cavallo is not None:
-        store.split_clip(a_cavallo.id, at)
+    # un gesto solo: un undo, e se qualcosa fallisce la timeline torna com'era
+    # invece di restare divisa e spinta a meta'
+    with store.batch():
+        if track_id is None:
+            track_id = store._default_track("audio" if m.kind == "audio" else "video")
+        track = store.track_for_edit(track_id)
+        a_cavallo = next((c for c in track.clips
+                          if c.start + EPS < at < c.end - EPS), None)
+        if a_cavallo is not None:
+            store.split_clip(a_cavallo.id, at)
 
-    track = store.track_or_die(track_id)
-    # da destra verso sinistra: cosi' nessuna clip finisce sopra un'altra mentre
-    # le si sposta una alla volta
-    for c in sorted(track.clips, key=lambda x: -x.start):
-        if c.start >= at - EPS:
-            store.move_clip(c.id, start=round(c.start + dur, 3))
+        track = store.track_or_die(track_id)
+        # da destra verso sinistra: cosi' nessuna clip finisce sopra un'altra
+        # mentre le si sposta una alla volta
+        for c in sorted(track.clips, key=lambda x: -x.start):
+            if c.start >= at - EPS:
+                store.move_clip(c.id, start=round(c.start + dur, 3))
 
-    nuova = store.add_clip(media_id, track_id=track_id, start=round(at, 3),
-                           in_=in_, duration=round(dur, 3))
+        nuova = store.add_clip(media_id, track_id=track_id, start=round(at, 3),
+                               in_=in_, duration=round(dur, 3))
     return {"clip": nuova.id, "start": nuova.start, "durata": nuova.duration,
             "spostate": sum(1 for c in store.track_or_die(track_id).clips
                             if c.start >= at + dur - EPS)}
@@ -81,22 +91,23 @@ def smooth_cuts(store, track_id: str | None = None, duration: float = MICRO_FADE
     tracce = ([store.track_for_edit(track_id)] if track_id
               else [t for t in store.project.tracks if not t.locked])
     toccate = 0
-    for track in tracce:
-        clips = sorted(track.clips, key=lambda c: c.start)
-        for i, c in enumerate(clips):
-            prima = clips[i - 1] if i else None
-            dopo = clips[i + 1] if i + 1 < len(clips) else None
-            attacca = prima is not None and abs(prima.end - c.start) < 0.02
-            stacca = dopo is not None and abs(c.end - dopo.start) < 0.02
-            fi = duration if (attacca or not only_touching) else None
-            fo = duration if (stacca or not only_touching) else None
-            if fi is None and fo is None:
-                continue
-            limite = max(0.0, min(duration, c.duration / 3))
-            store.set_audio(c.id,
-                            fade_in=limite if fi is not None else None,
-                            fade_out=limite if fo is not None else None)
-            toccate += 1
+    with store.batch():     # tutte le giunzioni sono un gesto: un solo undo
+        for track in tracce:
+            clips = sorted(track.clips, key=lambda c: c.start)
+            for i, c in enumerate(clips):
+                prima = clips[i - 1] if i else None
+                dopo = clips[i + 1] if i + 1 < len(clips) else None
+                attacca = prima is not None and abs(prima.end - c.start) < 0.02
+                stacca = dopo is not None and abs(c.end - dopo.start) < 0.02
+                fi = duration if (attacca or not only_touching) else None
+                fo = duration if (stacca or not only_touching) else None
+                if fi is None and fo is None:
+                    continue
+                limite = max(0.0, min(duration, c.duration / 3))
+                store.set_audio(c.id,
+                                fade_in=limite if fi is not None else None,
+                                fade_out=limite if fo is not None else None)
+                toccate += 1
     return {"clip_sfumate": toccate, "durata": duration}
 
 
@@ -196,13 +207,18 @@ def detach_audio(store, clip_id: str, track_id: str | None = None) -> dict:
     if not m.has_audio:
         raise ValueError(f"{m.name} non ha audio da scollegare")
 
-    if track_id is None:
-        audio_tracks = [t for t in store.project.tracks if t.kind == "audio"]
-        track_id = (audio_tracks[0].id if audio_tracks
-                    else store.add_track("audio").id)
-    nuova = store.add_clip(m.id, track_id=track_id, start=clip.start,
-                           in_=clip.in_, duration=clip.duration)
-    store.set_audio(clip_id, mute=True)
+    with store.batch():
+        if track_id is None:
+            audio_tracks = [t for t in store.project.tracks if t.kind == "audio"]
+            track_id = (audio_tracks[0].id if audio_tracks
+                        else store.add_track("audio").id)
+        nuova = store.add_clip(m.id, track_id=track_id, start=clip.start,
+                               in_=clip.in_, duration=clip.duration)
+        # la copia audio deve suonare come l'originale, non ripartire da zero
+        nuova.speed, nuova.reverse = clip.speed, clip.reverse
+        nuova.duration = clip.duration
+        nuova.audio = copy.deepcopy(clip.audio)
+        store.set_audio(clip_id, mute=True)
     return {"audio_clip": nuova.id, "traccia": track_id, "video_clip": clip_id}
 
 
@@ -222,30 +238,32 @@ def jl_cut(store, clip_id: str, seconds: float = 0.5, kind: str = "J") -> dict:
         raise ValueError("seconds deve essere positivo")
 
     _, clip = store.clip_or_die(clip_id)
-    gemella = _audio_twin(store, clip)
-    if gemella is None:
-        gemella_id = detach_audio(store, clip_id)["audio_clip"]
-    else:
-        gemella_id = gemella.id
-        store.set_audio(clip_id, mute=True)
+    # scollegare e spostare sono un gesto solo: un undo, niente meta' lavoro
+    with store.batch():
+        gemella = _audio_twin(store, clip)
+        if gemella is None:
+            gemella_id = detach_audio(store, clip_id)["audio_clip"]
+        else:
+            gemella_id = gemella.id
+            store.set_audio(clip_id, mute=True)
 
-    _, audio = store.clip_or_die(gemella_id)
-    if kind == "J":
-        possibile = min(seconds, audio.in_, audio.start)
-        if possibile <= 0:
-            return {"applicato": 0.0, "tipo": kind, "audio_clip": gemella_id,
-                    "nota": "niente materiale prima dell'attacco: J cut impossibile"}
-        store.move_clip(gemella_id, start=round(audio.start - possibile, 3))
-        store.set_clip(gemella_id, in_=round(audio.in_ - possibile, 3),
-                       duration=round(audio.duration + possibile, 3))
-    else:
-        m = store.media_or_die(audio.media)
-        avanzo = max(0.0, m.duration - (audio.in_ + audio.source_duration()))
-        possibile = min(seconds, avanzo)
-        if possibile <= 0:
-            return {"applicato": 0.0, "tipo": kind, "audio_clip": gemella_id,
-                    "nota": "niente materiale dopo lo stacco: L cut impossibile"}
-        store.set_clip(gemella_id, duration=round(audio.duration + possibile, 3))
+        _, audio = store.clip_or_die(gemella_id)
+        if kind == "J":
+            possibile = min(seconds, audio.in_, audio.start)
+            if possibile <= 0:
+                return {"applicato": 0.0, "tipo": kind, "audio_clip": gemella_id,
+                        "nota": "niente materiale prima dell'attacco: J cut impossibile"}
+            store.move_clip(gemella_id, start=round(audio.start - possibile, 3))
+            store.set_clip(gemella_id, in_=round(audio.in_ - possibile, 3),
+                           duration=round(audio.duration + possibile, 3))
+        else:
+            m = store.media_or_die(audio.media)
+            avanzo = max(0.0, m.duration - (audio.in_ + audio.source_duration()))
+            possibile = min(seconds, avanzo)
+            if possibile <= 0:
+                return {"applicato": 0.0, "tipo": kind, "audio_clip": gemella_id,
+                        "nota": "niente materiale dopo lo stacco: L cut impossibile"}
+            store.set_clip(gemella_id, duration=round(audio.duration + possibile, 3))
     return {"applicato": round(possibile, 3), "tipo": kind,
             "audio_clip": gemella_id, "video_clip": clip_id}
 

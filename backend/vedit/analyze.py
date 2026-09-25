@@ -229,7 +229,6 @@ def beats(path: str, block: float = 4.0, force: bool = False) -> dict:
         # ha quel limite: su una traccia reale separa 160.00 da 161.5 con un
         # punteggio venti volte piu' alto, dove l'autocorrelazione dava proprio
         # 161.5.
-        pos = np.arange(onset.size, dtype=np.float64)
 
         def pettine(bpm_: float, fasi: int) -> tuple[float, float]:
             p = 60.0 * fps / bpm_

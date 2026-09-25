@@ -161,7 +161,15 @@ def _fmt(x: float) -> str:
 
 
 def validate(value: Any) -> None:
-    """Solleva ValueError se il blocco keyframe e' malformato."""
+    """Solleva ValueError se il blocco keyframe e' malformato.
+
+    Anche un numero illeggibile e' un errore: alla compilazione diventerebbe
+    zero in silenzio, e un'opacita' o un volume a zero non si notano finche'
+    non si guarda il render.
+    """
+    if isinstance(value, str):
+        _numero(value, "valore")
+        return
     if not isinstance(value, dict) or "kf" not in value:
         return
     kf = value["kf"]
@@ -170,9 +178,20 @@ def validate(value: Any) -> None:
     for k in kf:
         if not isinstance(k, dict) or "t" not in k or "v" not in k:
             raise ValueError(f"keyframe deve avere 't' e 'v': {k!r}")
+        _numero(k["t"], "t")
+        _numero(k["v"], "v")
         ease = str(k.get("ease", "linear"))
         if ease not in EASINGS:
             raise ValueError(f"easing sconosciuto {ease!r}, attesi: {', '.join(EASINGS)}")
+
+
+def _numero(x: Any, nome: str) -> None:
+    if isinstance(x, bool):
+        return
+    try:
+        float(x)
+    except (TypeError, ValueError):
+        raise ValueError(f"{nome} deve essere un numero, non {x!r}") from None
 
 
 def coerce(value: Any) -> Any:

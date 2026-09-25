@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import subprocess
 import urllib.request
-from pathlib import Path
 
 from . import ffmpeg, probe, proxy
 

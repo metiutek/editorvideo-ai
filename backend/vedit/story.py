@@ -594,8 +594,11 @@ def _notes(shots: list[Shot], style: Style, total: float, target: float | None,
                "order='score'" if order != "score"
                else "non c'era dove spostarle"))
     if target and abs(total - target) > 0.5:
-        out.append(f"durata {total:.1f}s contro {target:.1f}s richiesti: "
-                   f"{'serve altro materiale' if total < target else 'si puo\' stringere ancora'}")
+        # niente backslash dentro l'f-string: su Python 3.10/3.11 e' un
+        # SyntaxError e il modulo intero non si importa
+        rimedio = ("serve altro materiale" if total < target
+                   else "si puo' stringere ancora")
+        out.append(f"durata {total:.1f}s contro {target:.1f}s richiesti: {rimedio}")
     if len(shots) > 2 and all(s.speech < 0.15 for s in shots):
         out.append("nessun parlato: senza voce o musica il montaggio regge solo "
                    "se le immagini sono forti, valuta una traccia audio")

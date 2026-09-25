@@ -61,6 +61,10 @@ class Store:
         self._undo: list[dict] = []
         self._redo: list[dict] = []
         self._batch = 0
+        # Contatore delle modifiche concluse. Chi deve sapere se il progetto e'
+        # cambiato (la revisione delle anteprime nella UI) lo confronta invece
+        # di serializzare e confrontare l'intero documento a ogni richiesta.
+        self.version = 0
         # chiamata dopo ogni modifica conclusa. La usa l'interfaccia web per
         # aggiornarsi quando a montare e' l'agente: stesso Store, un solo
         # scrittore, niente due processi che si sovrascrivono il file.
@@ -147,6 +151,7 @@ class Store:
     def _done(self) -> None:
         if self._batch:
             return          # si salva una volta sola, alla chiusura del blocco
+        self.version += 1
         if self.autosave and self.path:
             self.save()
         if self.on_change:
@@ -186,10 +191,23 @@ class Store:
             yield self
         except Exception:
             self.project = Project.from_obj(self._undo.pop())
+            self.version += 1   # chi ha letto lo stato a meta' blocco lo rilegge
             raise
         finally:
             self._batch = 0
         self._done()
+
+    @contextmanager
+    def _edit(self):
+        """Una modifica singola che, se fallisce a meta', non lascia traccia.
+
+        Diverse operazioni validano mentre scrivono (keyframe, stili, durate):
+        un errore dopo il primo campo lasciava il progetto modificato a meta' e
+        una voce di undo che non annullava niente di sensato. Dentro un blocco
+        ``batch`` esterno e' quello a rimettere tutto a posto.
+        """
+        with self.batch():
+            yield self
 
     def undo(self) -> bool:
         if not self._undo:
@@ -209,17 +227,17 @@ class Store:
 
     # ---- media ---------------------------------------------------------
     def import_media(self, paths: list[str]) -> list[Media]:
-        self._touch()
-        out = []
-        for p in paths:
-            existing = self.project.media_by_path(str(Path(p).resolve()))
-            if existing:
-                out.append(existing)
-                continue
-            m = probe_mod.probe(p)
-            self.project.media.append(m)
-            out.append(m)
-        self._done()
+        # un file illeggibile a meta' lista non deve lasciare importati i primi
+        with self._edit():
+            out = []
+            for p in paths:
+                existing = self.project.media_by_path(str(Path(p).resolve()))
+                if existing:
+                    out.append(existing)
+                    continue
+                m = probe_mod.probe(p)
+                self.project.media.append(m)
+                out.append(m)
         return out
 
     def set_media(self, media_id: str, folder: str | None = None, name: str | None = None) -> Media:
@@ -332,13 +350,15 @@ class Store:
                   solo: bool | None = None) -> Track:
         # volutamente non passa da track_for_edit: e' anche il modo di sbloccare
         t = self.track_or_die(track_id)
+        if volume is not None:
+            kf.validate(volume)
+            volume = kf.coerce(volume)
         self._touch()
         if hidden is not None:
             t.hidden = bool(hidden)
         if muted is not None:
             t.muted = bool(muted)
         if volume is not None:
-            kf.validate(volume)
             t.volume = volume
         if name is not None:
             t.name = name
@@ -406,13 +426,15 @@ class Store:
 
     def add_text(self, text: str, track_id: str | None = None, start: float = 0.0, duration: float = 3.0,
                  **style: Any) -> Clip:
-        track = self.track_for_edit(track_id or self._default_track("video"))
-        self._touch()
         st = TextStyle(text=text)
         for k, v in style.items():
             if not hasattr(st, k):
                 raise EditError(f"stile testo sconosciuto {k!r}; ammessi: {', '.join(vars(st))}")
             setattr(st, k, v)
+        if float(duration) <= 0:
+            raise EditError("la durata deve essere > 0")
+        track = self.track_for_edit(track_id or self._default_track("video"))
+        self._touch()
         c = Clip(type="text", start=float(start), duration=float(duration), text=st,
                  name=(text[:24] or "testo"))
         track.clips.append(c)
@@ -449,13 +471,17 @@ class Store:
 
     def move_clip(self, clip_id: str, start: float | None = None, track_id: str | None = None) -> Clip:
         track, clip = self.clip_for_edit(clip_id)
-        self._touch()
-        if start is not None:
-            clip.start = max(0.0, float(start))
+        dst = None
         if track_id and track_id != track.id:
+            # controlli prima di toccare qualcosa: un rifiuto non deve lasciare
+            # la clip spostata nel tempo ma sulla traccia di prima
             dst = self.track_for_edit(track_id)
             if dst.kind != track.kind:
                 raise EditError(f"non posso spostare una clip {track.kind} su una traccia {dst.kind}")
+        self._touch()
+        if start is not None:
+            clip.start = max(0.0, float(start))
+        if dst is not None:
             track.clips.remove(clip)
             dst.clips.append(clip)
             dst.clips.sort(key=lambda x: x.start)
@@ -468,23 +494,29 @@ class Store:
         """Cambia il punto di attacco e/o la durata. ``out`` = fine nella sorgente."""
         track, clip = self.clip_for_edit(clip_id)
         media = self.project.media_by_id(clip.media) if clip.media else None
-        self._touch()
+        # calcolo su copie locali: una durata impossibile si rifiuta senza aver
+        # gia' spostato l'attacco
+        new_in, new_dur = clip.in_, clip.duration
         if in_ is not None:
-            delta = float(in_) - clip.in_
-            clip.in_ = max(0.0, float(in_))
+            new_in = max(0.0, float(in_))
             if duration is None and out is None:
-                clip.duration = max(1.0 / 60, clip.duration - delta / max(abs(clip.speed), 1e-6))
+                delta = new_in - clip.in_
+                new_dur = max(1.0 / 60, clip.duration - delta / max(abs(clip.speed), 1e-6))
         if out is not None:
-            src_len = max(0.0, float(out) - clip.in_)
-            clip.duration = src_len / max(abs(clip.speed), 1e-6)
+            src_len = max(0.0, float(out) - new_in)
+            new_dur = src_len / max(abs(clip.speed), 1e-6)
         if duration is not None:
-            clip.duration = float(duration)
-        if clip.duration <= 0:
+            new_dur = float(duration)
+        if new_dur <= 0:
             raise EditError("la durata risultante e' <= 0")
         if media and media.duration > 0 and clip.type == "media":
-            max_dur = (media.duration - clip.in_) / max(abs(clip.speed), 1e-6)
-            if clip.duration > max_dur + 1e-3:
-                clip.duration = max_dur
+            if new_in >= media.duration:
+                raise EditError(f"attacco {new_in}s oltre la durata del media ({media.duration}s)")
+            max_dur = (media.duration - new_in) / max(abs(clip.speed), 1e-6)
+            if new_dur > max_dur + 1e-3:
+                new_dur = max_dur
+        self._touch()
+        clip.in_, clip.duration = new_in, new_dur
         self._done()
         return clip
 
@@ -497,18 +529,33 @@ class Store:
             )
         self._touch()
         head = at - clip.start
+        tail = clip.duration - head
+        k = abs(clip.speed or 1.0)
         second = copy.deepcopy(clip)
         second.id = new_id("c")
         second.start = at
-        second.in_ = clip.in_ + head * abs(clip.speed or 1.0)
-        second.duration = clip.duration - head
+        second.duration = tail
+        if clip.reverse:
+            # all'indietro la testa in timeline e' la *fine* del tratto sorgente:
+            # la seconda meta' parte dall'attacco, la prima si sposta avanti
+            second.in_ = clip.in_
+            clip.in_ = clip.in_ + tail * k
+        else:
+            second.in_ = clip.in_ + head * k
+        # dissolvenze e transizione d'ingresso restano alla prima meta', quelle
+        # d'uscita passano alla seconda: sul punto di taglio non deve succedere
+        # niente, se no il taglio "a meta'" si vede come un lampo o una tendina
         second.fade_in = 0.0
-        second.audio = copy.deepcopy(clip.audio)
         second.audio.fade_in = 0.0
+        second.fade_out = min(clip.fade_out, tail)
+        second.audio.fade_out = min(clip.audio.fade_out, tail)
 
         clip.duration = head
-        clip.fade_out = min(clip.fade_out, head)
-        clip.audio.fade_out = min(clip.audio.fade_out, head)
+        clip.fade_in = min(clip.fade_in, head)
+        clip.audio.fade_in = min(clip.audio.fade_in, head)
+        clip.fade_out = 0.0
+        clip.audio.fade_out = 0.0
+        clip.transition_out = Transition()
 
         track.clips.append(second)
         track.clips.sort(key=lambda x: x.start)
@@ -527,6 +574,13 @@ class Store:
         clip.speed = float(speed)
         if not keep_duration:
             clip.duration = src / speed
+        # a durata tenuta, accelerando si consuma piu' sorgente: oltre la fine
+        # del file il render mostrerebbe nero
+        media = self.project.media_by_id(clip.media) if clip.media else None
+        if media and media.duration > 0 and clip.type == "media":
+            max_dur = (media.duration - clip.in_) / clip.speed
+            if clip.duration > max_dur + 1e-3:
+                clip.duration = max(1.0 / 60, max_dur)
         self._done()
         return clip
 
@@ -543,12 +597,10 @@ class Store:
         bad = set(values) - allowed
         if bad:
             raise EditError(f"campi transform sconosciuti {sorted(bad)}; ammessi: {sorted(allowed)}")
+        clean = self._animabili(values)
         self._touch()
-        for k, v in values.items():
-            if v is None:
-                continue
-            kf.validate(v)
-            setattr(clip.transform, k, kf.coerce(v))
+        for k, v in clean.items():
+            setattr(clip.transform, k, v)
         self._done()
         return clip
 
@@ -558,14 +610,30 @@ class Store:
         bad = set(values) - allowed
         if bad:
             raise EditError(f"campi audio sconosciuti {sorted(bad)}; ammessi: {sorted(allowed)}")
+        clean = self._animabili(values)
         self._touch()
+        for k, v in clean.items():
+            setattr(clip.audio, k, v)
+        self._done()
+        return clip
+
+    @staticmethod
+    def _animabili(values: dict) -> dict:
+        """Valida e normalizza tutti i valori *prima* di scriverne uno.
+
+        Validando mentre si scrive, un keyframe malformato nel terzo campo
+        lasciava i primi due gia' cambiati.
+        """
+        out = {}
         for k, v in values.items():
             if v is None:
                 continue
-            kf.validate(v)
-            setattr(clip.audio, k, kf.coerce(v))
-        self._done()
-        return clip
+            try:
+                kf.validate(v)
+            except ValueError as exc:
+                raise EditError(f"{k}: {exc}") from exc
+            out[k] = kf.coerce(v)
+        return out
 
     def set_fades(self, clip_id: str, fade_in: float | None = None, fade_out: float | None = None,
                   audio: bool = True) -> Clip:
@@ -769,6 +837,8 @@ class Store:
         tb, b = self.clip_for_edit(clip_b)
         if ta.id != tb.id:
             raise EditError("la transizione richiede due clip sulla stessa traccia")
+        if a.id == b.id or b.start <= a.start:
+            raise EditError("la transizione va dalla clip che viene prima (clip_a) a quella dopo (clip_b)")
         d = min(float(duration), a.duration * 0.9, b.duration * 0.9)
         if d <= 0:
             raise EditError("durata di transizione non valida")
@@ -813,14 +883,21 @@ class Store:
     def close_gaps(self, track_id: str) -> int:
         """Compatta le clip eliminando i buchi. Ritorna il numero di clip spostate."""
         track = self.track_for_edit(track_id)
+        ordered = sorted(track.clips, key=lambda x: x.start)
+        # Si tolgono solo i vuoti: due clip sovrapposte da una transizione
+        # restano sovrapposte, se no compattare cancellerebbe le dissolvenze.
+        shift, reach, starts = 0.0, 0.0, []
+        for c in ordered:
+            if c.start > reach:
+                shift += c.start - reach
+            starts.append(c.start - shift)
+            reach = max(reach, c.end)
+        moved = sum(1 for c, s in zip(ordered, starts) if abs(c.start - s) > 1e-4)
+        if not moved:
+            return 0        # niente da compattare: nessuna voce di undo vuota
         self._touch()
-        moved = 0
-        cursor = 0.0
-        for c in sorted(track.clips, key=lambda x: x.start):
-            if abs(c.start - cursor) > 1e-4:
-                c.start = cursor
-                moved += 1
-            cursor = c.end
+        for c, s in zip(ordered, starts):
+            c.start = s
         self._done()
         return moved
 

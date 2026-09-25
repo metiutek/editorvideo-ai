@@ -209,7 +209,11 @@ def test_frame_prova_effetto_non_tocca_il_progetto(client, tmp_path, assets):
     assert normale.content != provato.content        # l'effetto si vede
     # la revisione e' l'impronta dell'intero progetto: se non cambia, l'effetto
     # non e' finito da nessuna parte
-    assert client.get("/api/state").json()["revision"] == prima
+    stato = client.get("/api/state").json()
+    assert stato["revision"] == prima
+    # la revisione e' in cache sul contatore delle modifiche: il controllo vero
+    # e' che la clip non abbia preso l'effetto
+    assert not stato["project"]["tracks"][0]["clips"][0].get("effects")
 
     assert client.get("/api/frame", params={"t": 1.0, "effect": "inesistente"}).status_code == 400
 

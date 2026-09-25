@@ -86,6 +86,7 @@ class Session:
         # stato piu' nuovo che conosce, cosi' una risposta arrivata in ritardo
         # non riporta la timeline indietro di un passo.
         self.seq = 0
+        self._rev_cache: tuple | None = None
 
     def need(self) -> Store:
         if self.store is None:
@@ -109,11 +110,25 @@ class Session:
                 "revision": self.revision(), "seq": self.seq}
 
     def revision(self) -> str:
-        """Impronta del progetto: invalida le cache di anteprima quando cambia."""
-        if self.store is None:
+        """Impronta del progetto: invalida le cache di anteprima quando cambia.
+
+        E' un hash del contenuto, cosi' due stati uguali (una modifica e il suo
+        undo) ritrovano le stesse anteprime. Ma serializzare tutto il progetto
+        a ogni fotogramma dello scrub costa: l'impronta si ricalcola solo
+        quando ``Store.version`` dice che qualcosa e' cambiato.
+        """
+        store = self.store
+        if store is None:
             return "0"
-        blob = json.dumps(self.store.project.to_dict(), sort_keys=True).encode()
-        return hashlib.sha1(blob).hexdigest()[:16]
+        # oggetti veri e non id(): un id si ricicla dopo la garbage collection
+        c = self._rev_cache
+        if c and c[0] is store and c[1] is store.project and c[2] == store.version:
+            return c[3]
+        project, version = store.project, store.version
+        blob = json.dumps(project.to_dict(), sort_keys=True).encode()
+        rev = hashlib.sha1(blob).hexdigest()[:16]
+        self._rev_cache = (store, project, version, rev)
+        return rev
 
 
 # --------------------------------------------------------------------------
@@ -157,6 +172,57 @@ def ricorda_recente(store: Store) -> None:
 
 S = Session()
 app = FastAPI(title="vedit")
+
+# Nomi con cui il server accetta di essere chiamato. Vuoto = nessun controllo
+# (i test usano TestClient, che si presenta come "testserver"); serve() e
+# serve_background() lo riempiono.
+_host_consentiti: set[str] = set()
+_LOOPBACK = {"127.0.0.1", "localhost", "::1", "[::1]"}
+
+
+def _consenti_host(host: str) -> None:
+    _host_consentiti.update(_LOOPBACK)
+    if host not in ("0.0.0.0", "::", ""):
+        _host_consentiti.add(host)
+    else:
+        # in ascolto su tutte le interfacce l'utente ha scelto la rete: il
+        # controllo sul nome non avrebbe senso
+        _host_consentiti.clear()
+
+
+def _nome_host(valore: str) -> str:
+    """'127.0.0.1:8760' -> '127.0.0.1'; '[::1]:8760' -> '[::1]'."""
+    valore = valore.strip().lower()
+    if valore.startswith("["):
+        return valore.split("]")[0] + "]"
+    return valore.rsplit(":", 1)[0] if valore.count(":") == 1 else valore
+
+
+@app.middleware("http")
+async def _solo_locale(request: Request, call_next):
+    """Difesa da DNS rebinding e da richieste mandate da altri siti.
+
+    L'API legge e scrive file ovunque sul disco (import, render, /api/file).
+    Una pagina qualunque aperta nel browser puo' puntare a 127.0.0.1: con un
+    dominio che si risolve in locale (rebinding) il nome nella richiesta non e'
+    il nostro, e con un form multipart l'Origin e' quella dell'altro sito.
+    Entrambe si rifiutano.
+    """
+    if not _da_qui(request.headers):
+        return JSONResponse({"detail": "richiesta non locale rifiutata"}, status_code=403)
+    return await call_next(request)
+
+
+def _da_qui(headers) -> bool:
+    if not _host_consentiti:
+        return True
+    if _nome_host(headers.get("host", "")) not in _host_consentiti:
+        return False
+    origin = headers.get("origin")
+    if origin is None:
+        return True     # navigazione e GET dalla stessa pagina: niente Origin
+    # "null" e' l'Origin delle pagine in sandbox: non e' la nostra interfaccia
+    return _nome_host(origin.split("://", 1)[-1]) in _host_consentiti
 
 
 # --------------------------------------------------------------------------
@@ -256,8 +322,19 @@ def op(name: str, body: dict | None = None) -> dict:
     except (EditError, ValueError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    S.publish({"type": "project"})
+    _avvisa(store)
     return {"result": _plain(result), **S.state_of_project()}
+
+
+def _avvisa(store: Store) -> None:
+    """Dice ai browser che il progetto e' cambiato, una volta sola.
+
+    Con l'interfaccia agganciata al server MCP ci pensa gia' ``on_change`` a
+    ogni modifica di Store: pubblicare anche qui mandava due eventi per ogni
+    gesto, e il browser ricaricava lo stato due volte.
+    """
+    if store.on_change is None:
+        S.publish({"type": "project"})
 
 
 def _plain(value: Any) -> Any:
@@ -375,7 +452,7 @@ async def upload(files: list[UploadFile] = File(...), folder: str = Form("")) ->
         if folder:
             for m in media:
                 store.set_media(m.id, folder=folder)
-    S.publish({"type": "project"})
+    _avvisa(store)
     return {"importati": [m.id for m in media], **S.state_of_project()}
 
 
@@ -672,8 +749,15 @@ def build_proxies(height: int = 540) -> dict:
     def work() -> None:
         try:
             proxy.ensure(store.project, height)
-            store.save()
+            with S.lock:
+                # i percorsi dei proxy entrano nel progetto senza passare da una
+                # modifica di Store: la revisione va invalidata a mano, se no
+                # le anteprime in cache restano quelle fatte sugli originali
+                store.version += 1
+                if store.path:
+                    store.save()
             S.publish({"type": "proxies", "state": "done"})
+            S.publish({"type": "project"})
         except Exception as exc:
             S.publish({"type": "proxies", "state": "error", "error": str(exc)})
 
@@ -683,9 +767,13 @@ def build_proxies(height: int = 540) -> dict:
 
 @app.post("/api/loudness")
 def loudness() -> dict:
-    store = S.need()
-    with S.lock:
-        measured = render.measure_loudness(store.project)
+    # Sulla copia, non sotto lock: la misura e' un passaggio intero di ffmpeg
+    # sul mix, e tenere il lock per tutto quel tempo bloccava ogni modifica e
+    # ogni anteprima finche' non aveva finito.
+    try:
+        measured = render.measure_loudness(_snapshot())
+    except RuntimeError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return {"lufs": float(measured.get("input_i", 0)),
             "true_peak": float(measured.get("input_tp", 0)),
             "lra": float(measured.get("input_lra", 0)),
@@ -714,7 +802,7 @@ def preset_apply(body: PresetBody) -> dict:
             store.add_effects(body.clip_id, p["effects"])
     except (EditError, ValueError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    S.publish({"type": "project"})
+    _avvisa(store)
     return {"applicato": p["name"], "effetti": len(p["effects"]), **S.state_of_project()}
 
 
@@ -757,7 +845,7 @@ def chat(body: ChatBody) -> StreamingResponse:
     def run_op(name: str, args: dict) -> str:
         with S.lock:
             out = chat_mod.execute(store, name, args)
-        S.publish({"type": "project"})
+        _avvisa(store)
         return out
 
     def events():
@@ -786,6 +874,10 @@ def chat(body: ChatBody) -> StreamingResponse:
 
 @app.websocket("/ws")
 async def ws(sock: WebSocket) -> None:
+    # il middleware http non vede i websocket: stesso controllo qui
+    if not _da_qui(sock.headers):
+        await sock.close(code=1008)
+        return
     await sock.accept()
     S.loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
@@ -827,6 +919,7 @@ def serve(host: str = "127.0.0.1", port: int = 8760, project: str | None = None,
 
     if project:
         S.store = Store.open(project)
+    _consenti_host(host)
     mount_frontend()
 
     url = f"http://{host}:{port}"
@@ -885,6 +978,7 @@ def serve_background(store: Store | None = None, host: str = "127.0.0.1", port: 
         return {**_background, "avviato_ora": False,
                 "progetto": S.store.path if S.store else None}
 
+    _consenti_host(host)
     mount_frontend()
     port = _porta_libera(host, port)
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
@@ -923,4 +1017,5 @@ def stop_background() -> bool:
     if thread:
         thread.join(timeout=10)
     _background.clear()
+    _host_consentiti.clear()
     return True

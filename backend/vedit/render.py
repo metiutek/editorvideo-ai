@@ -7,6 +7,7 @@ comando di Windows.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -97,7 +98,11 @@ def analyze_stabilization(project: Project, force: bool = False) -> dict:
             media = project.media_by_id(clip.media)
             if media is None:
                 continue
-            trf = stab_dir / f"{clip.id}_{abs(hash((media.path, clip.in_, clip.duration))) & 0xFFFFFFFF:x}.trf"
+            # hashlib e non hash(): quello delle stringhe cambia a ogni processo,
+            # e la cache non veniva mai ritrovata — l'analisi, che e' un
+            # passaggio intero sul file, si rifaceva a ogni render
+            firma = f"{media.path}|{clip.in_:.4f}|{clip.source_duration():.4f}"
+            trf = stab_dir / f"{clip.id}_{hashlib.sha1(firma.encode()).hexdigest()[:10]}.trf"
             if trf.exists() and not force:
                 out[clip.id] = str(trf)
                 continue
