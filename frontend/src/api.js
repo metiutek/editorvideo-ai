@@ -57,6 +57,8 @@ export const api = {
   waveform: (id) => req(`/api/media/${id}/waveform`),
   strip: (id, height = 44) => req(`/api/media/${id}/strip?height=${height}`),
   streamUrl: (id) => `/api/media/${id}/stream`,
+  // documento di una clip html con l'orologio virtuale: v cambia col contenuto
+  htmlUrl: (id, v) => `/api/html/${id}?v=${v}`,
 
   upload: (files, folder = '') => {
     const form = new FormData()
@@ -98,6 +100,15 @@ export const api = {
     }),
 
   chatReset: () => req('/api/chat/reset', { method: 'POST' }),
+
+  // modello dell'assistente: quale usare e con che chiave (resta su questo computer)
+  llm: () => req('/api/llm'),
+  setLlm: (body) =>
+    req('/api/llm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
 }
 
 /**
@@ -105,11 +116,11 @@ export const api = {
  * (testo, strumenti in esecuzione), quindi si legge il flusso invece di
  * aspettare la risposta completa.
  */
-export async function chat(message, onEvent, signal) {
+export async function chat(message, refs, onEvent, signal) {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, refs }),
     signal,
   })
   if (!res.ok) {

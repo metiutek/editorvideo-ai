@@ -42,6 +42,21 @@ function ease(name, p) {
 export const EASINGS = ['linear', 'hold', 'ease_in', 'ease_out', 'ease_in_out',
   'ease_in_cubic', 'ease_out_cubic', 'ease_in_out_cubic']
 
+/**
+ * Impronta breve di un testo (FNV-1a). Serve all'anteprima delle clip html:
+ * entra nell'indirizzo dell'iframe, che cosi' si ricarica solo quando il
+ * documento cambia davvero e non a ogni aggiornamento del progetto.
+ */
+export function impronta(testo) {
+  let h = 0x811c9dc5
+  const s = String(testo ?? '')
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(36)
+}
+
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 /**

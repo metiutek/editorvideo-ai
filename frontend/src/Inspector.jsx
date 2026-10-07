@@ -1,24 +1,24 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import { Anim, Check, EffectParams, Num, Row, Select, Text } from './Params.jsx'
 
 /** Pannello proprieta': clip selezionata, oppure progetto e master. */
 export default function Inspector({
-  project, effects, transitions, clip, playhead, run, setError, setBusy, onProva,
+  project, effects, transitions, clip, playhead, run, setError, setBusy, onProva, onRif,
 }) {
   const call = (op, args) => run(op, args).catch((e) => setError(e.message))
   return (
     <div className="inspector">
       {clip
         ? <ClipPanel clip={clip} effects={effects} transitions={transitions}
-            project={project} playhead={playhead} call={call} onProva={onProva} />
+            project={project} playhead={playhead} call={call} onProva={onProva} onRif={onRif} />
         : <ProjectPanel project={project} effects={effects} call={call} setBusy={setBusy}
             setError={setError} onProva={onProva} />}
     </div>
   )
 }
 
-function ClipPanel({ clip, effects, transitions, project, playhead, call, onProva }) {
+function ClipPanel({ clip, effects, transitions, project, playhead, call, onProva, onRif }) {
   const clipTime = Math.max(0, playhead - clip.start)
   const set = (patch) => call('set_clip', { clip_id: clip.id, ...patch })
   const tr = clip.transform || {}
@@ -26,7 +26,17 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
 
   return (
     <>
-      <div className="section-title">{clip.type} · {clip.id}</div>
+      <div className="section-title">
+        {clip.name || clip.type}
+        <span className="hint">{clip.type}</span>
+        <span className="spacer" />
+        {onRif && (
+          <button className="chip" title="Aggiungi questa clip come riferimento nella chat"
+            onClick={() => onRif(clip.id)}>
+            <Icon name="assistente" size={13} />chiedi
+          </button>
+        )}
+      </div>
 
       <div className="group">
         <h4>clip</h4>
@@ -97,6 +107,7 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
       </div>
 
       {clip.type === 'text' && <TextPanel clip={clip} call={call} />}
+      {clip.type === 'html' && <HtmlPanel clip={clip} call={call} />}
 
       <div className="group">
         <h4>
@@ -209,6 +220,70 @@ function TextPanel({ clip, call }) {
         onChange={(v) => set({ border_width: Math.round(v) })} /></Row>
       <Row label="font"><Text value={t.font_file} placeholder="percorso .ttf (facoltativo)"
         onChange={(v) => set({ font_file: v })} /></Row>
+    </div>
+  )
+}
+
+/**
+ * Editor del documento di una clip html.
+ *
+ * Si scrive e l'anteprima dal vivo si aggiorna da sola: la modifica parte
+ * quando si smette di scrivere per un attimo (un passo di undo per pausa, non
+ * uno per tasto), oppure subito con Ctrl+Invio. Se il documento cambia da
+ * fuori — l'agente via MCP — e qui non c'e' niente in sospeso, si prende
+ * quello nuovo.
+ */
+function HtmlPanel({ clip, call }) {
+  const [bozza, setBozza] = useState(clip.html || '')
+  const sporca = useRef(false)
+  const timer = useRef(null)
+
+  useEffect(() => {
+    if (!sporca.current) setBozza(clip.html || '')
+  }, [clip.id, clip.html])
+  useEffect(() => () => clearTimeout(timer.current), [clip.id])
+
+  const applica = (testo) => {
+    clearTimeout(timer.current)
+    if (!sporca.current) return
+    sporca.current = false
+    if (testo !== clip.html && testo.trim()) call('set_html', { clip_id: clip.id, html: testo })
+  }
+  const scrivi = (testo) => {
+    setBozza(testo)
+    sporca.current = true
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => applica(testo), 700)
+  }
+
+  return (
+    <div className="group">
+      <h4>html</h4>
+      <div className="row wide">
+        <textarea className="codice" rows={16} spellCheck={false} value={bozza}
+          onChange={(e) => scrivi(e.target.value)}
+          onBlur={() => applica(bozza)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); applica(bozza) }
+            // il tab scrive un rientro invece di saltare al campo dopo
+            if (e.key === 'Tab' && !e.shiftKey) {
+              e.preventDefault()
+              const el = e.target
+              const a = el.selectionStart
+              const nuovo = bozza.slice(0, a) + '  ' + bozza.slice(el.selectionEnd)
+              scrivi(nuovo)
+              requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = a + 2 })
+            }
+          }} />
+      </div>
+      <Row label="cartella"><Text value={clip.html_base || ''}
+        placeholder="per immagini e font relativi (facoltativa)"
+        onChange={(v) => call('set_html', { clip_id: clip.id, base: v })} /></Row>
+      <div className="hint">
+        Pagina grande quanto il progetto, sfondo trasparente. Animazioni CSS, GSAP,
+        requestAnimationFrame e setTimeout seguono la testina; per il controllo totale
+        definisci <code>window.veditRender = t =&gt; …</code>. Ctrl+Invio applica subito.
+      </div>
     </div>
   )
 }

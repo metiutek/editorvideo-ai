@@ -55,6 +55,10 @@ export default function App() {
   const [uploading, setUploading] = useState(null)
   const [dropping, setDropping] = useState(false)
   const [confirm, setConfirm] = useState(null)   // {title, message, ok, danger, onOk}
+  // riferimenti per l'assistente: punti del video di cui si sta parlando
+  const [refs, setRefs] = useState([])
+  const [pickArea, setPickArea] = useState(false)
+  const [llmSt, setLlmSt] = useState(null)
   const [sizes, setSizes] = useState(() => ({
     bin: 250, inspector: 320, timeline: 300, trackH: 72, ...loadSizes(),
   }))
@@ -87,6 +91,7 @@ export default function App() {
   // ---- stato iniziale ed eventi dal server --------------------------------
   useEffect(() => {
     api.state().then((s) => { setSys(s); applyState(s) }).catch((e) => setError(e.message))
+    api.llm().then(setLlmSt).catch(() => {})
 
     // Il progetto cambia anche senza un clic qui dentro: l'assistente, un
     // agente via MCP (open_ui), un'altra finestra. Il server avvisa e la UI
@@ -259,6 +264,12 @@ export default function App() {
     if (r.recenti) setSys((s) => (s ? { ...s, recenti: r.recenti } : s))
   }, [applyState])
 
+  /** Aggiunge un riferimento e porta l'assistente in primo piano. */
+  const aggiungiRif = useCallback((r) => {
+    setRefs((xs) => [...xs, r])
+    setRightTab('chat')
+  }, [])
+
   const openProject = useCallback((p) =>
     api.openProject(p).then(progettoAperto).catch((e) => setError(e.message)), [progettoAperto])
 
@@ -282,7 +293,7 @@ export default function App() {
       }}
     >
       <div className="topbar">
-        <span className="name">VEDIT</span>
+        <span className="name">vedit</span>
         <button className="ghost" onClick={() => setDialog('new')}>
           <Icon name="nuovo" />nuovo</button>
         <button className="ghost" onClick={() => setDialog('open')}>
@@ -298,16 +309,21 @@ export default function App() {
           onClick={() => run('redo').catch((e) => setError(e.message))}><Icon name="ripeti" /></button>
 
         <span className="sep" />
-        <button className="ghost" disabled={!project} title="Nuova traccia video"
+        <button className="ghost act sky" disabled={!project} title="Nuova traccia video"
           onClick={() => run('add_track', { kind: 'video' }).catch((e) => setError(e.message))}>
-          <Icon name="video" />traccia</button>
-        <button className="ghost" disabled={!project} title="Nuova traccia audio"
+          <Icon name="video" />traccia video</button>
+        <button className="ghost act mint" disabled={!project} title="Nuova traccia audio"
           onClick={() => run('add_track', { kind: 'audio' }).catch((e) => setError(e.message))}>
-          <Icon name="audio" />traccia</button>
-        <button className="ghost" disabled={!project} title="Titolo alla testina"
+          <Icon name="audio" />traccia audio</button>
+        <button className="ghost act grape" disabled={!project} title="Titolo alla testina"
           onClick={() => run('add_text', { text: 'Testo', start: playhead, duration: 3 })
             .then((c) => setSelected(c.id)).catch((e) => setError(e.message))}>
           <Icon name="testo" />titolo</button>
+        <button className="ghost act sun" disabled={!project}
+          title="Grafica animata in HTML/CSS/JS alla testina: si vede animata qui, dal vivo"
+          onClick={() => run('add_html', { start: playhead, duration: 4 })
+            .then((c) => setSelected(c.id)).catch((e) => setError(e.message))}>
+          <Icon name="codice" />grafica html</button>
 
         <span className="spacer" />
         <span className="path" title={path || ''}>{path || 'nessun progetto'}</span>
@@ -369,6 +385,9 @@ export default function App() {
             <Preview project={project} revision={revision} playhead={playhead} seek={seek}
               playing={playing} setPlaying={setPlaying} clip={selectedClip}
               run={run} setError={setError}
+              pickArea={pickArea}
+              onArea={(a) => { aggiungiRif({ kind: 'area', t: playheadRef.current, ...a }); setPickArea(false) }}
+              onCancelArea={() => setPickArea(false)}
               prova={provaFx ? { ...provaFx, clip: selected } : null}
               diretta={diretta} />
           )}
@@ -445,9 +464,18 @@ export default function App() {
               <Inspector project={project} effects={sys?.effects || []}
                 transitions={sys?.transitions || []} clip={selectedClip}
                 playhead={playhead} run={run} setError={setError} setBusy={setBusy}
-                onProva={setProvaFx} />
+                onProva={setProvaFx}
+                onRif={(id) => aggiungiRif({ kind: 'clip', id })} />
             ) : (
-              <Chat available={sys?.chat} setError={setError} onProject={applyState} />
+              <Chat available={llmSt || sys?.chat} onAvailable={setLlmSt} setError={setError}
+                onProject={applyState} project={project} playhead={playhead} seek={seek}
+                selected={selected} refs={refs} setRefs={setRefs}
+                pickArea={pickArea}
+                setPickArea={(v) => {
+                  const next = typeof v === 'function' ? v(pickArea) : v
+                  setPickArea(next)
+                  if (next) { setTab('program'); setPlaying(false) }
+                }} />
             )}
           </div>
         </div>
@@ -503,8 +531,12 @@ function Benvenuto({ recenti, onNew, onOpen, onRecent }) {
   return (
     <div className="preview benvenuto">
       <div className="benvenuto-box">
-        <div className="benvenuto-titolo">VEDIT</div>
-        <div className="hint">Editor video. Crea un progetto o riaprine uno: i video restano dove sono.</div>
+        <div className="benvenuto-titolo">Ciao! Facciamo un video.</div>
+        <div className="passi">
+          <div className="passo"><b>1</b><span>Crea un progetto</span><small>o riaprine uno</small></div>
+          <div className="passo"><b>2</b><span>Trascina i tuoi file</span><small>video, foto, musica</small></div>
+          <div className="passo"><b>3</b><span>Monta e esporta</span><small>da solo o con l'assistente</small></div>
+        </div>
         <div className="benvenuto-azioni">
           <button className="primary" onClick={onNew}><Icon name="nuovo" />nuovo progetto</button>
           <button onClick={onOpen}><Icon name="apri" />apri…</button>
@@ -522,7 +554,7 @@ function Benvenuto({ recenti, onNew, onOpen, onRecent }) {
             ))}
           </div>
         )}
-        <div className="hint">Oppure trascina qui dei file video: il progetto si crea da solo.</div>
+        <div className="hint">Puoi anche trascinare qui dei file: il progetto si crea da solo.</div>
       </div>
     </div>
   )

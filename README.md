@@ -168,9 +168,10 @@ Everything below is optional; without them the rest of the editor behaves identi
 tools that need them say what to install.
 
 ```bash
-pip install -e ".[chat]"        # anthropic — the chat assistant inside the UI (+ ANTHROPIC_API_KEY)
+pip install -e ".[chat]"        # anthropic — Claude with an API key in the assistant (other models need nothing)
 pip install -e ".[vision]"      # ultralytics — detect_subjects, track_mask, auto_reframe (pulls torch)
 pip install -e ".[transcribe]"  # faster-whisper — transcribe, make_captions, tighten_speech, censor_speech
+pip install -e ".[html]"        # playwright — renders HTML clips (uses the Chrome or Edge you already have)
 ```
 
 `numpy` and Pillow are **not** extras: footage analysis, music-timed editing, `preview_grid`
@@ -203,6 +204,21 @@ Format presets: `1080p`, `1080p60`, `4k`, `720p`, `vertical` (9:16, for reels an
 ---
 
 ## Driving it from an agent (MCP)
+
+**No VS Code needed.** Someone who downloads vedit just runs `vedit ui` (or
+`uvx --from vedit-mcp vedit ui`) and works in the browser; the assistant inside the app can be
+Claude Code itself (see *Assistant* below). Editors and terminals are one option, not a
+requirement.
+
+**The running editor is an MCP server too**, at `http://127.0.0.1:8760/mcp/`. Any client that
+connects there works on *the project open in the browser* — one project in memory, one writer,
+every edit visible as it happens:
+
+```bash
+claude mcp add --transport http vedit-live http://127.0.0.1:8760/mcp/
+```
+
+The classic stdio server is still there for agents that start without a UI:
 
 `.mcp.json` is already in the repo, so opening this folder in Claude Code offers the `vedit`
 server on first launch (approve it once). Anywhere else:
@@ -317,10 +333,27 @@ keyframe editor, with times relative to the start of the clip. With nothing sele
 the project: resolution, fps, background, EBU R128 normalisation of the mix, master effects.
 
 **6. Assistant.** Ask for a change in plain language and it happens on the project — "drop the
-first 2 seconds of the first clip", "dissolve between the two shots", "move the music to its
-own track and take it down 6 dB". Its tools **are the same operations as the buttons**: what it
-does appears in the timeline and undoes with Ctrl+Z, exactly like your own edit. Requires
-`ANTHROPIC_API_KEY`; without it, the tab explains why it is off and nothing else is affected.
+first 2 seconds of the first clip", "dissolve between the two shots", "make an animated lower
+third with my name". Its tools **are the same operations as the buttons**: what it does
+appears in the timeline and undoes with Ctrl+Z, exactly like your own edit.
+
+*Pick any model* from the chip at the top of the tab — no environment variables, no restart:
+
+- **Claude Code** already installed on your computer: uses your Claude subscription, no key.
+  It works on the open project through the editor's own MCP server, so you watch every edit
+  land in the timeline as it happens;
+- **Anthropic** (Claude) with an API key;
+- anything that speaks the **OpenAI chat/completions** protocol: OpenAI, Google Gemini,
+  OpenRouter, Groq, Mistral, DeepSeek, xAI, local models in **Ollama** or **LM Studio**, or any
+  other address you paste.
+
+Keys stay on your machine in `~/.vedit/llm.json`, never in the project file.
+
+*Point at things.* Under the message box: **instant** (the playhead), **span** (start, move,
+end), **clip** (the selected one, or "ask" in its properties), **area** (draw a box on the
+frame). Each becomes a numbered chip; write "make the title in 2 bigger" and the model gets the
+reference with the actual frame in front of it — the area drawn in red, and its position
+already converted to the `x`/`y` that `set_transform` uses.
 
 **7. Export.** Destination file, quality (`draft` / `medium` / `high` / `max`), codec (H.264,
 HEVC, AV1, VP9), optionally just a portion of the timeline. The extension picks the container:
@@ -381,6 +414,16 @@ balance, temperature, curves, `.cube` LUTs, `match_color` between shots, `color_
 **Composition** — position, scale, rotation and opacity per clip, all animatable with keyframes
 and easing; PiP, graphic overlays, text with box/outline/shadow, chroma key, crop, mirror,
 pixelate, vignette, grain, glow, stabilisation.
+
+**HTML motion graphics** — `add_html` puts an HTML/CSS/JS document on a track as a clip:
+lower thirds, animated titles, counters, infographics, whole screens. The background is
+transparent, so the footage shows through. The page's clock is the clip's clock: CSS
+animations and transitions, Web Animations, GSAP, `requestAnimationFrame` and `setTimeout`
+are all stepped one frame at a time, or define `window.veditRender = t => …` to draw each
+frame yourself. In the web UI the clip plays **live** in an iframe that follows the playhead,
+and you can edit its source in the properties panel while it plays. At render time Chromium
+steps through the same frames and captures them with alpha, so what you previewed is what you
+get.
 
 **Audio** — gain in dB (animatable), pan, fades, EQ, compressor, limiter, noise reduction, gate,
 reverb, echo, pitch shift, dynamic normalisation, and two-pass EBU R128 normalisation of the

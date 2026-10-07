@@ -47,6 +47,11 @@ all'inizio della clip. project_info da' lo stato della timeline con gli id.
 Per un montaggio serrato usa add_clips: mette tutti i tagli in una chiamata sola,
 ed e' atomico.
 
+Grafica animata (sottopancia, titoli, contatori, infografiche, schermate
+intere): add_html con un documento HTML/CSS/JS su una traccia sopra la ripresa.
+Lo sfondo e' trasparente, il tempo della pagina e' quello della clip, e
+nell'interfaccia (open_ui) si vede animata dal vivo prima di renderizzare.
+
 Se chi ti guida vuole vedere o correggere a mano, apri l'editor con open_ui:
 interfaccia e agente lavorano sullo stesso progetto, le modifiche si vedono da
 tutte e due le parti senza salvare niente. Se uno strumento dice che ffmpeg non
@@ -129,11 +134,29 @@ def _ui_attach(s: Store) -> None:
     modulo ``api`` non viene nemmeno importato, e il server MCP resta leggero.
     """
     api = sys.modules.get("vedit.api")
-    if api is not None and api.background_info() and api.S.store is not s:
+    if api is not None and (api.background_info() or api.MCP_ATTIVO) and api.S.store is not s:
         api.attach(s)
 
 
+def _ospite() -> Store | None:
+    """Il progetto aperto nell'interfaccia, se questo server MCP gira dentro di lei.
+
+    Collegandosi a /mcp dell'editor si lavora su quello che si vede nel
+    browser: senza ``project`` gli strumenti agiscono li', non su un progetto
+    proprio del server.
+    """
+    api = sys.modules.get("vedit.api")
+    if api is not None and api.MCP_ATTIVO and api.S.store is not None:
+        return api.S.store
+    return None
+
+
 def _store(project: str | None = None) -> Store:
+    if project is None and (ospite := _ospite()) is not None:
+        if ospite.path:
+            _stores[ospite.path] = ospite
+            _current[0] = ospite.path
+        return ospite
     if project:
         key = str(Path(project).resolve())
         if key not in _stores:
@@ -384,6 +407,42 @@ def add_color(color: str = "black", start: float = 0.0, duration: float = 2.0,
               track: str | None = None, project: str | None = None) -> dict:
     """Aggiunge una clip di colore pieno (stacco, fondale, schermata finale)."""
     return _clip_view(_store(project).add_color(color, track, start, duration))
+
+
+@mcp.tool()
+def add_html(html: str | None = None, path: str | None = None, start: float = 0.0,
+             duration: float = 4.0, track: str | None = None, base: str | None = None,
+             project: str | None = None) -> dict:
+    """Grafica animata scritta in HTML/CSS/JS, sovrapposta al video con trasparenza.
+
+    Passa il documento in ``html`` oppure un file in ``path`` (i percorsi
+    relativi di immagini e font si risolvono dalla sua cartella, o da ``base``).
+    Senza nessuno dei due parte da un sottopancia di esempio.
+
+    La pagina e' grande quanto il progetto (1920x1080 pixel CSS in 1080p) e lo
+    sfondo e' trasparente: quello che non disegni lascia vedere il video sotto.
+    Il tempo della pagina parte da 0 all'inizio della clip e avanza a passi di
+    1/fps, identico nell'anteprima dal vivo dell'interfaccia e nel render:
+    animazioni e transizioni CSS, Web Animations, GSAP/anime.js,
+    requestAnimationFrame e setTimeout funzionano senza fare niente. Per il
+    controllo totale definisci ``window.veditRender = t => {...}`` (t in
+    secondi): viene chiamata a ogni fotogramma.
+
+    Mettila su una traccia sopra la ripresa (add_track) e controlla con
+    preview_frame: al render Chromium la fotografa fotogramma per fotogramma.
+    Serve Playwright (extra ``html``) e Chrome, Edge o Chromium.
+    """
+    c = _store(project).add_html(html=html, path=path, track_id=track, start=start,
+                                 duration=duration, base=base)
+    return {**_clip_view(c), "html": f"{len(c.html or '')} caratteri", "base": c.html_base}
+
+
+@mcp.tool()
+def set_html(clip: str, html: str | None = None, path: str | None = None,
+             base: str | None = None, project: str | None = None) -> dict:
+    """Sostituisce il documento di una clip html (o solo la cartella ``base``)."""
+    c = _store(project).set_html(clip, html=html, path=path, base=base)
+    return {**_clip_view(c), "html": f"{len(c.html or '')} caratteri", "base": c.html_base}
 
 
 @mcp.tool()
@@ -1229,6 +1288,10 @@ async def open_ui(port: int = 8760, open_browser: bool = True,
     from . import api
 
     s = _store(project)
+    if api.MCP_ATTIVO and not api.background_info() and api.S.porta:
+        # siamo gia' dentro l'interfaccia: e' aperta, basta dire dove
+        return {"url": f"http://127.0.0.1:{api.S.porta}", "avviato_ora": False,
+                "progetto": s.path, "nota": "stai gia' lavorando dentro l'editor aperto"}
     esito = await _off(api.serve_background, s, "127.0.0.1", port, open_browser)
     if not esito.get("interfaccia_compilata", True):
         esito["avviso"] = ("interfaccia non compilata: da repo serve `npm run build` in frontend/ "

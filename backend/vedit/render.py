@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import effects as fx
-from . import ffmpeg, hw, probe
+from . import ffmpeg, htmlclip, hw, probe
 from .graph import CompileOptions, compile_project
 from .model import Project
 
@@ -156,6 +156,16 @@ def measure_loudness(project: Project) -> dict:
 # --------------------------------------------------------------------------
 
 
+def _html_files(project: Project, width: int | None, height: int | None, fps: float | None,
+                start: float | None, end: float | None) -> dict:
+    """Clip html fotografate alla risoluzione e cadenza di questo render."""
+    if not any(c.type == "html" for t in project.tracks for c in t.clips):
+        return {}
+    s = project.settings
+    return htmlclip.prepare(project, width=int(width or s.width), height=int(height or s.height),
+                            fps=float(fps or s.fps), start=start, end=end)
+
+
 def build_command(project: Project, opts: RenderOptions, workdir: Path) -> tuple[list[str], float, list[str], str]:
     out_path = Path(opts.output)
     ext = out_path.suffix.lower()
@@ -172,12 +182,13 @@ def build_command(project: Project, opts: RenderOptions, workdir: Path) -> tuple
             enc = info.encoder_for(opts.codec, opts.prefer_hw)
 
     stab = analyze_stabilization(project)
+    html = _html_files(project, opts.width, opts.height, opts.fps, opts.start, opts.end) if want_video else {}
     copts = CompileOptions(
         width=opts.width, height=opts.height, fps=opts.fps,
         use_proxy=opts.use_proxy, audio=want_audio, video=want_video,
         start=opts.start, end=opts.end, workdir=str(workdir),
         hwaccel=info.hwaccel if (opts.prefer_hw and opts.hwaccel_decode and info.is_hw(enc)) else "",
-        stab_files=stab,
+        stab_files=stab, html_files=html,
     )
     c = compile_project(project, copts)
 
@@ -335,9 +346,11 @@ def render_frame(project: Project, t: float, output: str, width: int | None = No
         w = width or project.settings.width
         h = int(round(w * project.settings.height / project.settings.width))
         h += h % 2
+        a, b = max(0.0, t), max(0.0, t) + max(2.0 / fps, 0.05)
         copts = CompileOptions(
             width=w, height=h, fps=fps, use_proxy=use_proxy, audio=False, video=True,
-            start=max(0.0, t), end=max(0.0, t) + max(2.0 / fps, 0.05), workdir=str(workdir),
+            start=a, end=b, workdir=str(workdir),
+            html_files=_html_files(project, w, h, fps, a, b),
         )
         c = compile_project(project, copts)
         script = workdir / "fg.txt"

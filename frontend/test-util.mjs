@@ -4,13 +4,19 @@
  *   node test-util.mjs
  */
 import assert from 'node:assert/strict'
-import { isKf, sampleKf, transformBox } from './src/util.js'
+import { impronta, isKf, sampleKf, transformBox } from './src/util.js'
 
 let ok = 0
 const test = (name, fn) => {
   try { fn(); ok++; console.log('ok   ' + name) }
   catch (e) { console.log('FAIL ' + name + ': ' + e.message); process.exitCode = 1 }
 }
+
+test('impronta: stabile, e cambia col documento della clip html', () => {
+  assert.equal(impronta('<p>a</p>'), impronta('<p>a</p>'))
+  assert.notEqual(impronta('<p>a</p>'), impronta('<p>b</p>'))
+  assert.equal(typeof impronta(undefined), 'string')
+})
 
 test('isKf torna sempre un booleano (uno 0 in JSX si stampa)', () => {
   assert.equal(isKf(0), false)

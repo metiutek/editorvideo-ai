@@ -9,40 +9,47 @@
    ========================================================================== */
 
 :root {
-  /* superfici, dalla piu' profonda alla piu' in rilievo */
-  --bg: #0d0f13;
-  --panel: #14171c;
-  --panel-2: #1b1f26;
-  --raised: #232830;
-  --line: #262b34;
-  --line-soft: #1e222a;
+  /* superfici, dalla piu' profonda alla piu' in rilievo: inchiostro caldo,
+     non grigio freddo, cosi' l'editor sembra un posto dove giocare */
+  --bg: #121119;
+  --panel: #1a1823;
+  --panel-2: #22202d;
+  --raised: #2c2a3a;
+  --line: #353247;
+  --line-soft: #282636;
 
   /* testo */
-  --text: #dde1e8;
-  --dim: #8a91a0;
-  --faint: #626a78;
+  --text: #f3f0fa;
+  --dim: #b3aecb;
+  --faint: #8c87a6;
 
-  /* accento: uno solo */
-  --accent: #4c8dff;
-  --accent-dim: #2f63bd;
-  --accent-soft: rgba(76, 141, 255, .14);
+  /* accento: corallo. Gli altri colori servono a riconoscere le cose al volo */
+  --accent: #ff8a5c;
+  --accent-dim: #f2703f;
+  --accent-soft: rgba(255, 138, 92, .15);
+  --accent-ink: #2a1208;
+  --sky: #6fa8ff;
+  --mint: #5fd6b4;
+  --grape: #b792ff;
+  --sun: #ffc65c;
 
-  --danger: #e2585a;
-  --warn: #d9a441;
-  --ok: #4fae72;
+  --danger: #ff6b7d;
+  --warn: #ffc65c;
+  --ok: #5fd69e;
 
-  /* clip: colori desaturati, leggibili anche affiancati */
-  --clip-video: #2c4f73;
-  --clip-audio: #2a6152;
-  --clip-text: #55407a;
-  --clip-color: #6d4a2c;
+  /* clip: pieni ma morbidi, il testo bianco si legge su tutti */
+  --clip-video: #4363c4;
+  --clip-audio: #2b876c;
+  --clip-text: #7953c0;
+  --clip-color: #ad6438;
+  --clip-html: #1f8577;
 
   /* misure: una scala sola, usata ovunque */
-  --r-sm: 3px;
-  --r: 4px;
-  --r-lg: 7px;
-  --h-ctl: 26px;
-  --h-ctl-sm: 21px;
+  --r-sm: 6px;
+  --r: 9px;
+  --r-lg: 14px;
+  --h-ctl: 30px;
+  --h-ctl-sm: 24px;
 
   /* colonna dei nomi traccia: stesso valore di HEAD in Timeline.jsx */
   --tl-head: 150px;
@@ -54,7 +61,7 @@ html, body, #root { height: 100%; margin: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 12px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font: 500 13px/1.5 "Nunito", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   overflow: hidden;
   user-select: none;
   -webkit-font-smoothing: antialiased;
@@ -122,6 +129,10 @@ input, select, textarea {
   height: var(--h-ctl); padding: 0 7px; width: 100%;
 }
 textarea { height: auto; padding: 5px 7px; line-height: 1.45; }
+textarea.codice {
+  font-family: ui-monospace, Consolas, 'Cascadia Mono', monospace; font-size: 11px;
+  white-space: pre; overflow: auto; tab-size: 2; resize: vertical;
+}
 select { padding-right: 4px; }
 input[type=checkbox] {
   width: 15px; height: 15px; accent-color: var(--accent); padding: 0; flex: none;
@@ -311,6 +322,11 @@ input[type=range]::-moz-range-thumb {
   position: absolute; inset: 0; width: 100%; height: 100%;
   transform-origin: center; will-change: transform, opacity;
 }
+.livehtml { pointer-events: none; }
+.livehtml iframe {
+  position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0;
+  background: transparent; color-scheme: normal; pointer-events: none;
+}
 .livetext { display: grid; place-items: center; text-align: center; pointer-events: none; }
 .livetext span { white-space: pre-wrap; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 900; }
 
@@ -446,6 +462,7 @@ input[type=range]::-moz-range-thumb {
 .clip.audio { background-color: var(--clip-audio); }
 .clip.text { background-color: var(--clip-text); }
 .clip.color { background-color: var(--clip-color); }
+.clip.html { background-color: var(--clip-html); }
 .clip.disabled { opacity: .4; }
 .clip.sel {
   outline: 2px solid var(--accent); outline-offset: -1px; z-index: 3;
@@ -706,3 +723,176 @@ input.percorso {
 .browser .item.recente .hint {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%;
 }
+
+
+/* ==========================================================================
+   Tono giocoso
+   --------------------------------------------------------------------------
+   Semplice da capire prima di tutto: parole intere invece di sigle, un colore
+   per ogni tipo di cosa, bersagli grandi. Il gioco sta nelle forme (pillole,
+   angoli morbidi), nei colori caldi e in un rimbalzo leggero al clic — mai in
+   adesivi o emoji, che invecchiano e distraggono dall'immagine.
+   ========================================================================== */
+
+button { border-radius: 999px; font-weight: 600; transition: background .14s, border-color .14s, color .14s, transform .12s; }
+button:hover:not(:disabled):not(.icon) { transform: translateY(-1px); }
+button:active:not(:disabled) { transform: scale(.96); }
+button.icon { border-radius: 10px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 800; }
+button.primary:hover:not(:disabled) { background: #ffa07a; border-color: #ffa07a; }
+button.on { background: var(--accent-soft); color: var(--accent); }
+input, select, textarea { border-radius: var(--r); background: #100f16; }
+input[type=range]::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -5.5px; background: var(--text); }
+input[type=range]:active::-webkit-slider-thumb { background: var(--accent); }
+
+/* barra in alto: il nome e' un marchio piccolo e caldo, le azioni hanno un
+   pallino colorato che dice di che famiglia sono */
+.topbar { padding: 8px 12px; gap: 4px; background: var(--bg); border-bottom: none; }
+.topbar .name {
+  font-size: 17px; font-weight: 800; letter-spacing: -.01em; color: var(--text);
+  display: inline-flex; align-items: center; gap: 7px; margin-right: 14px; text-transform: lowercase;
+}
+.topbar .name::before {
+  content: ""; width: 14px; height: 14px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffc2a8, var(--accent) 60%);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.topbar .sep { background: var(--line-soft); }
+button.act .ico {
+  width: 22px; height: 22px; padding: 3px; border-radius: 50%;
+  background: var(--chip, var(--raised)); color: #16141e;
+}
+button.act.sky { --chip: var(--sky); }
+button.act.mint { --chip: var(--mint); }
+button.act.grape { --chip: var(--grape); }
+button.act.sun { --chip: var(--sun); }
+button.act { color: var(--text); padding-left: 5px; }
+
+/* pannelli come schede morbide che galleggiano sul fondo */
+.middle { padding: 0 8px 8px; gap: 0; background: var(--bg); }
+.middle > div > .panel, .center { border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line-soft); }
+.divider.v, .divider.h { background: transparent; }
+
+/* schede a pillola, non sottolineate */
+.tabs { padding: 6px; gap: 4px; border-bottom: 1px solid var(--line-soft); }
+.tabs button { height: 30px; border-radius: 999px; border-bottom: none; padding: 0 13px; }
+.tabs button.on { background: var(--raised); color: var(--text); border-bottom: none; }
+.tabs button:hover:not(:disabled) { color: var(--text); background: var(--panel-2); }
+
+.section-title {
+  height: 40px; font-size: 13px; letter-spacing: 0; text-transform: none;
+  font-weight: 700; color: var(--text); gap: 8px; border-bottom: 1px solid var(--line-soft);
+}
+.section-title .hint { font-weight: 500; }
+.group { border-bottom: 1px solid var(--line-soft); padding: 12px; }
+.group h4 { font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--dim); font-weight: 700; }
+
+/* monitor e trasporto */
+.preview { background: #0b0a10; }
+.preview img, .preview video, .livecanvas { border-radius: 10px; }
+.transport { background: var(--panel); border-top: 1px solid var(--line-soft); }
+.transport .modo { font-weight: 700; }
+.badge { border-radius: 999px; padding: 4px 10px; }
+
+/* timeline: clip come gettoni arrotondati, testina corallo */
+.clip { border-radius: 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,.14); }
+.clip.sel { outline: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.2); }
+.playhead { background: var(--accent); }
+.playhead::before { background: var(--accent); border-radius: 6px; }
+
+/* chat */
+.msg { border-radius: 16px; padding: 9px 12px; }
+.msg.user { background: var(--accent); color: var(--accent-ink); font-weight: 600; border-bottom-right-radius: 5px; }
+.msg.assistant { background: var(--panel-2); border: 1px solid var(--line-soft); border-bottom-left-radius: 5px; }
+.chatempty { font-size: 12px; color: var(--dim); line-height: 1.6; }
+.chatempty b { color: var(--text); font-size: 13px; }
+.esempi { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; align-items: flex-start; }
+.esempio {
+  height: auto; min-height: 30px; padding: 5px 12px; text-align: left; white-space: normal;
+  background: var(--panel-2); border-color: var(--line-soft); color: var(--text); font-weight: 600;
+}
+.esempio:hover:not(:disabled) { border-color: var(--accent); }
+.chatfoot { border-top: 1px solid var(--line-soft); padding: 8px; display: flex; flex-direction: column; gap: 7px; }
+.chatfoot .chatbar { border-top: none; padding: 0; }
+.chatbar { display: flex; gap: 6px; align-items: flex-end; }
+.chatbar textarea { border-radius: 14px; padding: 8px 11px; }
+.chatbar button.primary.icon { width: 38px; height: 38px; border-radius: 50%; }
+.modelpill {
+  height: 28px; padding: 0 11px; font-size: 12px; background: var(--panel-2);
+  border-color: var(--line); color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}
+.modelpill .dot, .prov .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.modelpill .dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(95,214,158,.18); }
+.prov .dot.ok { background: var(--ok); }
+
+/* riferimenti: pastiglie numerate */
+.rifbar { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.rifbar .hint { margin-right: 2px; }
+button.chip {
+  height: 26px; padding: 0 10px; font-size: 12px; gap: 5px;
+  background: var(--panel-2); border-color: var(--line); color: var(--dim);
+}
+button.chip:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+button.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.rifs { display: flex; flex-wrap: wrap; gap: 5px; }
+.rif {
+  display: inline-flex; align-items: center; gap: 0; border-radius: 999px;
+  background: var(--accent-soft); color: var(--text); font-size: 12px; font-weight: 600;
+  border: 1px solid rgba(255,138,92,.35);
+}
+.rif b {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); font-size: 11px; margin-right: 6px; font-weight: 800;
+}
+.rifs.inmsg { margin-bottom: 6px; }
+.rifs.inmsg .rif { padding: 2px 9px 2px 3px; background: rgba(42,18,8,.18); border-color: rgba(42,18,8,.25); color: var(--accent-ink); }
+.rifs.inmsg .rif b { background: var(--accent-ink); color: var(--accent); }
+.rifgo { height: 24px; padding: 0 6px 0 3px; background: transparent; border: none; color: inherit; font-weight: 600; }
+.rifgo:hover:not(:disabled) { background: transparent; transform: none; }
+.rifx { width: 22px; height: 22px; padding: 0; background: transparent; border: none; color: var(--dim); }
+.rifx:hover:not(:disabled) { background: transparent; color: var(--text); transform: none; }
+
+/* area da indicare sul monitor */
+.areapick { position: absolute; inset: 0; cursor: crosshair; z-index: 5; background: rgba(10,9,15,.18); }
+.areabox {
+  position: absolute; border: 2px solid var(--accent); border-radius: 6px;
+  background: rgba(255,138,92,.14); box-shadow: 0 0 0 9999px rgba(10,9,15,.35);
+}
+
+/* impostazioni del modello */
+.modelset { padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.modelset .avviso {
+  background: var(--accent-soft); border: 1px solid rgba(255,138,92,.35); color: var(--text);
+  border-radius: var(--r-lg); padding: 9px 12px; font-size: 12px;
+}
+.provgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.prov {
+  height: auto; min-height: 36px; padding: 6px 10px; justify-content: flex-start; gap: 8px;
+  border-radius: 12px; background: var(--panel-2); border-color: var(--line-soft); text-align: left;
+  white-space: normal; font-size: 12px;
+}
+.prov.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.provform { display: flex; flex-direction: column; gap: 10px; }
+.campo { display: flex; flex-direction: column; gap: 4px; }
+.campo > span { font-size: 12px; color: var(--dim); font-weight: 700; }
+.provform .azioni { display: flex; gap: 8px; align-items: center; }
+.hint.warn { color: var(--warn); }
+
+/* prima schermata: tre passi chiari */
+.benvenuto-titolo { font-size: 30px; font-weight: 800; letter-spacing: -.02em; color: var(--text); }
+.passi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 4px; }
+.passo {
+  background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 16px;
+  padding: 14px; display: flex; flex-direction: column; gap: 3px; text-align: left;
+}
+.passo b {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent); color: var(--accent-ink); font-weight: 800; margin-bottom: 6px;
+}
+.passo:nth-child(2) b { background: var(--sky); color: #0e1a33; }
+.passo:nth-child(3) b { background: var(--mint); color: #0b2a22; }
+.passo span { font-weight: 800; font-size: 14px; }
+.passo small { color: var(--dim); font-size: 12px; }
+
+.toast { border-radius: 14px; }
+.dialog { border-radius: 18px; }

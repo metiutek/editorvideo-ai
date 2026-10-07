@@ -33,7 +33,10 @@ DEFAULT_FONTS = (
     "/System/Library/Fonts/Helvetica.ttc",
 )
 
-MAX_PREPAD = 4.0  # limite al pre-ingrandimento usato per lo zoom animato
+MAX_PREPAD = 4.0
+
+# Clip generate che stanno sopra ai media della stessa traccia.
+GRAFICA = ("text", "color", "html")  # limite al pre-ingrandimento usato per lo zoom animato
 
 
 @dataclass
@@ -61,6 +64,9 @@ class CompileOptions:
     # Mai "auto": la scelta la fa hw.detect() provandola davvero.
     hwaccel: str = ""
     stab_files: dict = field(default_factory=dict)  # clip_id -> file .trf di vidstab
+    # clip_id -> (file .mov con alpha, tempo del suo primo fotogramma): le clip
+    # html fotografate da htmlclip.prepare. Il grafo resta puro, il browser no.
+    html_files: dict = field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------
@@ -242,7 +248,22 @@ class _Builder:
                      extra={"clip": clip.id, "trf": self.o.stab_files.get(clip.id)})
 
         f: list[str] = []
-        if clip.type == "media":
+        if clip.type == "html":
+            got = self.o.html_files.get(clip.id)
+            if not got:
+                self.warnings.append(f"clip {clip.id}: html non rasterizzato, esclusa dal render")
+                return None
+            path, t0 = got
+            # nei segmenti l'attacco (in_) e' gia' avanzato della parte tagliata;
+            # il file parte da t0, quindi si salta solo la differenza
+            args: list[str] = []
+            salto = clip.in_ - float(t0)
+            if salto > 1e-6:
+                args += ["-ss", n(salto)]
+            args += ["-t", n(clip_visible(clip) + 0.05), "-i", path]
+            src = f"{self.add_input(args)}:v"
+            f += ["setpts=PTS-STARTPTS", f"fps={n(self.fps)}"]
+        elif clip.type == "media":
             if media is None or not media.has_video:
                 return None
             idx = self.input_for(clip, media)
@@ -524,11 +545,11 @@ class _Builder:
             # Ordine di sovrapposizione dentro la traccia:
             #  - le clip che iniziano dopo vanno sotto, cosi' la transizione in
             #    uscita di una scopre la seguente;
-            #  - titoli e colori pieni stanno comunque sopra i media: un titolo
+            #  - titoli, colori pieni e grafica html stanno comunque sopra i media: un titolo
             #    messo sulla stessa traccia di una ripresa deve vedersi.
             # A parita' di posizione vince l'ordine della lista (sort stabile).
             for clip in sorted(track.clips,
-                               key=lambda c: (c.type in ("text", "color"), -clip_origin(c))):
+                               key=lambda c: (c.type in GRAFICA, -clip_origin(c))):
                 if not clip.enabled or clip.duration <= 0:
                     continue
                 lab = self.video_clip(clip, track)

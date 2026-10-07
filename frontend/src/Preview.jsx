@@ -19,7 +19,7 @@ const PRIMO = 4
  */
 export default function Preview({
   project, revision, playhead, seek, playing, setPlaying, clip, run, setError, prova,
-  diretta = true,
+  diretta = true, pickArea = false, onArea, onCancelArea,
 }) {
   const videoRef = useRef(null)
   const imgRef = useRef(null)
@@ -158,6 +158,7 @@ export default function Preview({
             : frame.pending && <div className="badge sottile">aggiorno…</div>}
         </>
       )}
+      {pickArea && !empty && <AreaPicker onArea={onArea} onCancel={onCancelArea} />}
       {(failed || (frame.failed && !playing)) && (
         <div className="badge">{failed || 'fotogramma non disponibile'}</div>
       )}
@@ -166,6 +167,63 @@ export default function Preview({
           {fmt(playhead)} / {fmt(duration)}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Riquadro da disegnare sull'inquadratura, per indicare all'assistente un punto
+ * preciso ("questo logo", "quella scritta"). Le misure tornano in frazioni del
+ * fotogramma, quindi valgono a qualunque dimensione del monitor.
+ */
+function AreaPicker({ onArea, onCancel }) {
+  const ref = useRef(null)
+  const [box, setBox] = useState(null)
+
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape') onCancel?.() }
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [onCancel])
+
+  const fotogramma = () => {
+    const host = ref.current?.parentElement
+    return host?.querySelector('.livecanvas') || host?.querySelector('img')
+  }
+
+  const down = (e) => {
+    const r = ref.current.getBoundingClientRect()
+    const x0 = e.clientX - r.left
+    const y0 = e.clientY - r.top
+    ref.current.setPointerCapture(e.pointerId)
+    let ultimo = { x: x0, y: y0, w: 0, h: 0 }
+    const move = (ev) => {
+      const x1 = ev.clientX - r.left
+      const y1 = ev.clientY - r.top
+      ultimo = { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) }
+      setBox(ultimo)
+    }
+    const up = () => {
+      ref.current?.removeEventListener('pointermove', move)
+      setBox(null)
+      const f = fotogramma()?.getBoundingClientRect()
+      if (!f || ultimo.w < 6 || ultimo.h < 6) return
+      const ax = (r.left + ultimo.x - f.left) / f.width
+      const ay = (r.top + ultimo.y - f.top) / f.height
+      const x = Math.max(0, Math.min(1, ax))
+      const y = Math.max(0, Math.min(1, ay))
+      const w = Math.max(0, Math.min(1, ax + ultimo.w / f.width) - x)
+      const h = Math.max(0, Math.min(1, ay + ultimo.h / f.height) - y)
+      if (w > 0.005 && h > 0.005) onArea?.({ x, y, w, h })
+    }
+    ref.current.addEventListener('pointermove', move)
+    ref.current.addEventListener('pointerup', up, { once: true })
+  }
+
+  return (
+    <div className="areapick" ref={ref} onPointerDown={down}>
+      {box && <div className="areabox" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />}
+      <div className="badge prova">disegna un riquadro su quello che vuoi indicare · Esc annulla</div>
     </div>
   )
 }

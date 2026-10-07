@@ -340,6 +340,7 @@ export default function Timeline({
                       className={[
                         'clip', track.kind === 'audio' ? 'audio' : '',
                         clip.type === 'text' ? 'text' : '', clip.type === 'color' ? 'color' : '',
+                        clip.type === 'html' ? 'html' : '',
                         clip.enabled === false ? 'disabled' : '',
                         selected === clip.id ? 'sel' : '',
                       ].join(' ')}

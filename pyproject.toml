@@ -63,6 +63,10 @@ vision = ["ultralytics>=8.3"]
 # di serie. Senza, transcribe/make_captions/tighten_speech/censor_speech
 # dicono cosa installare.
 transcribe = ["faster-whisper>=1.0"]
+# clip html: Chromium fotografa la grafica fotogramma per fotogramma al render.
+# Usa Chrome o Edge gia' installati; senza, add_html funziona e l'anteprima
+# dal vivo pure, ma il render dice cosa installare.
+html = ["playwright>=1.40"]
 
 [project.scripts]
 vedit = "vedit.cli:main"

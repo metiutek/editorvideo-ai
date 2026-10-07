@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
-import { sampleKf } from './util.js'
+import { impronta, sampleKf } from './util.js'
 
 /**
  * Riproduzione in tempo reale, senza passare da ffmpeg.
@@ -11,6 +11,10 @@ import { sampleKf } from './util.js'
  * opacita', dissolvenze e i pochi effetti che il CSS sa rifare. Niente da
  * preparare: si parte subito e lo scrub non renderizza nulla.
  *
+ * Le clip html invece sono esatte anche qui: girano in un iframe con lo stesso
+ * orologio virtuale che il render usa per fotografarle (htmlclip.py), e la
+ * testina lo porta al fotogramma giusto con un messaggio.
+ *
  * Il prezzo e' la fedelta': quello che il CSS non sa fare (LUT, chroma key,
  * glow, curve, stabilizzazione, tendine e scorrimenti) qui non si vede. Quando
  * capita, il componente lo dichiara con `onApprossimato` invece di mostrare
@@ -19,6 +23,9 @@ import { sampleKf } from './util.js'
 
 // Effetti che il CSS riproduce fedelmente. Gli altri fanno scattare l'avviso.
 const CSS_FILTRI = new Set(['color', 'blur', 'mirror', 'vignette'])
+
+// clip generate: stanno sopra ai media della stessa traccia, come in graph.py
+const GRAFICA = new Set(['text', 'color', 'html'])
 
 const dbToVol = (db) => Math.min(1, Math.max(0, 10 ** ((Number(db) || 0) / 20)))
 
@@ -67,6 +74,11 @@ export default function LivePlayer({
   const [box, setBox] = useState(null)       // dimensione a schermo del canvas
   const orologio = useRef({ da: 0, a: 0 })   // riferimento tempo reale -> timeline
   const attiviRef = useRef('')
+  // clip html: iframe, ultimo tempo mandato, e un contatore per ricaricarle
+  // quando la testina torna indietro su una pagina che non sa riavvolgersi
+  const frames = useRef(new Map())
+  const inviati = useRef(new Map())
+  const [ricariche, setRicariche] = useState({})
   // la testina si legge da un riferimento: se entrasse fra le dipendenze del
   // ciclo, ogni suo aggiornamento lo ricostruirebbe azzerando l'orologio
   const testina = useRef(playhead)
@@ -128,7 +140,7 @@ export default function LivePlayer({
     // le clip che iniziano dopo stanno sotto, testi e colori sempre sopra:
     // stesso ordine del compilatore, altrimenti l'anteprima mente
     return out.sort((a, b) => {
-      const grafica = (x) => (x.clip.type === 'text' || x.clip.type === 'color' ? 1 : 0)
+      const grafica = (x) => (GRAFICA.has(x.clip.type) ? 1 : 0)
       if (grafica(a) !== grafica(b)) return grafica(a) - grafica(b)
       return b.clip.start - a.clip.start
     })
@@ -167,6 +179,17 @@ export default function LivePlayer({
 
         const tLocale = t - clip.start
         const speed = Math.abs(clip.speed || 1)
+
+        if (clip.type === 'html') {
+          // un messaggio solo quando il tempo cambia: da fermi l'iframe non
+          // lavora, in riproduzione avanza a passi di fotogramma come al render
+          const fr = frames.current.get(clip.id)
+          const tl = Math.max(0, Math.min(clip.duration, tLocale))
+          if (fr?.contentWindow && inviati.current.get(clip.id) !== tl) {
+            inviati.current.set(clip.id, tl)
+            fr.contentWindow.postMessage({ vedit: 'seek', t: tl }, '*')
+          }
+        }
 
         if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') {
           const dentro = (clip.in || 0) + tLocale * speed
@@ -235,10 +258,34 @@ export default function LivePlayer({
     for (const id of [...elementi.current.keys()]) {
       if (!vivi.has(id)) elementi.current.delete(id)
     }
+    for (const id of [...inviati.current.keys()]) {
+      if (!vivi.has(id)) inviati.current.delete(id)
+    }
   }, [attivi])
+
+  // L'iframe e' in sandbox: risponde solo con messaggi. "ready" = documento
+  // (ri)caricato, va riportato al tempo della testina; "reload" = gli si e'
+  // chiesto di tornare indietro ma ha uno stato script che non si riavvolge.
+  useEffect(() => {
+    const ascolta = (ev) => {
+      const d = ev.data
+      if (!d || (d.vedit !== 'ready' && d.vedit !== 'reload')) return
+      for (const [id, fr] of frames.current) {
+        if (fr.contentWindow !== ev.source) continue
+        inviati.current.delete(id)
+        if (d.vedit === 'reload') setRicariche((r) => ({ ...r, [id]: (r[id] || 0) + 1 }))
+      }
+    }
+    window.addEventListener('message', ascolta)
+    return () => window.removeEventListener('message', ascolta)
+  }, [])
 
   const media = Object.fromEntries((project?.media || []).map((m) => [m.id, m]))
   const registra = (id) => (el) => { if (el) elementi.current.set(id, el); else elementi.current.delete(id) }
+  const registraFrame = (id) => (el) => {
+    if (el) frames.current.set(id, el)
+    else frames.current.delete(id)
+  }
 
   return (
     <div className="live" ref={hostRef}>
@@ -250,6 +297,20 @@ export default function LivePlayer({
             if (track.kind === 'audio') {
               return <audio key={chiave} ref={registra(chiave)} src={api.streamUrl(clip.media)}
                 preload="auto" />
+            }
+            if (clip.type === 'html') {
+              return (
+                <div key={`${chiave}:${ricariche[clip.id] || 0}`} ref={registra(chiave)}
+                  className="livelayer livehtml">
+                  <iframe ref={registraFrame(chiave)} title={clip.name || 'html'}
+                    // allow-scripts senza allow-same-origin: la pagina gira in
+                    // un'origine opaca, non tocca l'editor ne' le sue API
+                    sandbox="allow-scripts"
+                    src={api.htmlUrl(clip.id, impronta(`${clip.html}|${clip.html_base || ''}|${project?.settings?.fps}`))}
+                    width={pw} height={ph}
+                    style={{ width: pw, height: ph, transform: `scale(${box.k})` }} />
+                </div>
+              )
             }
             if (clip.type === 'text') return <Testo key={chiave} clip={clip} k={box.k} ref2={registra(chiave)} />
             if (clip.type === 'color') {

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from . import effects as fx
+from . import htmlclip
 from . import keyframes as kf
 from . import probe as probe_mod
 from .model import (
@@ -452,6 +453,78 @@ class Store:
         self._done()
         return c
 
+    @staticmethod
+    def _sorgente_html(html: str | None, path: str | None) -> tuple[str, str | None]:
+        """Documento e cartella base da ``html`` (testo) o ``path`` (file .html).
+
+        Il documento entra *nel progetto*: il render resta funzione del solo
+        JSON anche se il file viene cambiato o spostato. La cartella serve ai
+        percorsi relativi (immagini, font) e resta quella del file.
+        """
+        if (html is None) == (path is None):
+            raise EditError("passa html (il documento) oppure path (un file .html), uno dei due")
+        base = None
+        if path is not None:
+            f = Path(path)
+            if not f.is_file():
+                raise EditError(f"file html non trovato: {path}")
+            html = f.read_text(encoding="utf-8", errors="replace")
+            base = str(f.resolve().parent)
+        assert html is not None
+        if not html.strip():
+            raise EditError("il documento html e' vuoto")
+        if len(html) > htmlclip.MAX_HTML:
+            raise EditError(f"documento html troppo grande ({len(html)} caratteri)")
+        return html, base
+
+    def add_html(self, html: str | None = None, path: str | None = None, track_id: str | None = None,
+                 start: float = 0.0, duration: float = 4.0, name: str | None = None,
+                 base: str | None = None) -> Clip:
+        """Grafica animata in HTML/CSS/JS sopra il video (vedi htmlclip.py).
+
+        Senza ``html`` ne' ``path`` parte da un sottopancia di esempio.
+        """
+        if html is None and path is None:
+            html = htmlclip.template(self.project.settings.width, self.project.settings.height)
+        doc, cartella = self._sorgente_html(html, path)
+        if base is not None:
+            if not Path(base).is_dir():
+                raise EditError(f"cartella base inesistente: {base}")
+            cartella = str(Path(base).resolve())
+        if float(duration) <= 0:
+            raise EditError("la durata deve essere > 0")
+        track = self.track_for_edit(track_id or self._default_track("video"))
+        if track.kind != "video":
+            raise EditError("una clip html va su una traccia video")
+        self._touch()
+        c = Clip(type="html", html=doc, html_base=cartella, start=max(0.0, float(start)),
+                 duration=float(duration), name=name or (Path(path).stem if path else "html"))
+        track.clips.append(c)
+        track.clips.sort(key=lambda x: x.start)
+        self._done()
+        return c
+
+    def set_html(self, clip_id: str, html: str | None = None, path: str | None = None,
+                 base: str | None = None) -> Clip:
+        """Sostituisce il documento di una clip html (o solo la cartella base)."""
+        track, clip = self.clip_for_edit(clip_id)
+        if clip.type != "html":
+            raise EditError(f"la clip {clip_id} non e' di tipo html")
+        doc, cartella = (None, None)
+        if html is not None or path is not None:
+            doc, cartella = self._sorgente_html(html, path)
+        if base is not None and base != "" and not Path(base).is_dir():
+            raise EditError(f"cartella base inesistente: {base}")
+        self._touch()
+        if doc is not None:
+            clip.html = doc
+            if path is not None:
+                clip.html_base = cartella
+        if base is not None:
+            clip.html_base = str(Path(base).resolve()) if base else None
+        self._done()
+        return clip
+
     def _default_track(self, kind: str) -> str:
         t = next((t for t in self.project.tracks if t.kind == kind), None)
         if t is None:
@@ -565,6 +638,8 @@ class Store:
     def set_speed(self, clip_id: str, speed: float, keep_duration: bool = False) -> Clip:
         """Cambia velocita'. Di default la durata in timeline si accorcia/allunga."""
         track, clip = self.clip_for_edit(clip_id)
+        if clip.type == "html":
+            raise EditError("una clip html non ha velocita': il ritmo lo decide la sua animazione")
         if speed <= 0:
             raise EditError("la velocita' deve essere > 0 (usa reverse=true per il contrario)")
         if speed > 100 or speed < 0.01:
@@ -999,6 +1074,9 @@ class Store:
                     item["audio"] = vars(c.audio)
                     if c.text:
                         item["text"] = vars(c.text)
+                    if c.type == "html":
+                        item["html"] = c.html
+                        item["html_base"] = c.html_base
                 else:
                     tf = c.transform
                     changed = {k: v for k, v in vars(tf).items()
@@ -1010,6 +1088,8 @@ class Store:
                         item["audio"] = {"gain_db": c.audio.gain_db, "mute": c.audio.mute}
                     if c.text:
                         item["text"] = c.text.text[:60]
+                    if c.type == "html":
+                        item["html"] = f"{len(c.html or '')} caratteri"
                 tr["clips"].append(item)
             out["tracks"].append(tr)
         return out

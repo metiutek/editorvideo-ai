@@ -16,6 +16,7 @@ import os
 import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -31,13 +32,13 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import ffmpeg, hw, presets, proxy, render
+from . import ffmpeg, htmlclip, hw, llm, presets, proxy, render
 from .model import TRANSITIONS, Effect
 from .store import PRESETS, EditError, Store
 
@@ -61,7 +62,7 @@ FRONTEND = _frontend_dir()
 OPS = {
     "import_media", "set_media", "remove_media", "rename_folder",
     "add_track", "set_track", "remove_track", "move_track",
-    "add_clip", "add_text", "add_color", "remove_clip", "move_clip", "trim_clip",
+    "add_clip", "add_text", "add_color", "add_html", "set_html", "remove_clip", "move_clip", "trim_clip",
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
@@ -80,7 +81,10 @@ class Session:
         self.lock = threading.RLock()
         # conversazione con l'assistente: contiene i blocchi tool_use/tool_result,
         # che i turni successivi devono rimandare intatti
-        self.chat: list[dict] = []
+        self.chat: dict = {}
+        # porta su cui ascolta l'interfaccia: serve a dire a Claude Code dov'e'
+        # il server MCP dell'editor
+        self.porta: int | None = None
         # Numero di modifiche al progetto viste da questo processo. Viaggia in
         # ogni risposta e in ogni evento "project": il browser applica solo lo
         # stato piu' nuovo che conosce, cosi' una risposta arrivata in ritardo
@@ -171,7 +175,68 @@ def ricorda_recente(store: Store) -> None:
 
 
 S = Session()
-app = FastAPI(title="vedit")
+class _PonteMcp:
+    """Il server MCP dell'editor, montato su /mcp dell'interfaccia.
+
+    Chi si collega qui (Claude Code, Cursor, un altro agente) lavora sullo
+    *stesso* Store del browser: un solo progetto in memoria, un solo
+    scrittore, e ogni modifica compare subito in timeline. L'app MCP vera si
+    crea a ogni avvio del server, perche' il suo gestore di sessioni si puo'
+    avviare una volta sola.
+    """
+
+    def __init__(self) -> None:
+        self.app = None
+
+    async def __call__(self, scope, receive, send):
+        if self.app is None:
+            res = JSONResponse({"detail": "server MCP non attivo"}, status_code=503)
+            await res(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+_mcp = _PonteMcp()
+MCP_ATTIVO = False
+
+
+@asynccontextmanager
+async def _vita(_app):
+    """Avvia e ferma il server MCP insieme all'interfaccia."""
+    global MCP_ATTIVO
+    try:
+        from mcp.server.transport_security import TransportSecuritySettings
+
+        from . import mcp_server
+
+        # i controlli su host e origine li fa gia' il middleware qui sotto
+        sub = mcp_server.mcp.streamable_http_app(
+            streamable_http_path="/", stateless_http=True,
+            transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
+    except Exception:  # noqa: BLE001 - senza MCP l'interfaccia funziona lo stesso
+        sub = None
+    if sub is None:
+        yield
+        return
+    async with sub.router.lifespan_context(sub):
+        _mcp.app = sub
+        MCP_ATTIVO = True
+        try:
+            yield
+        finally:
+            MCP_ATTIVO = False
+            _mcp.app = None
+
+
+app = FastAPI(title="vedit", lifespan=_vita)
+app.mount("/mcp", _mcp)
+
+
+def mcp_url() -> str | None:
+    """Indirizzo del server MCP dell'editor, se l'interfaccia e' in ascolto."""
+    if not MCP_ATTIVO or not S.porta:
+        return None
+    return f"http://127.0.0.1:{S.porta}/mcp/"
 
 # Nomi con cui il server accetta di essere chiamato. Vuoto = nessun controllo
 # (i test usano TestClient, che si presenta come "testserver"); serve() e
@@ -208,9 +273,23 @@ async def _solo_locale(request: Request, call_next):
     il nostro, e con un form multipart l'Origin e' quella dell'altro sito.
     Entrambe si rifiutano.
     """
-    if not _da_qui(request.headers):
+    if not _da_qui(request.headers) and not _lettura_html(request):
         return JSONResponse({"detail": "richiesta non locale rifiutata"}, status_code=403)
     return await call_next(request)
+
+
+def _lettura_html(request: Request) -> bool:
+    """Le clip html girano in un iframe in sandbox, quindi con Origin "null".
+
+    Font e moduli che caricano dalla loro cartella arrivano cosi': si lasciano
+    passare solo in lettura e solo sotto /api/html/, che serve file della
+    cartella della clip e nient'altro. Il controllo sul nome host resta.
+    """
+    if request.method != "GET" or not request.url.path.startswith("/api/html/"):
+        return False
+    if request.headers.get("origin") != "null":
+        return False
+    return not _host_consentiti or _nome_host(request.headers.get("host", "")) in _host_consentiti
 
 
 def _da_qui(headers) -> bool:
@@ -281,7 +360,7 @@ def project_state() -> dict:
 @app.post("/api/project/create")
 def project_create(body: CreateBody) -> dict:
     try:
-        S.store = Store.create(name=body.name, preset=body.preset, path=body.path)
+        attach(Store.create(name=body.name, preset=body.preset, path=body.path))
     except (EditError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
     S.chat.clear()
@@ -293,7 +372,7 @@ def project_create(body: CreateBody) -> dict:
 @app.post("/api/project/open")
 def project_open(body: OpenBody) -> dict:
     try:
-        S.store = Store.open(body.path)
+        attach(Store.open(body.path))
     except (EditError, OSError, ValueError) as exc:
         raise HTTPException(400, str(exc)) from exc
     S.chat.clear()
@@ -462,6 +541,50 @@ def raw_file(path: str):
     if not p.is_file():
         raise HTTPException(404, "file inesistente")
     return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "application/octet-stream")
+
+
+# --------------------------------------------------------------------------
+# clip html: il documento per l'anteprima dal vivo
+# --------------------------------------------------------------------------
+
+# l'iframe e' in sandbox (origine opaca): i font e i moduli che carica sono
+# richieste CORS e senza questo intestazione il browser le scarta
+_CORS_HTML = {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}
+
+
+def _clip_html(clip_id: str):
+    store = S.need()
+    found = store.project.find_clip(clip_id)
+    if not found or found[1].type != "html":
+        raise HTTPException(404, f"clip html {clip_id!r} inesistente")
+    return store, found[1]
+
+
+@app.get("/api/html/{clip_id}")
+def html_doc(clip_id: str) -> HTMLResponse:
+    """Il documento della clip con l'orologio virtuale, pilotato dalla UI.
+
+    E' lo stesso che Chromium fotografa al render (htmlclip.compose): quello
+    che si vede nell'anteprima dal vivo e' quello che finisce nel file.
+    """
+    store, clip = _clip_html(clip_id)
+    base = f"/api/html/{clip_id}/files/" if clip.html_base else None
+    doc = htmlclip.compose(clip.html or "", store.project.settings.fps, base)
+    return HTMLResponse(doc, headers=_CORS_HTML)
+
+
+@app.get("/api/html/{clip_id}/files/{rel:path}")
+def html_file(clip_id: str, rel: str):
+    """File relativi della clip (immagini, font, script), solo dalla sua cartella."""
+    _, clip = _clip_html(clip_id)
+    if not clip.html_base:
+        raise HTTPException(404, "la clip non ha una cartella base")
+    root = Path(clip.html_base).resolve()
+    target = (root / rel).resolve()
+    if not target.is_relative_to(root) or not target.is_file():
+        raise HTTPException(404, "file inesistente")
+    return FileResponse(target, headers=_CORS_HTML,
+                        media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream")
 
 
 # --------------------------------------------------------------------------
@@ -813,17 +936,40 @@ def preset_apply(body: PresetBody) -> dict:
 
 class ChatBody(BaseModel):
     message: str
+    # punti del video di cui si parla: istanti, tratti, clip, aree dell'inquadratura
+    refs: list[dict] = []
 
 
 def chat_available() -> dict:
-    """La UI mostra la chat solo se qui c'e' davvero una credenziale utilizzabile."""
+    """Modello attivo, se si puo' usare, e l'elenco di quelli configurabili."""
     try:
-        chat_mod.client()
-    except chat_mod.ChatUnavailable as exc:
-        return {"ok": False, "motivo": str(exc)}
-    except Exception as exc:
-        return {"ok": False, "motivo": str(exc)}
-    return {"ok": True, "model": chat_mod.MODEL}
+        return chat_mod.available()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "motivo": str(exc), "providers": []}
+
+
+class LlmBody(BaseModel):
+    provider: str
+    chiave: str | None = None
+    modello: str | None = None
+    indirizzo: str | None = None
+    attiva: bool = True
+
+
+@app.get("/api/llm")
+def llm_stato() -> dict:
+    return {**chat_available(), "mcp": mcp_url()}
+
+
+@app.post("/api/llm")
+def llm_imposta(body: LlmBody) -> dict:
+    """Sceglie il modello e salva la chiave, solo su questa macchina (~/.vedit)."""
+    try:
+        llm.imposta(body.provider, body.chiave, body.modello, body.indirizzo, body.attiva)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    S.chat.clear()
+    return {**chat_available(), "mcp": mcp_url()}
 
 
 @app.post("/api/chat/reset")
@@ -853,7 +999,8 @@ def chat(body: ChatBody) -> StreamingResponse:
             return f"data: {json.dumps(obj, ensure_ascii=False, default=str)}\n\n"
 
         try:
-            for ev in chat_mod.run(store, S.chat, body.message, run_op):
+            for ev in chat_mod.run(store, S.chat, body.message, run_op,
+                                   refs=body.refs, mcp_url=mcp_url()):
                 yield send(ev)
         except chat_mod.ChatUnavailable as exc:
             yield send({"type": "error", "message": str(exc)})
@@ -918,10 +1065,11 @@ def serve(host: str = "127.0.0.1", port: int = 8760, project: str | None = None,
     import uvicorn
 
     if project:
-        S.store = Store.open(project)
+        attach(Store.open(project))
     _consenti_host(host)
     mount_frontend()
 
+    S.porta = port
     url = f"http://{host}:{port}"
     if open_browser:
         threading.Timer(1.0, lambda: __import__("webbrowser").open(url)).start()
@@ -981,6 +1129,7 @@ def serve_background(store: Store | None = None, host: str = "127.0.0.1", port: 
     _consenti_host(host)
     mount_frontend()
     port = _porta_libera(host, port)
+    S.porta = port
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True, name="vedit-ui")

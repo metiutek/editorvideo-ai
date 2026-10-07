@@ -5,22 +5,17 @@ Claude come strumenti: l'assistente non ha una strada privata per modificare il
 progetto, fa esattamente quello che faresti tu cliccando. Ogni turno ritorna un
 flusso di eventi che la UI mostra mentre arrivano.
 
-Serve una credenziale Anthropic nell'ambiente (``ANTHROPIC_API_KEY``, oppure un
-profilo creato con ``ant auth login``).
+Il modello lo sceglie l'utente fra quelli di ``llm.py``: Claude, qualunque
+servizio compatibile OpenAI, oppure il Claude Code installato sul computer.
 """
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from . import presets
-
-MODEL = "claude-opus-5"
-# il ragionamento e' attivo di default su questo modello e pesa sullo stesso
-# tetto della risposta: senza margine le risposte si troncano a meta'
-MAX_TOKENS = 32000
-MAX_TURNS = 12   # quanti giri di strumenti prima di fermarsi
+from . import llm, presets
 
 SYSTEM = """Sei l'assistente di montaggio dentro vedit, un editor video non lineare.
 
@@ -82,6 +77,16 @@ def build_tools() -> list[dict]:
                "font_size": {"type": "integer"}, "color": _STR,
                "box": {"type": "boolean", "description": "riquadro dietro al testo"}},
               ["text"]),
+        _tool("add_html",
+              "Grafica animata in HTML/CSS/JS sopra il video, con sfondo trasparente: "
+              "sottopancia, titoli animati, contatori, infografiche. La pagina e' grande "
+              "quanto il progetto in pixel CSS; animazioni CSS, GSAP, requestAnimationFrame "
+              "e setTimeout seguono il tempo della clip. Mettila su una traccia sopra la ripresa.",
+              {"html": {**_STR, "description": "documento HTML completo"},
+               "track_id": _STR, "start": _NUM, "duration": _NUM}, ["html"]),
+        _tool("set_html",
+              "Sostituisce il documento HTML di una clip html.",
+              {"clip_id": _STR, "html": _STR}, ["clip_id", "html"]),
         _tool("split_clip",
               "Taglia una clip in due al tempo di timeline indicato.",
               {"clip_id": _STR, "at": _NUM}, ["clip_id", "at"]),
@@ -204,22 +209,9 @@ class ChatUnavailable(RuntimeError):
     """Manca la credenziale o il pacchetto: e' un problema di setup, non un bug."""
 
 
-def client():
-    try:
-        import anthropic
-    except ImportError as exc:  # pragma: no cover - dipende dall'ambiente
-        raise ChatUnavailable(
-            "il pacchetto 'anthropic' non e' installato: pip install anthropic"
-        ) from exc
-    cl = anthropic.Anthropic()
-    # il costruttore non protesta se manca la chiave: fallirebbe alla prima
-    # richiesta, e la UI mostrerebbe la chat come se funzionasse
-    if not getattr(cl, "api_key", None) and not getattr(cl, "auth_token", None):
-        raise ChatUnavailable(
-            "nessuna credenziale Anthropic: imposta ANTHROPIC_API_KEY nell'ambiente "
-            "e riavvia vedit ui"
-        )
-    return cl
+def available() -> dict:
+    """Modello attivo e se si puo' usare: e' quello che la UI mostra nella chat."""
+    return llm.stato()
 
 
 def _state_block(store: Any) -> str:
@@ -227,67 +219,144 @@ def _state_block(store: Any) -> str:
             + json.dumps(store.summary("full"), ensure_ascii=False))
 
 
-def run(store: Any, history: list[dict], question: str,
-        run_op: Callable[[str, dict], str]) -> Iterator[dict]:
-    """Un turno di conversazione. Restituisce eventi man mano che arrivano.
+# --------------------------------------------------------------------------
+# riferimenti: i punti del video di cui l'utente sta parlando
+# --------------------------------------------------------------------------
 
-    ``history`` viene esteso sul posto, cosi' il chiamante conserva i blocchi
-    ``tool_use``/``tool_result`` che i turni successivi devono rimandare intatti.
+
+def _fmt(t: float) -> str:
+    m, s = divmod(max(0.0, float(t)), 60)
+    return f"{int(m)}:{s:05.2f}"
+
+
+def _fotogramma(store: Any, t: float, area: dict | None = None) -> str | None:
+    """PNG del fotogramma al tempo t, con il riquadro dell'area se c'e'."""
+    import tempfile
+    import uuid
+
+    from . import render
+
+    cartella = Path(tempfile.gettempdir()) / "vedit_riferimenti"
+    cartella.mkdir(parents=True, exist_ok=True)
+    out = cartella / f"rif_{uuid.uuid4().hex[:10]}.png"
+    try:
+        render.render_frame(store.project, max(0.0, t), str(out), width=960)
+    except Exception:  # noqa: BLE001 - senza immagine il riferimento resta in parole
+        return None
+    if area:
+        from PIL import Image, ImageDraw
+
+        im = Image.open(out).convert("RGB")
+        w, h = im.size
+        x0, y0 = area["x"] * w, area["y"] * h
+        x1, y1 = x0 + area["w"] * w, y0 + area["h"] * h
+        d = ImageDraw.Draw(im)
+        for k in range(4):
+            d.rectangle([x0 - k, y0 - k, x1 + k, y1 + k], outline=(255, 70, 70))
+        im.save(out)
+    return str(out)
+
+
+def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
+    """Testo che descrive i riferimenti, piu' le immagini dei fotogrammi indicati.
+
+    Ogni riferimento ha un numero: l'utente scrive "il punto 2" e il modello sa
+    di cosa parla, con l'immagine davanti quando serve guardare.
     """
-    cl = client()
-    tools = build_tools()
-
-    # Lo stato va nel turno utente, non nel prompt di sistema: cosi' il prefisso
-    # resta identico tra un turno e l'altro e la cache non viene invalidata.
-    history.append({"role": "user", "content": [
-        {"type": "text", "text": _state_block(store)},
-        {"type": "text", "text": question},
-    ]})
-
-    for _ in range(MAX_TURNS):
-        try:
-            with cl.messages.stream(
-                model=MODEL,
-                max_tokens=MAX_TOKENS,
-                system=SYSTEM,
-                tools=tools,
-                messages=history,
-                extra_body={"output_config": {"effort": "high"}},
-            ) as stream:
-                for event in stream:
-                    if event.type == "content_block_start" and event.content_block.type == "thinking":
-                        yield {"type": "thinking"}
-                    elif event.type == "content_block_delta" and event.delta.type == "text_delta":
-                        yield {"type": "text", "text": event.delta.text}
-                message = stream.get_final_message()
-        except ChatUnavailable:
-            raise
-        except Exception as exc:  # errori di rete, credenziali, rate limit
-            yield {"type": "error", "message": str(exc)}
-            return
-
-        history.append({"role": "assistant", "content": message.content})
-
-        if message.stop_reason == "refusal":
-            yield {"type": "error", "message": "la richiesta e' stata rifiutata"}
-            return
-        if message.stop_reason != "tool_use":
-            yield {"type": "done"}
-            return
-
-        results = []
-        for block in message.content:
-            if block.type != "tool_use":
+    if not refs:
+        return "", []
+    p = store.project
+    righe, immagini = [], []
+    w, h = p.settings.width, p.settings.height
+    for i, r in enumerate(refs, 1):
+        k = r.get("kind")
+        nota = f" — nota: {r['nota']}" if r.get("nota") else ""
+        a = b = 0.0
+        if k == "clip":
+            found = p.find_clip(r.get("id", ""))
+            if not found:
+                righe.append(f"[{i}] clip {r.get('id')} (non esiste piu')")
                 continue
-            yield {"type": "tool", "name": block.name, "input": block.input}
-            try:
-                out = run_op(block.name, dict(block.input))
-                results.append({"type": "tool_result", "tool_use_id": block.id, "content": out})
-                yield {"type": "tool_done", "name": block.name}
-            except Exception as exc:
-                results.append({"type": "tool_result", "tool_use_id": block.id,
-                                "content": f"errore: {exc}", "is_error": True})
-                yield {"type": "tool_error", "name": block.name, "message": str(exc)}
-        history.append({"role": "user", "content": results})
+            tr, c = found
+            righe.append(f"[{i}] clip {c.id} \"{c.name}\" ({c.type}) sulla traccia {tr.id}, "
+                         f"da {_fmt(c.start)} a {_fmt(c.end)}{nota}")
+            t = c.start + c.duration / 2
+        elif k == "time":
+            t = float(r.get("t", 0))
+            righe.append(f"[{i}] l'istante {_fmt(t)} ({t:.2f}s){nota}")
+        elif k == "range":
+            a, b = sorted((float(r.get("a", 0)), float(r.get("b", 0))))
+            righe.append(f"[{i}] il tratto da {_fmt(a)} a {_fmt(b)} ({a:.2f}-{b:.2f}s){nota}")
+            t = a
+        elif k == "area":
+            t = float(r.get("t", 0))
+            x, y, aw, ah = (float(r.get(c, 0)) for c in ("x", "y", "w", "h"))
+            righe.append(
+                f"[{i}] un'area dell'inquadratura al tempo {_fmt(t)}: riquadro rosso nell'immagine; "
+                f"in pixel di progetto x={round(x * w)} y={round(y * h)} "
+                f"larghezza={round(aw * w)} altezza={round(ah * h)} "
+                f"(set_transform usa x/y dal centro: centro dell'area = "
+                f"{round((x + aw / 2 - .5) * w)}, {round((y + ah / 2 - .5) * h)}){nota}")
+        else:
+            continue
+        if len(immagini) < llm.MAX_IMMAGINI:
+            png = _fotogramma(store, t, r if k == "area" else None)
+            if png:
+                immagini.append({"etichetta": f"[{i}]", "path": png})
+            if k == "range" and len(immagini) < llm.MAX_IMMAGINI:
+                png2 = _fotogramma(store, max(a, b - 0.05))
+                if png2:
+                    immagini.append({"etichetta": f"[{i}] fine", "path": png2})
+    testo = ("L'utente indica questi riferimenti (le immagini sono i fotogrammi, "
+             "nello stesso ordine):\n" + "\n".join(righe))
+    return testo, immagini
 
-    yield {"type": "error", "message": f"fermato dopo {MAX_TURNS} giri di strumenti"}
+
+# --------------------------------------------------------------------------
+# un turno
+# --------------------------------------------------------------------------
+
+
+def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict], str],
+        refs: list[dict] | None = None, mcp_url: str | None = None) -> Iterator[dict]:
+    """Un turno di conversazione con il modello attivo, come flusso di eventi.
+
+    ``stato_chat`` conserva la cronologia nel formato del motore che l'ha
+    prodotta: cambiando modello si ricomincia, perche' i formati non sono
+    intercambiabili.
+    """
+    try:
+        p, cfg = llm.attivo()
+    except (RuntimeError, ValueError) as exc:
+        raise ChatUnavailable(str(exc)) from exc
+    if stato_chat.get("provider") != p["id"]:
+        stato_chat.clear()
+        stato_chat.update({"provider": p["id"], "messaggi": [], "sessione": None})
+
+    testo_rif, immagini = riferimenti(store, refs or [])
+    contenuto: list[dict] = []
+    if p["tipo"] != "claude_code":
+        # lo stato va nel turno utente, non nel prompt di sistema: il prefisso
+        # resta identico fra un turno e l'altro e la cache non si invalida
+        contenuto.append({"type": "text", "text": _state_block(store)})
+    if testo_rif:
+        contenuto.append({"type": "text", "text": testo_rif})
+    for im in immagini:
+        if p["tipo"] == "claude_code":
+            contenuto.append({"type": "text", "text": f"Immagine {im['etichetta']}: {im['path']}"})
+        else:
+            contenuto.append(llm.immagine(im["path"]))
+    contenuto.append({"type": "text", "text": question})
+
+    if p["tipo"] == "claude_code":
+        if not mcp_url:
+            yield {"type": "error", "message": "il server MCP dell'editor non e' attivo"}
+            return
+        cwd = str(Path(store.path).parent) if store.path else None
+        yield from llm.run_claude_code(p, cfg, stato_chat, contenuto, mcp_url, cwd)
+    elif p["tipo"] == "anthropic":
+        yield from llm.run_anthropic(p, cfg, SYSTEM, build_tools(), stato_chat["messaggi"],
+                                     contenuto, run_op)
+    else:
+        yield from llm.run_openai(p, cfg, SYSTEM, build_tools(), stato_chat["messaggi"],
+                                  contenuto, run_op)

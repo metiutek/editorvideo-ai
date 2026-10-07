@@ -74,6 +74,15 @@ mani: lo strumento **`open_ui`** avvia l'editor nel browser **sullo stesso proge
 memoria**, quindi le modifiche dell'agente si vedono subito nella timeline e viceversa, senza
 salvare o riaprire niente.
 
+**Non serve VS Code.** Chi scarica vedit lancia `vedit ui` (o `uvx --from vedit-mcp vedit ui`)
+e lavora nel browser; l'assistente dentro l'app puo' essere Claude Code stesso (vedi
+*Assistente*). E l'editor aperto **e' anche un server MCP**, su
+`http://127.0.0.1:8760/mcp/`: chi si collega li' lavora sul progetto che si vede nel browser.
+
+```bash
+claude mcp add --transport http vedit-live http://127.0.0.1:8760/mcp/
+```
+
 ---
 
 ## Installazione in un comando (per modificarlo)
@@ -161,15 +170,17 @@ cd ..
 `npm run build` va rifatto solo se modifichi il codice dell'interfaccia. Se ti dimentichi,
 il server te lo dice invece di mostrare una pagina bianca.
 
-**Assistente in chat (facoltativo).** Serve una credenziale Anthropic:
+**Assistente in chat (facoltativo).** Il modello si sceglie dentro l'app, nella scheda
+*assistente*: Claude Code installato sul computer (nessuna chiave), Claude con chiave API,
+oppure qualunque servizio compatibile OpenAI (OpenAI, Gemini, OpenRouter, Ollama…). Per usare
+Claude con la chiave serve il pacchetto `anthropic`:
 
 ```bash
 pip install -e ".[chat]"                     # aggiunge il pacchetto anthropic
-export ANTHROPIC_API_KEY=sk-ant-...          # Windows: setx ANTHROPIC_API_KEY sk-ant-...
 ```
 
-Senza chiave tutto il resto funziona identico: la scheda *assistente* mostra il motivo
-invece di fingere di andare.
+Senza modello configurato tutto il resto funziona identico: la scheda *assistente* mostra
+cosa manca invece di fingere di andare.
 
 **Riconoscimento del soggetto (facoltativo).** `detect_subjects`, `track_mask` e
 `auto_reframe` usano YOLO, che si tira dietro torch — sono giga, quindi non arrivano
@@ -185,6 +196,14 @@ e macina CPU:
 
 ```bash
 pip install -e ".[transcribe]"               # aggiunge faster-whisper
+```
+
+**Grafica HTML (facoltativo).** Al render le clip html le fotografa Chromium tramite
+Playwright, che usa Chrome o Edge gia' installati (senza: `python -m playwright install
+chromium`). L'anteprima dal vivo nell'interfaccia funziona anche senza:
+
+```bash
+pip install -e ".[html]"                     # aggiunge playwright
 ```
 
 Senza gli extra, quegli strumenti dicono cosa manca e il resto dell'editor non se ne
@@ -325,9 +344,27 @@ Chiedi una modifica in italiano e viene fatta sul progetto:
 
 Gli strumenti che usa **sono le stesse operazioni dei pulsanti**: quello che fa compare in
 timeline e lo annulli con Ctrl+Z, esattamente come una tua modifica. Sotto ogni risposta
-vedi la lista di cosa ha toccato. **azzera** ricomincia la conversazione.
+vedi la lista di cosa ha toccato. Il cestino ricomincia la conversazione.
 
-Richiede `ANTHROPIC_API_KEY` (vedi [Installazione](#installazione)).
+**Scegli il modello** dalla pastiglia in alto nella scheda, senza variabili d'ambiente e
+senza riavviare:
+
+- **Claude Code** installato sul computer: usa il tuo abbonamento, nessuna chiave. Lavora sul
+  progetto aperto attraverso il server MCP dell'editor stesso, quindi vedi ogni modifica
+  comparire in timeline mentre la fa;
+- **Anthropic** (Claude) con una chiave API;
+- qualunque servizio che parla il protocollo **chat/completions di OpenAI**: OpenAI, Google
+  Gemini, OpenRouter, Groq, Mistral, DeepSeek, xAI, i modelli locali di **Ollama** o
+  **LM Studio**, o un indirizzo qualsiasi che incolli tu.
+
+Le chiavi restano su questo computer in `~/.vedit/llm.json`, mai nel file di progetto.
+
+**Indica i punti.** Sotto la casella del messaggio: **istante** (la testina), **tratto**
+(inizio, sposti, fine), **clip** (quella selezionata, oppure "chiedi" nelle sue proprietà),
+**area** (disegni un riquadro sull'inquadratura). Ognuno diventa una pastiglia numerata:
+scrivi «ingrandisci il titolo nel 2» e il modello riceve il riferimento con il fotogramma
+davanti — l'area segnata in rosso, e la sua posizione già convertita negli `x`/`y` di
+`set_transform`.
 
 ### 7. Esportare
 
@@ -419,6 +456,16 @@ ombre/mezzitoni/alteluci, temperatura, curve, LUT `.cube`.
 **Composizione** — posizione, scala, rotazione, opacità per clip, tutte animabili con keyframe
 ed easing; PiP, overlay grafici, testi con box/bordo/ombra, chroma key, ritaglio, specchio,
 pixelate, vignettatura, grana, glow, stabilizzazione.
+
+**Grafica animata in HTML** — `add_html` mette in traccia un documento HTML/CSS/JS come una
+clip: sottopancia, titoli animati, contatori, infografiche, schermate intere. Lo sfondo e'
+trasparente e lascia vedere la ripresa sotto. L'orologio della pagina e' quello della clip:
+animazioni e transizioni CSS, Web Animations, GSAP, `requestAnimationFrame` e `setTimeout`
+avanzano un fotogramma alla volta, oppure definisci `window.veditRender = t => …` e disegni
+tu ogni fotogramma. Nell'interfaccia la clip gira **dal vivo** in un iframe che segue la
+testina, e il sorgente si modifica nel pannello proprieta' mentre scorre. Al render Chromium
+ripassa gli stessi fotogrammi e li cattura con l'alpha: quello che hai visto e' quello che
+esce.
 
 **Audio** — guadagno in dB (animabile), pan, dissolvenze, equalizzatore, compressore, limiter,
 riduzione rumore, gate, riverbero, eco, pitch shift, normalizzazione dinamica e

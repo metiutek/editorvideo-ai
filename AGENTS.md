@@ -61,8 +61,11 @@ di inventarti una diagnosi.
 | `npm non trovato` | Node.js 18+ manca: CLI e MCP funzionano lo stesso, resta fuori solo l'interfaccia web. |
 | extra `chat` non installabile | l'assistente in chat resta spento, tutto il resto è identico. |
 
-L'assistente in chat dentro la UI vuole anche `ANTHROPIC_API_KEY` nell'ambiente. Senza chiave
-la scheda *assistente* spiega perché è spenta; nessun'altra funzione ne risente.
+L'assistente in chat dentro la UI si configura dall'app (scheda *assistente*): Claude Code
+installato sul computer, Claude con chiave, o qualunque servizio compatibile OpenAI. Le chiavi
+stanno in `~/.vedit/llm.json`, mai nel progetto. Senza modello la scheda dice cosa manca;
+nessun'altra funzione ne risente. Il codice sta in `llm.py` (motori) e `chat.py` (strumenti,
+riferimenti).
 
 ---
 
@@ -198,6 +201,14 @@ Per guardare il girato prima di montarlo: `inspect_footage` vuole il **file sorg
 tutto il montaggio insieme ed è il modo più rapido per accorgersi che un punto d'attacco è
 caduto sull'inquadratura sbagliata.
 
+### Grafica in HTML
+
+`add_html` mette un documento HTML/CSS/JS in traccia come clip, con sfondo trasparente: va su
+una traccia *sopra* la ripresa. La pagina misura quanto il progetto in pixel CSS e il suo
+tempo e' quello della clip (`htmlclip.OROLOGIO`): animazioni CSS, GSAP, rAF e timer avanzano
+a passi di fotogramma, identici nell'anteprima dal vivo della UI e nel render. Controlla
+sempre con `preview_frame`: al render Chromium la fotografa davvero.
+
 L'ordine degli effetti conta e si cambia con `move_effect`: denoise prima di sharpen pulisce e
 poi incide, l'ordine opposto incide anche il rumore.
 
@@ -221,6 +232,14 @@ fatte:
 Se cambi quelle istruzioni, `tests/test_mcp.py` verifica che le regole restino: sono la parte
 che l'agente legge sempre.
 
+### Lavorare dentro l'editor aperto (MCP su HTTP)
+
+`vedit ui` espone anche il server MCP su `http://127.0.0.1:8760/mcp/` (`api._PonteMcp`). Chi si
+collega li' lavora sul progetto aperto nel browser: senza `project` gli strumenti agiscono su
+`api.S.store` (`mcp_server._ospite`). E' cosi' che l'assistente "Claude Code" della chat tocca
+il progetto, ed e' il modo giusto anche per un agente esterno quando l'utente ha gia' l'editor
+aperto: `claude mcp add --transport http vedit-live http://127.0.0.1:8760/mcp/`.
+
 ### Far vedere il montaggio (open_ui)
 
 `open_ui` avvia l'interfaccia web **dentro il processo del server MCP** e restituisce
@@ -243,9 +262,10 @@ l'ultimo che salva vince, non c'è un lock. Con `open_ui` il problema non si pon
   — quest'ultimo non è facoltativo: senza, restano fuori `music_beats`, `plan_edit`,
   `inspect_footage`, `match_color` e `check_cuts`, cioè scelta del materiale e montaggio a
   tempo. Stessa cosa per Pillow: `preview_grid` e `color_scopes` ci stanno sopra, e guardare
-  il montaggio è la regola prima. Gli extra veri sono tre: `chat` (`anthropic`, l'assistente
-  nella UI), `vision` (`ultralytics`, riconoscimento del soggetto — si tira dietro torch) e
-  `transcribe` (`faster-whisper`, sottotitoli e pulizia del parlato). Senza gli extra il resto
+  il montaggio è la regola prima. Gli extra veri sono quattro: `chat` (`anthropic`, l'assistente
+  nella UI), `vision` (`ultralytics`, riconoscimento del soggetto — si tira dietro torch),
+  `transcribe` (`faster-whisper`, sottotitoli e pulizia del parlato) e `html` (`playwright`,
+  render delle clip html — usa Chrome o Edge gia' installati). Senza gli extra il resto
   dell'editor funziona identico e gli strumenti che li vogliono dicono come installarli.
 - `tests/test_dipendenze.py` legge gli import del backend e pretende che ognuno sia dichiarato
   in `pyproject.toml`: un pacchetto che c'è sulla macchina di chi sviluppa ma non nel wheel

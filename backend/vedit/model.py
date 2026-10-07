@@ -198,7 +198,7 @@ class Transition:
 @dataclass
 class Clip:
     id: str = field(default_factory=lambda: new_id("c"))
-    type: str = "media"  # media | text | color
+    type: str = "media"  # media | text | color | html
     media: str | None = None  # id del Media, per type=media
     start: float = 0.0  # posizione in timeline (s)
     in_: float = 0.0  # punto di attacco nella sorgente (s)
@@ -219,6 +219,10 @@ class Clip:
 
     text: TextStyle | None = None  # per type=text
     color: str = "black"  # per type=color
+    # per type=html: il documento intero (vedi htmlclip.py) e la cartella da cui
+    # risolvere i percorsi relativi (immagini, font, script locali)
+    html: str | None = None
+    html_base: str | None = None
 
     @property
     def end(self) -> float:
