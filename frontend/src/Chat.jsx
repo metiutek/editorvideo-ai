@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api, chat as sendChat } from './api.js'
+import { FileBrowser } from './Dialogs.jsx'
 import Icon from './Icons.jsx'
 import { fmt } from './util.js'
 
@@ -22,6 +23,8 @@ export function rifLabel(r, project) {
   if (r.kind === 'range') return `${fmt(Math.min(r.a, r.b))} → ${fmt(Math.max(r.a, r.b))}`
   if (r.kind === 'area') return `area a ${fmt(r.t)}`
   if (r.kind === 'file') return r.name
+  if (r.kind === 'link') return r.name || r.url
+  if (r.kind === 'folder') return r.name || r.path
   if (r.kind === 'clip') {
     const c = project?.tracks.flatMap((t) => t.clips).find((x) => x.id === r.id)
     return c ? `clip ${c.name || c.id}` : `clip ${r.id}`
@@ -29,7 +32,9 @@ export function rifLabel(r, project) {
   return '?'
 }
 
-const RIF_ICON = { time: 'orologio', range: 'taglia', area: 'riquadro', clip: 'video', file: 'graffetta' }
+const RIF_ICON = { time: 'orologio', range: 'taglia', area: 'riquadro', clip: 'video', file: 'graffetta', link: 'link', folder: 'cartella' }
+
+const URL_SOLO = /^https?:\/\/\S+$/i
 
 /**
  * Chat con l'assistente. Gli strumenti che usa sono le stesse operazioni dei
@@ -52,6 +57,9 @@ export default function Chat({
   const [caricando, setCaricando] = useState(0)  // allegati in arrivo
   const [sopra, setSopra] = useState(false)      // file trascinati sopra la chat
   const fileRef = useRef(null)
+  const [linkAperto, setLinkAperto] = useState(false)
+  const [linkTesto, setLinkTesto] = useState('')
+  const [sceltaCartella, setSceltaCartella] = useState(false)
   const endRef = useRef(null)
   const abortRef = useRef(null)
 
@@ -76,6 +84,18 @@ export default function Chat({
   }
 
   const addRef = (r) => setRefs((xs) => [...xs, r])
+
+  /** Il server legge la pagina o scarica il file: qui arriva il riferimento pronto. */
+  const aggiungiLink = async (url) => {
+    const u = url.trim()
+    if (!u) return
+    setCaricando((n) => n + 1)
+    try {
+      addRef(await api.chatLink(u))
+      setLinkTesto('')
+      setLinkAperto(false)
+    } catch (e) { setError(e.message) } finally { setCaricando((n) => Math.max(0, n - 1)) }
+  }
 
   /** Carica i file e li aggiunge come riferimenti numerati, come gli altri. */
   const allega = async (lista) => {
@@ -186,8 +206,9 @@ export default function Chat({
             </div>
             <div className="hint">
               Vuoi indicare un punto preciso? Usa i pulsanti qui sotto: istante, tratto, clip,
-              un'area disegnata sull'inquadratura, oppure allega un file (anche trascinandolo
-              qui o incollando uno screenshot). Ogni modifica si annulla con Ctrl+Z.
+              un'area disegnata sull'inquadratura, un file (anche trascinandolo qui o
+              incollando uno screenshot), un link o una cartella. Un link incollato da solo
+              diventa un riferimento da se'. Ogni modifica si annulla con Ctrl+Z.
             </div>
           </div>
         )}
@@ -273,7 +294,31 @@ export default function Chat({
             <Icon name={RIF_ICON.file} size={13} />{caricando ? 'carico…' : 'file'}</button>
           <input ref={fileRef} type="file" multiple hidden
             onChange={(e) => { allega(e.target.files); e.target.value = '' }} />
+          <button className={`chip ${linkAperto ? 'on' : ''}`} disabled={caricando > 0}
+            title="Una pagina web, un'immagine, un video o un audio da internet"
+            onClick={() => setLinkAperto((v) => !v)}>
+            <Icon name={RIF_ICON.link} size={13} />link</button>
+          <button className="chip" title="Una cartella del computer: l'assistente ne vede i file"
+            onClick={() => setSceltaCartella(true)}>
+            <Icon name={RIF_ICON.folder} size={13} />cartella</button>
         </div>
+        {linkAperto && (
+          <div className="linkbar">
+            <input autoFocus value={linkTesto} placeholder="incolla un link e premi Invio"
+              onChange={(e) => setLinkTesto(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); aggiungiLink(linkTesto) }
+                if (e.key === 'Escape') setLinkAperto(false)
+              }} />
+            <button className="chip" disabled={!linkTesto.trim() || caricando > 0}
+              onClick={() => aggiungiLink(linkTesto)}>{caricando ? 'leggo…' : 'aggiungi'}</button>
+          </div>
+        )}
+        {sceltaCartella && (
+          <FileBrowser title="Scegli una cartella da indicare all'assistente" cartella
+            memoria="chat-cartelle" onClose={() => setSceltaCartella(false)}
+            onPick={([p]) => addRef({ kind: 'folder', path: p, name: p.split(/[\\/]/).filter(Boolean).pop() })} />
+        )}
         <div className="chatbar">
           <textarea
             rows={2} value={input} disabled={busy}
@@ -283,7 +328,10 @@ export default function Chat({
             onPaste={(e) => {
               // un'immagine copiata (uno screenshot) si incolla come allegato
               const files = [...(e.clipboardData?.files || [])]
-              if (files.length) { e.preventDefault(); allega(files) }
+              if (files.length) { e.preventDefault(); allega(files); return }
+              // un link incollato da solo diventa un riferimento, letto dal server
+              const testo = e.clipboardData?.getData('text')?.trim() || ''
+              if (URL_SOLO.test(testo)) { e.preventDefault(); aggiungiLink(testo) }
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }

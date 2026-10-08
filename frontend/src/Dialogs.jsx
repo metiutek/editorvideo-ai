@@ -86,7 +86,7 @@ const cartellaRicordata = (chiave) => {
  * recente): un clic e si apre.
  */
 export function FileBrowser({
-  title, filter, multiple = true, onPick, onClose, startPath, memoria, recenti,
+  title, filter, multiple = true, onPick, onClose, startPath, memoria, recenti, cartella = false,
 }) {
   const [cwd, setCwd] = useState(null)
   const [picked, setPicked] = useState([])
@@ -110,8 +110,13 @@ export function FileBrowser({
         <span className="hint">{picked.length ? `${picked.length} selezionati` : ''}</span>
         <span className="spacer" />
         <button onClick={onClose}>annulla</button>
-        <button className="primary" disabled={!picked.length}
-          onClick={() => scegli(picked)}>conferma</button>
+        {cartella ? (
+          <button className="primary" disabled={!cwd} onClick={() => scegli([cwd.path])}>
+            usa questa cartella</button>
+        ) : (
+          <button className="primary" disabled={!picked.length}
+            onClick={() => scegli(picked)}>conferma</button>
+        )}
       </>}
     >
       {err && <div className="hint" style={{ color: 'var(--danger)', marginBottom: 8 }}>{err}</div>}
@@ -152,8 +157,10 @@ export function FileBrowser({
         ))}
         {files.map((f) => (
           <div className={`item ${picked.includes(f.path) ? 'picked' : ''}`} key={f.path}
-            onClick={() => toggle(f.path)}
-            onDoubleClick={() => scegli([f.path])}>
+            // scegliendo una cartella i file si vedono ma non si selezionano
+            style={cartella ? { opacity: .6, cursor: 'default' } : undefined}
+            onClick={() => !cartella && toggle(f.path)}
+            onDoubleClick={() => !cartella && scegli([f.path])}>
             <Icon name="video" /> {f.name}
             <span className="spacer" style={{ flex: 1 }} />
             <span className="hint">{(f.size / 1e6).toFixed(1)} MB</span>

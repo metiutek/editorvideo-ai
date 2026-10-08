@@ -905,3 +905,7 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
   background: rgba(18,17,25,.82); color: var(--text); font-weight: 800; font-size: 14px;
   pointer-events: none;
 }
+
+/* link da aggiungere ai riferimenti */
+.linkbar { display: flex; gap: 6px; align-items: center; }
+.linkbar input { height: 28px; border-radius: 999px; padding: 0 12px; }

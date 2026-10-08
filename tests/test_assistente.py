@@ -256,3 +256,76 @@ def test_api_allega_accanto_al_progetto(client, tmp_path):
     assert a["tipo"] == "image" and a["name"] == "schizzo.png"
     assert b["name"] == "schizzo_1.png"                 # non sovrascrive
     assert (tmp_path / "allegati" / "schizzo.png").read_bytes() == b"\x89PNG-finto"
+
+
+# --------------------------------------------------------------------------
+# link e cartelle
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sito(tmp_path):
+    """Un piccolo sito locale: una pagina e un'immagine."""
+    import http.server
+    import threading
+    from functools import partial
+
+    from PIL import Image
+
+    www = tmp_path / "www"
+    www.mkdir()
+    (www / "pagina.html").write_text(
+        "<html><head><title>Guida al montaggio</title><style>p{}</style></head>"
+        "<body><h1>Ritmo</h1><p>Taglia sul battere.</p><script>var x=1</script></body></html>",
+        encoding="utf-8")
+    Image.new("RGB", (4, 4), "blue").save(www / "foto.png")
+    srv = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), partial(http.server.SimpleHTTPRequestHandler, directory=str(www)))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_address[1]}"
+    srv.shutdown()
+
+
+def test_link_a_una_pagina_diventa_testo(sito, tmp_path):
+    from vedit import collegamenti
+
+    r = collegamenti.risolvi_link(f"{sito}/pagina.html", tmp_path / "allegati")
+    assert r["tipo"] == "pagina" and r["name"] == "Guida al montaggio"
+    s = Store.create("t", "720p")
+    testo, immagini = chat.riferimenti(s, [r])
+    assert "Taglia sul battere." in testo and "var x" not in testo and "p{}" not in testo
+    assert immagini == []
+
+
+def test_link_a_un_immagine_si_scarica(sito, tmp_path):
+    from vedit import collegamenti
+
+    r = collegamenti.risolvi_link(f"{sito}/foto.png", tmp_path / "allegati")
+    assert r["tipo"] == "image" and (tmp_path / "allegati" / "foto.png").is_file()
+    _, immagini = chat.riferimenti(Store.create("t", "720p"), [r])
+    assert immagini[0]["tipo"] == "image"
+
+
+def test_link_non_valido():
+    from vedit import collegamenti
+
+    with pytest.raises(ValueError):
+        collegamenti.risolvi_link("file:///C:/Windows/win.ini", __import__("pathlib").Path("."))
+
+
+def test_cartella_elencata(tmp_path):
+    (tmp_path / "girato").mkdir()
+    (tmp_path / "girato" / "a.mp4").write_bytes(b"0" * 10)
+    (tmp_path / "girato" / "note.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "girato" / ".nascosto").write_text("x", encoding="utf-8")
+    testo, _ = chat.riferimenti(Store.create("t", "720p"),
+                                [{"kind": "folder", "path": str(tmp_path / "girato")}])
+    assert "2 file (1 video/audio" in testo
+    assert "a.mp4  [media" in testo and ".nascosto" not in testo
+    assert "import_media" in testo
+
+
+def test_api_link(client, sito):
+    r = client.post("/api/chat/link", json={"url": f"{sito}/pagina.html"})
+    assert r.status_code == 200 and r.json()["tipo"] == "pagina"
+    assert client.post("/api/chat/link", json={"url": "non un link"}).status_code == 400

@@ -279,6 +279,26 @@ def tipo_allegato(path: str | Path) -> str:
     return "altro"
 
 
+def _allegato(i: int, f: Path, come: str, nota: str, righe: list, immagini: list) -> None:
+    """Una riga per un file (allegato o scaricato da un link) e, se serve, l'immagine."""
+    tipo = tipo_allegato(f)
+    if tipo in ("image", "pdf"):
+        cosa = "immagine" if tipo == "image" else "documento PDF"
+        righe.append(f"[{i}] {cosa} {come} \"{f.name}\" (percorso: {f}){nota}")
+        if len(immagini) < llm.MAX_IMMAGINI:
+            immagini.append({"etichetta": f"[{i}]", "path": str(f), "tipo": tipo})
+    elif tipo == "testo":
+        testo_file = f.read_text(encoding="utf-8", errors="replace")
+        taglio = "\n[... tagliato ...]" if len(testo_file) > MAX_TESTO else ""
+        righe.append(f"[{i}] file {come} \"{f.name}\" (percorso: {f}){nota}, contenuto:\n"
+                     f"```\n{testo_file[:MAX_TESTO]}{taglio}\n```")
+    elif tipo == "media":
+        righe.append(f"[{i}] file multimediale {come} \"{f.name}\", percorso: {f}{nota}. "
+                     "Per usarlo nel montaggio importalo con import_media.")
+    else:
+        righe.append(f"[{i}] file {come} \"{f.name}\", percorso: {f}{nota}")
+
+
 def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
     """Testo che descrive i riferimenti, piu' le immagini dei fotogrammi indicati.
 
@@ -324,22 +344,28 @@ def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
             if not f.is_file():
                 righe.append(f"[{i}] file allegato {r.get('name', '')} (non trovato){nota}")
                 continue
-            tipo = tipo_allegato(f)
-            if tipo in ("image", "pdf"):
-                cosa = "immagine" if tipo == "image" else "documento PDF"
-                righe.append(f"[{i}] {cosa} allegato \"{f.name}\" (percorso: {f}){nota}")
-                if len(immagini) < llm.MAX_IMMAGINI:
-                    immagini.append({"etichetta": f"[{i}]", "path": str(f), "tipo": tipo})
-            elif tipo == "testo":
-                testo_file = f.read_text(encoding="utf-8", errors="replace")
-                taglio = "\n[... tagliato ...]" if len(testo_file) > MAX_TESTO else ""
-                righe.append(f"[{i}] file allegato \"{f.name}\" (percorso: {f}){nota}, contenuto:\n"
-                             f"```\n{testo_file[:MAX_TESTO]}{taglio}\n```")
-            elif tipo == "media":
-                righe.append(f"[{i}] file multimediale allegato \"{f.name}\", percorso: {f}{nota}. "
-                             "Per usarlo nel montaggio importalo con import_media.")
+            _allegato(i, f, "allegato", nota, righe, immagini)
+            continue
+        elif k == "link":
+            url = r.get("url", "")
+            f = Path(r.get("path", "")) if r.get("path") else None
+            if r.get("tipo") == "pagina" and f and f.is_file():
+                pagina = f.read_text(encoding="utf-8", errors="replace")
+                taglio = "\n[... tagliato ...]" if len(pagina) > MAX_TESTO else ""
+                righe.append(f"[{i}] la pagina web {url} \"{r.get('name', '')}\"{nota}, testo:\n"
+                             f"```\n{pagina[:MAX_TESTO]}{taglio}\n```")
+            elif f and f.is_file():
+                _allegato(i, f, f"scaricato da {url}", nota, righe, immagini)
             else:
-                righe.append(f"[{i}] file allegato \"{f.name}\", percorso: {f}{nota}")
+                righe.append(f"[{i}] il link {url}{nota} (contenuto non letto)")
+            continue
+        elif k == "folder":
+            from .collegamenti import elenco_cartella
+
+            cart = r.get("path", "")
+            righe.append(f"[{i}] la cartella {cart}{nota}. I media si importano con import_media "
+                         f"usando i percorsi completi (cartella + nome). Contenuto: "
+                         f"{elenco_cartella(cart)}")
             continue
         else:
             continue

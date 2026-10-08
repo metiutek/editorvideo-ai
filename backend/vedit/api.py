@@ -972,6 +972,33 @@ def llm_imposta(body: LlmBody) -> dict:
     return {**chat_available(), "mcp": mcp_url()}
 
 
+def _cartella_allegati() -> Path:
+    import tempfile
+
+    store = S.store
+    dest = (Path(store.path).parent / "allegati") if store and store.path \
+        else Path(tempfile.gettempdir()) / "vedit_allegati"
+    dest.mkdir(parents=True, exist_ok=True)
+    return dest
+
+
+class LinkBody(BaseModel):
+    url: str
+
+
+@app.post("/api/chat/link")
+def chat_link(body: LinkBody) -> dict:
+    """Legge (o scarica) un link e lo restituisce come riferimento per la chat."""
+    from . import collegamenti
+
+    try:
+        return collegamenti.risolvi_link(body.url, _cartella_allegati())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - rete, certificati, 404 del sito
+        raise HTTPException(400, f"non riesco a leggere il link: {exc}") from exc
+
+
 @app.post("/api/chat/allega")
 async def chat_allega(files: list[UploadFile] = File(...)) -> dict:
     """File allegati a un messaggio: immagini, PDF, testi, video, audio.
@@ -980,12 +1007,7 @@ async def chat_allega(files: list[UploadFile] = File(...)) -> dict:
     l'utente, li ritrovano; senza progetto salvato vanno nella cartella
     temporanea.
     """
-    import tempfile
-
-    store = S.store
-    dest = (Path(store.path).parent / "allegati") if store and store.path \
-        else Path(tempfile.gettempdir()) / "vedit_allegati"
-    dest.mkdir(parents=True, exist_ok=True)
+    dest = _cartella_allegati()
     out = []
     for f in files:
         name = Path(f.filename or "file").name
