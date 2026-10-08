@@ -85,7 +85,8 @@ globalThis.ResizeObserver = class { observe() {} disconnect() {} }
 globalThis.localStorage = {
   // si parte in "fedele": i controlli sull'anteprima renderizzata devono
   // vedere quel percorso. La diretta si prova dopo, con l'interruttore.
-  _d: { 'vedit.diretta': 'no' },
+  // il pannello di destra parte sull'assistente; qui si provano le proprieta'
+  _d: { 'vedit.diretta': 'no', 'vedit.destra': 'props' },
   getItem(k) { return this._d[k] ?? null }, setItem(k, v) { this._d[k] = String(v) },
 }
 

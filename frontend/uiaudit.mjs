@@ -104,6 +104,13 @@ const key = (k, opts = {}) => dom.window.dispatchEvent(
 const problems = []
 const fail = (area, msg) => problems.push(`${area}: ${msg}`)
 
+// ------------------------------------------- 0. si parte dall'assistente
+// e' il cuore dell'app: senza una scelta salvata la scheda aperta a destra e' la chat
+const schedaAttiva = [...root.querySelectorAll('.tabs button.on')].map((b) => b.textContent.trim())
+if (!schedaAttiva.includes('assistente')) {
+  fail('pannello destro', `all'avvio e' aperta "${schedaAttiva.join(', ')}" invece dell'assistente`)
+}
+
 // --------------------------------------------------------------- 1. emoji
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u
 const visitAll = () => [...root.querySelectorAll('*')]

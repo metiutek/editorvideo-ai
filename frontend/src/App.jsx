@@ -51,7 +51,15 @@ export default function App() {
   const [source, setSource] = useState(null)     // media aperto nel monitor
   const [tab, setTab] = useState('program')      // program | source
   const [leftTab, setLeftTab] = useState('media')      // media | libreria
-  const [rightTab, setRightTab] = useState('props')    // props | chat
+  // L'assistente e' il cuore dell'app: e' la scheda aperta di default. Se
+  // l'utente preferisce le proprieta' la scelta resta fra una sessione e l'altra.
+  const [rightTab, setRightTabState] = useState(() => {
+    try { return localStorage.getItem('vedit.destra') === 'props' ? 'props' : 'chat' } catch { return 'chat' }
+  })
+  const setRightTab = useCallback((t) => {
+    setRightTabState(t)
+    try { localStorage.setItem('vedit.destra', t) } catch { /* resta per questa sessione */ }
+  }, [])
   const [uploading, setUploading] = useState(null)
   const [dropping, setDropping] = useState(false)
   const [confirm, setConfirm] = useState(null)   // {title, message, ok, danger, onOk}
@@ -462,10 +470,10 @@ export default function App() {
         <div style={{ width: sizes.inspector, flex: 'none', display: 'flex', minWidth: 0 }}>
           <div className="panel">
             <div className="tabs">
-              <button className={rightTab === 'props' ? 'on' : ''}
-                onClick={() => setRightTab('props')}><Icon name="proprieta" />proprieta'</button>
               <button className={rightTab === 'chat' ? 'on' : ''}
                 onClick={() => setRightTab('chat')}><Icon name="assistente" />assistente</button>
+              <button className={rightTab === 'props' ? 'on' : ''}
+                onClick={() => setRightTab('props')}><Icon name="proprieta" />proprieta'</button>
             </div>
             {rightTab === 'props' ? (
               <Inspector project={project} effects={sys?.effects || []}
