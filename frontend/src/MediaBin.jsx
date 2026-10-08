@@ -1,6 +1,7 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import useMediaAssets from './mediaAssets.js'
+import { useFineTrascinamento } from './trascina.js'
 import { fmt } from './util.js'
 
 const ICON = { audio: 'audio', image: 'immagine', video: 'video' }
@@ -56,6 +57,8 @@ function Onda({ peaks }) {
 export default function MediaBin({ project, run, setError, onOpenSource, onImport, uploading, ask }) {
   const [open, setOpen] = useState({})
   const [dragOver, setDragOver] = useState(null)
+  // il tratteggio di lista e cartelle si spegne comunque finisca il trascinamento
+  useFineTrascinamento(useCallback(() => setDragOver(null), []))
   const [newFolder, setNewFolder] = useState(null)   // nome in scrittura, null = nessuno
   const media = project?.media || []
   const assets = useMediaAssets(media)

@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { api, chat as sendChat } from './api.js'
 import { FileBrowser } from './Dialogs.jsx'
+import { useFineTrascinamento } from './trascina.js'
 import Icon from './Icons.jsx'
 import { dettaglioStrumento, fmt } from './util.js'
 
@@ -75,6 +76,7 @@ export default function Chat({
   const [caricando, setCaricando] = useState(0)  // allegati in arrivo
   const [sopra, setSopra] = useState(false)      // file trascinati sopra la chat
   const fileRef = useRef(null)
+  useFineTrascinamento(useCallback(() => setSopra(false), []))
   const [linkAperto, setLinkAperto] = useState(false)
   const [linkTesto, setLinkTesto] = useState('')
   const [sceltaCartella, setSceltaCartella] = useState(false)
@@ -199,7 +201,9 @@ export default function Chat({
       // progetto: il trascinamento non deve arrivare all'import della finestra
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes('Files')) return
-        e.preventDefault(); e.stopPropagation(); setSopra(true)
+        // niente stopPropagation: la finestra deve sapere che il file e' sulla
+        // chat, per spegnere l'invito a importarlo nel progetto
+        e.preventDefault(); setSopra(true)
       }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setSopra(false) }}
       onDrop={(e) => {

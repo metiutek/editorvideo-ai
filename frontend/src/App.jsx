@@ -9,6 +9,7 @@ import MediaBin from './MediaBin.jsx'
 import Preview from './Preview.jsx'
 import SourceMonitor from './SourceMonitor.jsx'
 import Timeline from './Timeline.jsx'
+import { useFineTrascinamento } from './trascina.js'
 import { clamp, findClip, fmt } from './util.js'
 
 const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|flac|ogg|opus|png|jpe?g|webp|bmp|tiff?)$/i
@@ -62,6 +63,7 @@ export default function App() {
   }, [])
   const [uploading, setUploading] = useState(null)
   const [dropping, setDropping] = useState(false)
+  useFineTrascinamento(useCallback(() => setDropping(false), []))
   const [confirm, setConfirm] = useState(null)   // {title, message, ok, danger, onOk}
   // riferimenti per l'assistente: punti del video di cui si sta parlando
   const [refs, setRefs] = useState([])
@@ -292,7 +294,11 @@ export default function App() {
     <div
       className={`app ${dropping ? 'dropping' : ''}`}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true) }
+        if (!e.dataTransfer.types.includes('Files')) return
+        // sopra la chat il file diventa un allegato: l'invito a importarlo
+        // nel progetto direbbe il contrario di quello che succede
+        if (e.target.closest?.('.chat')) { setDropping(false); return }
+        e.preventDefault(); setDropping(true)
       }}
       onDragLeave={(e) => {
         // relatedTarget nullo = il puntatore ha lasciato la finestra: senza questo

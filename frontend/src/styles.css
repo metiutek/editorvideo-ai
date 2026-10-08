@@ -1005,3 +1005,6 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .preview img.benvenuto-logo { background: transparent; box-shadow: none; width: 84px; height: 84px; }
 /* con poco spazio la prima schermata scorre invece di perdere la testa */
 .preview.benvenuto { overflow-y: auto; place-items: safe center; }
+
+/* invito a importare: con l'accento dell'app, non con il blu di prima */
+.dropzone { background: rgba(255,138,92,.07); border-radius: 18px; font-weight: 800; }
