@@ -22,6 +22,8 @@ import anyio
 from mcp.server.mcpserver import Image, MCPServer
 
 from . import analyze, captions, cleanup, colormatch, ops
+# domande_mod: in ask_user il parametro si chiama domande
+from . import domande as domande_mod
 from . import effects as fx
 from . import ffmpeg, hw, probe, proxy, render, review, story, versions, vision
 from .model import TRANSITIONS
@@ -46,6 +48,12 @@ I tempi sono in secondi. Ogni parametro animabile accetta anche
 all'inizio della clip. project_info da' lo stato della timeline con gli id.
 Per un montaggio serrato usa add_clips: mette tutti i tagli in una chiamata sola,
 ed e' atomico.
+
+Non esportare mai di tua iniziativa: render_video si usa solo quando l'utente lo
+chiede esplicitamente, e anche allora l'editor gli chiede conferma prima di
+scrivere il file. Quando una scelta spetta all'utente (stile, durata, formato,
+quale versione tenere, se esportare) usa ask_user con 2-4 opzioni chiare, la
+consigliata per prima, invece di decidere a caso o di fare domande nel testo.
 
 Grafica animata (sottopancia, titoli, contatori, infografiche, schermate
 intere): add_html con un documento HTML/CSS/JS su una traccia sopra la ripresa.
@@ -1265,6 +1273,15 @@ async def render_video(output: str, quality: str = "high", codec: str = "h264",
     L'estensione decide il contenitore: .mp4 .mov .mkv .webm .gif .mp3 .wav .m4a.
     """
     s = _store(project)
+    # Dentro l'editor l'export e' una decisione dell'utente: magari il video non
+    # gli va ancora bene. Gliela si chiede, e senza un si' non si scrive niente.
+    api = sys.modules.get("vedit.api")
+    if api is not None and api.MCP_ATTIVO and api.S.store is not None:
+        esito = await _off(api.chiedi, domande_mod.conferma_export(output, "draft" if preview else quality))
+        if not domande_mod.approvato(esito):
+            return {"esportato": False,
+                    "motivo": esito.get("motivo") or "l'utente ha scelto di non esportare adesso",
+                    "risposte": esito.get("risposte")}
     opts = render.RenderOptions(
         output=output, quality="draft" if preview else quality, codec=codec,
         start=start, end=end, bitrate=bitrate,
@@ -1273,6 +1290,27 @@ async def render_video(output: str, quality: str = "high", codec: str = "h264",
     res = await _off(render.render, s.project, opts)
     return {"output": res.output, "durata": res.duration, "secondi_impiegati": res.seconds,
             "encoder": res.encoder, "mb": round(res.size / 1e6, 2), "avvisi": res.warnings}
+
+
+@mcp.tool()
+async def ask_user(domande: list[dict]) -> dict:
+    """Fa all'utente da 1 a 4 domande con opzioni cliccabili, nell'editor, e aspetta.
+
+    Ogni domanda: {"domanda": "...", "titolo": "breve", "opzioni": [{"etichetta":
+    "...", "descrizione": "..."}, ...], "multipla": false}. Da 2 a 6 opzioni, la
+    consigliata per prima; l'utente puo' sempre scrivere un'alternativa. Usalo per
+    le scelte che spettano a lui: stile, durata, formato, quale versione tenere,
+    se esportare. Funziona quando l'editor e' aperto (open_ui o vedit ui):
+    altrimenti fai la domanda nella conversazione.
+    """
+    api = sys.modules.get("vedit.api")
+    if api is None or not (api.MCP_ATTIVO or api.background_info()):
+        return {"errore": "nessuna interfaccia aperta: fai la domanda direttamente nella conversazione"}
+    try:
+        norm = domande_mod.valida(domande)
+    except ValueError as exc:
+        return {"errore": str(exc)}
+    return await _off(api.chiedi, norm)
 
 
 @mcp.tool()

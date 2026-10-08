@@ -240,6 +240,15 @@ collega li' lavora sul progetto aperto nel browser: senza `project` gli strument
 il progetto, ed e' il modo giusto anche per un agente esterno quando l'utente ha gia' l'editor
 aperto: `claude mcp add --transport http vedit-live http://127.0.0.1:8760/mcp/`.
 
+### Domande all'utente ed export
+
+`ask_user` mostra nell'editor una scheda di domande con opzioni (`domande.py` per la forma,
+`api.chiedi` per l'attesa) e torna le risposte: usalo per le scelte che spettano all'utente
+invece di decidere a caso. **L'export non e' una decisione dell'agente**: quando l'editor e'
+aperto, `render_video` chiede conferma con `ask_user` e senza un si' non scrive il file
+(`tests/test_assistente.py` lo verifica). Gli stili di montaggio della chat stanno in
+`stili.py`.
+
 ### Far vedere il montaggio (open_ui)
 
 `open_ui` avvia l'interfaccia web **dentro il processo del server MCP** e restituisce

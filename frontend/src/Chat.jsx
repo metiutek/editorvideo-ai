@@ -14,7 +14,7 @@ const TOOL_LABEL = {
   set_transform: 'posizione e scala', set_audio: 'audio della clip', set_text: 'modifica il testo',
   add_track: 'aggiunge una traccia', close_gaps: 'chiude i buchi', undo: 'annulla',
   preview_frame: 'guarda un fotogramma', preview_grid: 'guarda il montaggio',
-  music_beats: 'ascolta il ritmo', Read: 'guarda un\'immagine', render_video: 'esporta',
+  ask_user: 'ti fa una domanda', add_color: 'aggiunge un colore pieno', music_beats: 'ascolta il ritmo', Read: 'guarda un\'immagine', render_video: 'esporta',
   marker: 'aggiunge un marker', remove_marker: 'toglie un marker', markers: 'legge i marker',
   set_clip: 'modifica la clip', set_track: 'modifica la traccia', move_track: 'sposta la traccia',
   remove_track: 'elimina una traccia', delete: 'elimina', redo: 'ripete', move_effect: 'riordina gli effetti',
@@ -56,12 +56,21 @@ const URL_SOLO = /^https?:\/\/\S+$/i
  */
 export default function Chat({
   available, onAvailable, onProject, setError, project, playhead, seek, selected,
-  refs, setRefs, pickArea, setPickArea,
+  refs, setRefs, pickArea, setPickArea, stili = [], domanda, onRisposta,
 }) {
   const [turns, setTurns] = useState([])   // {role, text, tools:[], refs}
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [settings, setSettings] = useState(false)
+  // stile di montaggio: resta scelto fra una sessione e l'altra
+  const [stile, setStileState] = useState(() => {
+    try { return localStorage.getItem('vedit.stile') || '' } catch { return '' }
+  })
+  const setStile = (v) => {
+    setStileState(v)
+    try { localStorage.setItem('vedit.stile', v) } catch { /* senza storage resta per questa sessione */ }
+  }
+  const [menuStili, setMenuStili] = useState(false)
   const [tratto, setTratto] = useState(null)   // inizio di un tratto in costruzione
   const [caricando, setCaricando] = useState(0)  // allegati in arrivo
   const [sopra, setSopra] = useState(false)      // file trascinati sopra la chat
@@ -72,7 +81,7 @@ export default function Chat({
   const endRef = useRef(null)
   const abortRef = useRef(null)
 
-  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy])
+  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy, domanda])
 
   if (settings || !available?.ok) {
     return (
@@ -138,7 +147,7 @@ export default function Chat({
     const ctrl = new AbortController()
     abortRef.current = ctrl
     try {
-      await sendChat(q, sentRefs, (ev) => {
+      await sendChat(q, sentRefs, stile || null, (ev) => {
         if (ev.type === 'text') patch((m) => ({ ...m, thinking: false, text: m.text + ev.text }))
         else if (ev.type === 'thinking') patch((m) => ({ ...m, thinking: true }))
         else if (ev.type === 'note') patch((m) => ({ ...m, note: ev.message }))
@@ -205,10 +214,31 @@ export default function Chat({
           {available.nome}{available.model ? ` · ${available.model}` : ''}
         </button>
         <span className="spacer" />
+        <button className={`stilepill ${stile ? 'on' : ''}`} title="Stile di montaggio"
+          onClick={() => setMenuStili((v) => !v)}>
+          <Icon name="libreria" size={13} />
+          {stili.find((s) => s.id === stile)?.nome || 'stile'}
+        </button>
         <button className="icon sm" onClick={reset} title="Ricomincia la conversazione">
           <Icon name="cestino" size={14} />
         </button>
       </div>
+
+      {menuStili && (
+        <div className="stilimenu">
+          <div className="hint">Lo stile guida l'assistente in ogni scelta: ritmo, transizioni, colore, testi.</div>
+          <button className={`stilevoce ${!stile ? 'on' : ''}`}
+            onClick={() => { setStile(''); setMenuStili(false) }}>
+            <b>Nessuno</b><span>decide l'assistente caso per caso</span>
+          </button>
+          {stili.map((s) => (
+            <button key={s.id} className={`stilevoce ${stile === s.id ? 'on' : ''}`}
+              onClick={() => { setStile(s.id); setMenuStili(false) }}>
+              <b>{s.nome}</b><span>{s.breve}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="chatlog">
         {!turns.length && (
@@ -237,7 +267,9 @@ export default function Chat({
                 {m.refs?.length > 0 && (
                   <div className="rifs inmsg">
                     {m.refs.map((r, j) => (
-                      <span key={j} className="rif"><b>{j + 1}</b>{rifLabel(r, project)}</span>
+                      <span key={j} className="rif" title={[r.url, r.path].filter(Boolean).join('\n')}>
+                        <b>{j + 1}</b><span className="riftesto">{rifLabel(r, project)}</span>
+                      </span>
                     ))}
                   </div>
                 )}
@@ -258,6 +290,7 @@ export default function Chat({
             )}
           </div>
         ))}
+        {domanda && <DomandaCard key={domanda.id} domanda={domanda} onRisposta={onRisposta} />}
         <div ref={endRef} />
       </div>
 
@@ -265,11 +298,19 @@ export default function Chat({
         {refs.length > 0 && (
           <div className="rifs">
             {refs.map((r, j) => (
-              <span key={j} className="rif" title="Vai a questo punto">
-                <button className="rifgo" onClick={() => seek(r.kind === 'range' ? Math.min(r.a, r.b)
-                  : r.kind === 'clip' ? (project?.tracks.flatMap((t) => t.clips)
-                    .find((c) => c.id === r.id)?.start ?? 0) : r.t)}>
-                  <b>{j + 1}</b>{rifLabel(r, project)}
+              <span key={j} className="rif">
+                <button className="rifgo"
+                  // il nome intero (titolo, indirizzo, percorso) sta nel suggerimento:
+                  // nell'etichetta si accorcia, se no spinge la x fuori dal pannello
+                  title={[rifLabel(r, project), r.url, r.path].filter(Boolean).join('\n')}
+                  onClick={() => {
+                    // link, file e cartelle non sono punti della timeline
+                    if (['link', 'file', 'folder'].includes(r.kind)) return
+                    seek(r.kind === 'range' ? Math.min(r.a, r.b)
+                      : r.kind === 'clip' ? (project?.tracks.flatMap((t) => t.clips)
+                        .find((c) => c.id === r.id)?.start ?? 0) : r.t)
+                  }}>
+                  <b>{j + 1}</b><span className="riftesto">{rifLabel(r, project)}</span>
                 </button>
                 <button className="rifx" title="Togli"
                   onClick={() => setRefs((xs) => xs.filter((_, k) => k !== j))}>
@@ -358,6 +399,67 @@ export default function Chat({
               title="Invia (Invio)"><Icon name="invia" /></button>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Le domande dell'assistente, come in Claude Code: opzioni da cliccare, una
+ * casella per scrivere altro, e "non rispondere" per chiuderle. Finche' non si
+ * risponde l'assistente aspetta: niente export o scelte prese al posto tuo.
+ */
+function DomandaCard({ domanda, onRisposta }) {
+  const [scelte, setScelte] = useState({})   // indice -> etichette scelte
+  const [altro, setAltro] = useState({})     // indice -> testo libero
+  const lista = domanda.domande || []
+  const pronta = lista.every((_, i) => (scelte[i]?.length > 0) || (altro[i] || '').trim())
+
+  const tocca = (i, etichetta, multipla) => setScelte((s) => {
+    const ora = s[i] || []
+    if (!multipla) return { ...s, [i]: ora[0] === etichetta ? [] : [etichetta] }
+    return { ...s, [i]: ora.includes(etichetta) ? ora.filter((x) => x !== etichetta) : [...ora, etichetta] }
+  })
+
+  const invia = () => {
+    const risposte = {}
+    lista.forEach((d, i) => {
+      const scritto = (altro[i] || '').trim()
+      const sc = scelte[i] || []
+      risposte[d.domanda] = d.multipla ? [...sc, ...(scritto ? [scritto] : [])] : (scritto || sc[0])
+    })
+    onRisposta(risposte)
+  }
+
+  return (
+    <div className="domande">
+      <div className="domtesta"><Icon name="assistente" size={14} />L'assistente ti chiede</div>
+      {lista.map((d, i) => (
+        <div key={i} className="domanda">
+          {d.titolo && <span className="domtitolo">{d.titolo}</span>}
+          <div className="domtesto">{d.domanda}</div>
+          <div className="opzioni">
+            {d.opzioni.map((o) => {
+              const on = (scelte[i] || []).includes(o.etichetta)
+              return (
+                <button key={o.etichetta} className={`opzione ${on ? 'on' : ''}`}
+                  onClick={() => tocca(i, o.etichetta, d.multipla)}>
+                  <span className={`spunta ${d.multipla ? 'quadra' : ''}`}>{on && <Icon name="spunta" size={11} />}</span>
+                  <span className="otesto"><b>{o.etichetta}</b>{o.descrizione && <small>{o.descrizione}</small>}</span>
+                </button>
+              )
+            })}
+          </div>
+          <input className="altro" placeholder="altro: scrivi la tua risposta" value={altro[i] || ''}
+            onChange={(e) => setAltro((a) => ({ ...a, [i]: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter' && pronta) invia() }} />
+          {d.multipla && <div className="hint">puoi sceglierne piu' d'una</div>}
+        </div>
+      ))}
+      <div className="domazioni">
+        <button className="primary" disabled={!pronta} onClick={invia}>
+          <Icon name="invia" />rispondi</button>
+        <button className="ghost" onClick={() => onRisposta({ __annulla__: true })}>non rispondere</button>
       </div>
     </div>
   )

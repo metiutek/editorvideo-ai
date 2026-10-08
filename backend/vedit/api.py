@@ -38,7 +38,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import ffmpeg, htmlclip, hw, llm, presets, proxy, render
+from . import domande, ffmpeg, htmlclip, hw, llm, presets, proxy, render, stili
 from .model import TRANSITIONS, Effect
 from .store import PRESETS, EditError, Store
 
@@ -84,6 +84,8 @@ class Session:
         self.chat: dict = {}
         # "ferma" premuto nella chat: il turno in corso si interrompe al primo passo utile
         self.fermo = threading.Event()
+        # domanda in attesa di risposta nel browser (ask_user, conferma export)
+        self.domanda: dict | None = None
         # porta su cui ascolta l'interfaccia: serve a dire a Claude Code dov'e'
         # il server MCP dell'editor
         self.porta: int | None = None
@@ -335,6 +337,7 @@ def state() -> dict:
         "library": presets.describe(),
         "presets": list(PRESETS),
         "chat": chat_available(),
+        "stili": stili.descrivi(),
         "system": {"ffmpeg": ffmpeg.version(), "encoders": info.encoders,
                    "hw": info.working},
     }
@@ -938,6 +941,7 @@ def preset_apply(body: PresetBody) -> dict:
 
 class ChatBody(BaseModel):
     message: str
+    stile: str | None = None
     # punti del video di cui si parla: istanti, tratti, clip, aree dell'inquadratura
     refs: list[dict] = []
 
@@ -1028,6 +1032,56 @@ async def chat_allega(files: list[UploadFile] = File(...)) -> dict:
     return {"allegati": out}
 
 
+def chiedi(lista, timeout: float = 1800.0) -> dict:
+    """Mostra le domande nel browser e aspetta la risposta (o "ferma").
+
+    Blocca chi chiama, quindi va usata da un thread: la chat gira gia' in uno,
+    il server MCP ci passa con anyio.to_thread. Una domanda per volta: e' una
+    persona sola a rispondere.
+    """
+    norm = domande.valida(lista)
+    qid = uuid.uuid4().hex[:10]
+    evento = threading.Event()
+    if S.domanda is not None:
+        return {"annullata": True, "motivo": "c'e' gia' una domanda in attesa di risposta"}
+    S.domanda = {"id": qid, "domande": norm, "evento": evento, "risposte": None}
+    S.publish({"type": "domande", "id": qid, "domande": norm})
+    scadenza = time.time() + timeout
+    try:
+        while not evento.wait(0.25):
+            if S.fermo.is_set():
+                return {"annullata": True, "motivo": "l'utente ha fermato l'assistente"}
+            if time.time() > scadenza:
+                return {"annullata": True, "motivo": "nessuna risposta"}
+        r = S.domanda["risposte"] or {}
+        if r.get("__annulla__"):
+            return {"annullata": True, "motivo": "l'utente ha chiuso le domande senza rispondere"}
+        return {"risposte": r}
+    finally:
+        S.domanda = None
+        S.publish({"type": "domande_chiuse", "id": qid})
+
+
+@app.get("/api/domanda")
+def domanda_aperta() -> dict:
+    d = S.domanda
+    return {"domanda": {"id": d["id"], "domande": d["domande"]} if d else None}
+
+
+class RispostaBody(BaseModel):
+    risposte: dict
+
+
+@app.post("/api/domanda/{qid}")
+def domanda_rispondi(qid: str, body: RispostaBody) -> dict:
+    d = S.domanda
+    if d is None or d["id"] != qid:
+        raise HTTPException(404, "nessuna domanda in attesa con questo id")
+    d["risposte"] = body.risposte
+    d["evento"].set()
+    return {"ok": True}
+
+
 @app.post("/api/chat/stop")
 def chat_stop() -> dict:
     """Interrompe il turno dell'assistente in corso (le modifiche gia' fatte restano)."""
@@ -1052,6 +1106,9 @@ def chat(body: ChatBody) -> StreamingResponse:
     store = S.need()
 
     def run_op(name: str, args: dict) -> str:
+        if name == "ask_user":
+            # fuori dal lock: si aspetta l'utente, non si tocca il progetto
+            return json.dumps(chiedi(args.get("domande", args)), ensure_ascii=False)
         with S.lock:
             out = chat_mod.execute(store, name, args)
         _avvisa(store)
@@ -1064,7 +1121,8 @@ def chat(body: ChatBody) -> StreamingResponse:
         try:
             S.fermo.clear()
             for ev in chat_mod.run(store, S.chat, body.message, run_op,
-                                   refs=body.refs, mcp_url=mcp_url(), fermo=S.fermo.is_set):
+                                   refs=body.refs, mcp_url=mcp_url(), fermo=S.fermo.is_set,
+                                   stile=body.stile):
                 yield send(ev)
         except chat_mod.ChatUnavailable as exc:
             yield send({"type": "error", "message": str(exc)})

@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from . import llm, presets
+from . import domande, llm, presets, stili
 
 SYSTEM = """Sei l'assistente di montaggio dentro vedit, un editor video non lineare.
 
@@ -35,6 +35,11 @@ Come lavorare:
 - Per un "look" o una catena audio preferisci apply_preset: sono combinazioni
   gia' tarate. add_effect serve quando serve un parametro preciso.
 - Se un'operazione fallisce, leggi l'errore e correggi invece di ripeterla.
+
+Non esportare mai di tua iniziativa: qui non hai l'export, lo fa l'utente con il
+pulsante "esporta". Quando una scelta spetta all'utente (stile, durata, formato,
+quale versione tenere) usa ask_user con 2-4 opzioni chiare, la consigliata per
+prima, invece di decidere a caso o di fare domande nel testo.
 
 Rispondi in italiano, in modo breve. Dopo aver modificato la timeline di' in una
 frase cosa hai fatto, senza rielencare ogni chiamata."""
@@ -77,6 +82,7 @@ def build_tools() -> list[dict]:
                "font_size": {"type": "integer"}, "color": _STR,
                "box": {"type": "boolean", "description": "riquadro dietro al testo"}},
               ["text"]),
+        {"name": "ask_user", "description": domande.DESCRIZIONE, "input_schema": domande.SCHEMA},
         _tool("add_html",
               "Grafica animata in HTML/CSS/JS sopra il video, con sfondo trasparente: "
               "sottopancia, titoli animati, contatori, infografiche. La pagina e' grande "
@@ -389,7 +395,7 @@ def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
 
 def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict], str],
         refs: list[dict] | None = None, mcp_url: str | None = None,
-        fermo: Callable[[], bool] = lambda: False) -> Iterator[dict]:
+        fermo: Callable[[], bool] = lambda: False, stile: str | None = None) -> Iterator[dict]:
     """Un turno di conversazione con il modello attivo, come flusso di eventi.
 
     ``stato_chat`` conserva la cronologia nel formato del motore che l'ha
@@ -410,6 +416,8 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
         # lo stato va nel turno utente, non nel prompt di sistema: il prefisso
         # resta identico fra un turno e l'altro e la cache non si invalida
         contenuto.append({"type": "text", "text": _state_block(store)})
+    if stili.blocco(stile):
+        contenuto.append({"type": "text", "text": stili.blocco(stile)})
     if testo_rif:
         contenuto.append({"type": "text", "text": testo_rif})
     for im in immagini:

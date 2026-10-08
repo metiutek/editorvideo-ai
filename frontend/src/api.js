@@ -117,6 +117,14 @@ export const api = {
   chatReset: () => req('/api/chat/reset', { method: 'POST' }),
   // ferma il turno in corso: le modifiche gia' fatte restano e si annullano con Ctrl+Z
   chatStop: () => req('/api/chat/stop', { method: 'POST' }),
+  // domande dell'assistente in attesa di risposta (ask_user, conferma export)
+  domanda: () => req('/api/domanda'),
+  rispondi: (qid, risposte) =>
+    req(`/api/domanda/${qid}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ risposte }),
+    }),
 
   // modello dell'assistente: quale usare e con che chiave (resta su questo computer)
   llm: () => req('/api/llm'),
@@ -133,11 +141,11 @@ export const api = {
  * (testo, strumenti in esecuzione), quindi si legge il flusso invece di
  * aspettare la risposta completa.
  */
-export async function chat(message, refs, onEvent, signal) {
+export async function chat(message, refs, stile, onEvent, signal) {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, refs }),
+    body: JSON.stringify({ message, refs, stile }),
     signal,
   })
   if (!res.ok) {

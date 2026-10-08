@@ -59,6 +59,9 @@ export default function App() {
   const [refs, setRefs] = useState([])
   const [pickArea, setPickArea] = useState(false)
   const [llmSt, setLlmSt] = useState(null)
+  // domanda dell'assistente in attesa di risposta: arriva dal server e si
+  // risponde nella chat, chiunque l'abbia fatta (chat, Claude Code, un agente MCP)
+  const [domanda, setDomanda] = useState(null)
   const [sizes, setSizes] = useState(() => ({
     bin: 250, inspector: 320, timeline: 300, trackH: 72, ...loadSizes(),
   }))
@@ -92,6 +95,8 @@ export default function App() {
   useEffect(() => {
     api.state().then((s) => { setSys(s); applyState(s) }).catch((e) => setError(e.message))
     api.llm().then(setLlmSt).catch(() => {})
+    api.domanda().then((r) => { if (r.domanda) { setDomanda(r.domanda); setRightTab('chat') } })
+      .catch(() => {})
 
     // Il progetto cambia anche senza un clic qui dentro: l'assistente, un
     // agente via MCP (open_ui), un'altra finestra. Il server avvisa e la UI
@@ -104,6 +109,8 @@ export default function App() {
     }
     return connectEvents((ev) => {
       if (ev.type === 'render') setJob(ev.job)
+      if (ev.type === 'domande') { setDomanda({ id: ev.id, domande: ev.domande }); setRightTab('chat') }
+      if (ev.type === 'domande_chiuse') setDomanda((d) => (d && d.id === ev.id ? null : d))
       if (ev.type === 'proxies') {
         // anche in caso di errore: altrimenti l'avviso "genero i proxy" resta li' per sempre
         setBusy(null)
@@ -293,7 +300,7 @@ export default function App() {
       }}
     >
       <div className="topbar">
-        <span className="name">vedit</span>
+        <span className="name"><img src="/logo.svg" alt="" className="marchio" />vedit</span>
         <button className="ghost" onClick={() => setDialog('new')}>
           <Icon name="nuovo" />nuovo</button>
         <button className="ghost" onClick={() => setDialog('open')}>
@@ -470,6 +477,12 @@ export default function App() {
               <Chat available={llmSt || sys?.chat} onAvailable={setLlmSt} setError={setError}
                 onProject={applyState} project={project} playhead={playhead} seek={seek}
                 selected={selected} refs={refs} setRefs={setRefs}
+                stili={sys?.stili || []} domanda={domanda}
+                onRisposta={(risposte) => {
+                  const d = domanda
+                  setDomanda(null)
+                  if (d) api.rispondi(d.id, risposte).catch((e) => setError(e.message))
+                }}
                 pickArea={pickArea}
                 setPickArea={(v) => {
                   const next = typeof v === 'function' ? v(pickArea) : v
@@ -531,6 +544,7 @@ function Benvenuto({ recenti, onNew, onOpen, onRecent }) {
   return (
     <div className="preview benvenuto">
       <div className="benvenuto-box">
+        <img src="/logo.svg" alt="vedit" className="benvenuto-logo" />
         <div className="benvenuto-titolo">Ciao! Facciamo un video.</div>
         <div className="passi">
           <div className="passo"><b>1</b><span>Crea un progetto</span><small>o riaprine uno</small></div>

@@ -365,3 +365,137 @@ def test_ferma_a_meta_lascia_una_cronologia_valida(monkeypatch):
 def test_api_stop(client):
     assert client.post("/api/chat/stop").json() == {"ok": True}
     assert api_mod.S.fermo.is_set()
+
+
+# --------------------------------------------------------------------------
+# domande all'utente, export solo con il suo si', stili
+# --------------------------------------------------------------------------
+
+
+def test_domande_validate():
+    from vedit import domande
+
+    d = domande.valida([{"domanda": "Che stile?", "opzioni": ["Lento", {"etichetta": "Veloce"}]}])
+    assert d[0]["opzioni"][0] == {"etichetta": "Lento", "descrizione": ""}
+    assert d[0]["multipla"] is False
+    with pytest.raises(ValueError):
+        domande.valida([{"domanda": "Una sola?", "opzioni": ["si"]}])
+    with pytest.raises(ValueError):
+        domande.valida([{"domanda": f"d{i}", "opzioni": ["a", "b"]} for i in range(5)])
+    assert domande.approvato({"risposte": {"q": "Si', esporta"}})
+    assert not domande.approvato({"risposte": {"q": "No, non ancora"}})
+    assert not domande.approvato({"risposte": {"q": "esporta pure"}})   # solo un si' esplicito
+    assert not domande.approvato({"annullata": True})
+
+
+def _rispondi_appena_chiede(risposta, attesa=10.0):
+    """Fa la parte dell'utente: aspetta la domanda e risponde dal 'browser'."""
+    import threading
+    import time
+
+    def utente():
+        fine = time.time() + attesa
+        while time.time() < fine:
+            d = api_mod.S.domanda
+            if d is not None:
+                d["risposte"] = risposta(d) if callable(risposta) else risposta
+                d["evento"].set()
+                return
+            time.sleep(0.02)
+
+    t = threading.Thread(target=utente, daemon=True)
+    t.start()
+    return t
+
+
+def test_chiedi_aspetta_la_risposta(client):
+    _rispondi_appena_chiede(lambda d: {d["domande"][0]["domanda"]: "Lento"})
+    esito = api_mod.chiedi([{"domanda": "Che ritmo?", "opzioni": ["Lento", "Veloce"]}])
+    assert esito == {"risposte": {"Che ritmo?": "Lento"}}
+    assert api_mod.S.domanda is None
+
+
+def test_chiedi_via_api_e_annulla(client):
+    import threading
+
+    esiti = []
+    t = threading.Thread(target=lambda: esiti.append(api_mod.chiedi(
+        [{"domanda": "Esporto?", "opzioni": ["Si'", "No"]}], timeout=10)))
+    t.start()
+    import time
+    for _ in range(200):
+        aperta = client.get("/api/domanda").json()["domanda"]
+        if aperta:
+            break
+        time.sleep(0.02)
+    assert aperta["domande"][0]["domanda"] == "Esporto?"
+    assert client.post("/api/domanda/sbagliato", json={"risposte": {}}).status_code == 404
+    assert client.post(f"/api/domanda/{aperta['id']}", json={"risposte": {"__annulla__": True}}).status_code == 200
+    t.join(5)
+    assert esiti[0]["annullata"] is True
+
+
+def test_chiedi_si_ferma_con_ferma(client):
+    api_mod.S.fermo.set()
+    try:
+        esito = api_mod.chiedi([{"domanda": "x?", "opzioni": ["a", "b"]}], timeout=5)
+    finally:
+        api_mod.S.fermo.clear()
+    assert esito["annullata"] is True
+
+
+@pytest.mark.anyio
+async def test_render_dentro_l_editor_vuole_il_si(tmp_path):
+    """L'assistente non esporta di sua iniziativa: senza un si' niente file."""
+    from vedit import mcp_server as srv
+
+    api_mod.S.store = None
+    out = tmp_path / "video.mp4"
+    try:
+        with TestClient(api_mod.app) as c:
+            c.post("/api/project/create", json={"path": str(tmp_path / "p.json"), "preset": "720p"})
+            await srv.mcp.call_tool("add_color", {"color": "red", "duration": 1})
+            _rispondi_appena_chiede(lambda d: {d["domande"][0]["domanda"]: "No, non ancora"})
+            res = await srv.mcp.call_tool("render_video", {"output": str(out)})
+            testo = json.dumps(res, default=str)
+            assert "esportato" in testo and "false" in testo.lower()
+            assert not out.exists()
+    finally:
+        api_mod.S.store = None
+        srv._stores.clear()
+        srv._current[0] = None
+
+
+@pytest.mark.anyio
+async def test_ask_user_senza_interfaccia_lo_dice():
+    from vedit import mcp_server as srv
+
+    res = await srv.mcp.call_tool("ask_user", {"domande": [{"domanda": "x?", "opzioni": ["a", "b"]}]})
+    assert "nessuna interfaccia" in json.dumps(res, default=str)
+
+
+def test_stile_arriva_al_modello(monkeypatch):
+    from vedit import stili
+
+    assert {s["id"] for s in stili.descrivi()} >= {"cinematico", "dinamico", "documentario", "trailer"}
+    assert stili.blocco(None) == "" and stili.blocco("inesistente") == ""
+    mandati = []
+
+    def finto(url, chiave, body):
+        mandati.append(body)
+        yield {"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}
+
+    monkeypatch.setattr(llm, "_post_stream", finto)
+    llm.imposta("openai", chiave="k", modello="gpt-5")
+    list(chat.run(Store.create("t", "720p"), {}, "fammi il video", lambda n, a: "", stile="trailer"))
+    testo = json.dumps(mandati[0]["messages"][-1], ensure_ascii=False)
+    assert "Stile di montaggio scelto dall'utente: Trailer" in testo
+    assert "style='cinematic'" in testo
+
+
+def test_l_assistente_non_ha_l_export_e_puo_chiedere():
+    nomi = {t["name"] for t in chat.build_tools()}
+    assert "ask_user" in nomi
+    assert not any("render" in n or "export" in n for n in nomi)
+    assert "Non esportare mai di tua iniziativa" in chat.SYSTEM
+    assert "AskUserQuestion qui non funziona" in llm.SISTEMA_CLAUDE_CODE

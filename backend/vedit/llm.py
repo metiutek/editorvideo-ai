@@ -495,7 +495,14 @@ stato): non passare il parametro project, lavori gia' su quello giusto. Ogni mod
 compare subito nella timeline dell'utente e si annulla con Ctrl+Z.
 
 Usa gli strumenti di vedit per tutto: add_html per la grafica animata, preview_frame
-per guardare il risultato prima di dire che e' fatto. Se l'utente ti indica dei
+per guardare il risultato prima di dire che e' fatto.
+
+Scrivi sempre in italiano, anche le brevi note fra un passaggio e l'altro.
+
+Non esportare mai di tua iniziativa: render_video solo se l'utente lo chiede, e
+l'editor gli chiede comunque conferma. Per le scelte che spettano all'utente
+(stile, durata, formato, se esportare) usa mcp__vedit__ask_user, che gli mostra
+le domande con le opzioni nell'editor: AskUserQuestion qui non funziona. Se l'utente ti indica dei
 riferimenti (istanti, clip, aree dell'inquadratura) le immagini relative sono file
 PNG che puoi aprire con Read. Rispondi in italiano, breve."""
 
@@ -529,7 +536,9 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
     prompt = "\n\n".join(c["text"] if c["type"] == "text" else f"(immagine: {c['path']})"
                          for c in contenuto)
     env = {**os.environ}
-    env.pop("CLAUDECODE", None)  # avviato da dentro un'altra sessione non deve credersi annidato
+    env.pop("CLAUDECODE", None)
+    # ask_user aspetta che l'utente risponda nell'editor: puo' volerci un po'
+    env.setdefault("MCP_TOOL_TIMEOUT", "1800000")  # avviato da dentro un'altra sessione non deve credersi annidato
     try:
         proc = subprocess.Popen(
             args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -558,6 +567,7 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
         proc.stdin.write(prompt.encode("utf-8"))
         proc.stdin.close()
         aperti: dict[str, str] = {}
+        scritto = False   # c'e' gia' del testo: un blocco nuovo va staccato dal precedente
         for raw in proc.stdout:
             try:
                 ev = json.loads(raw.decode("utf-8", "replace"))
@@ -570,7 +580,11 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
                 e = ev.get("event") or {}
                 d = e.get("delta") or {}
                 if e.get("type") == "content_block_delta" and d.get("type") == "text_delta":
+                    scritto = True
                     yield {"type": "text", "text": d.get("text", "")}
+                elif e.get("type") == "content_block_start" and scritto and \
+                        (e.get("content_block") or {}).get("type") == "text":
+                    yield {"type": "text", "text": "\n\n"}
                 elif e.get("type") == "content_block_start" and (e.get("content_block") or {}).get("type") == "thinking":
                     yield {"type": "thinking"}
             elif tipo == "assistant":

@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo/logo.png" alt="logo di vedit" width="120"/></p>
+
 # vedit
 
 > 🇬🇧 English version (and the PyPI page): [README.md](README.md).
@@ -364,7 +366,19 @@ Le chiavi restano su questo computer in `~/.vedit/llm.json`, mai nel file di pro
 **area** (disegni un riquadro sull'inquadratura). Ognuno diventa una pastiglia numerata:
 scrivi «ingrandisci il titolo nel 2» e il modello riceve il riferimento con il fotogramma
 davanti — l'area segnata in rosso, e la sua posizione già convertita negli `x`/`y` di
-`set_transform`.
+`set_transform`. Allo stesso modo si aggiungono file (trascinati o incollati, anche uno
+screenshot), link (una pagina arriva come testo, un video diretto viene scaricato) e cartelle.
+
+**Chiede, non decide al posto tuo.** Quando una scelta spetta a te — stile, durata, formato,
+quale versione tenere — l'assistente mostra una scheda di domande con le opzioni da cliccare
+(`ask_user`, disponibile anche a qualunque agente MCP collegato all'editor aperto). **Non
+esporta mai di sua iniziativa**: dentro l'editor ogni `render_video` prima ti chiede conferma,
+e senza un sì non scrive niente. Ogni passaggio dice su cosa lavora e si apre sui parametri
+esatti; **ferma** lo interrompe a metà.
+
+**Stili di montaggio.** Ne scegli uno dalla pastiglia nella chat — cinematografico,
+dinamico/social, documentario, vlog, trailer, videoclip, minimal, retro/VHS — e guida ogni
+scelta: ritmo dei tagli, transizioni, colore, titoli, musica.
 
 ### 7. Esportare
 

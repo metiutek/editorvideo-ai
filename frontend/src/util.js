@@ -109,6 +109,10 @@ export function dettaglioStrumento(nome, input, project) {
   if (typeof a.url === 'string') { try { parti.push(new URL(a.url).host) } catch { parti.push(corto(a.url)) } }
   if (typeof a.pattern === 'string') parti.push(corto(a.pattern))
   if (typeof a.output === 'string') parti.push(base(a.output))
+  if (Array.isArray(a.domande) && a.domande.length) {
+    const d = a.domande[0]
+    parti.push(a.domande.length > 1 ? `${a.domande.length} domande` : corto(String(d.titolo || d.domanda || ''), 40))
+  }
   return parti.join(' · ')
 }
 

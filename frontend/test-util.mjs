@@ -24,6 +24,8 @@ test('passi dell\'assistente: su cosa lavorano, in parole', () => {
   assert.equal(dettaglioStrumento('import_media', { paths: ['C:\\video\\a.mp4'] }, project), 'a.mp4')
   assert.equal(dettaglioStrumento('project_info', {}, project), '')
   assert.equal(dettaglioStrumento('x', null, project), '')
+  assert.equal(dettaglioStrumento('ask_user', { domande: [{ titolo: 'Export', domanda: 'Esporto?' }] }, project),
+    'Export')
 })
 
 test('impronta: stabile, e cambia col documento della clip html', () => {

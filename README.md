@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo/logo.png" alt="vedit logo" width="120"/></p>
+
 <h1 align="center">vedit — tell an AI to edit your video, and watch it happen</h1>
 
 <p align="center">
@@ -353,7 +355,19 @@ Keys stay on your machine in `~/.vedit/llm.json`, never in the project file.
 end), **clip** (the selected one, or "ask" in its properties), **area** (draw a box on the
 frame). Each becomes a numbered chip; write "make the title in 2 bigger" and the model gets the
 reference with the actual frame in front of it — the area drawn in red, and its position
-already converted to the `x`/`y` that `set_transform` uses.
+already converted to the `x`/`y` that `set_transform` uses. Files (drag, paste a
+screenshot), links (a page arrives as text, a direct video is downloaded) and folders work the
+same way.
+
+*It asks, it doesn't assume.* When a choice is yours — style, length, format, which version to
+keep — the assistant shows a question card with options to click (`ask_user`, also available
+to any MCP agent connected to the open editor). **It never exports on its own**: inside the
+editor every `render_video` first asks you, and without a yes no file is written. Each step
+shows what it touches and opens to its exact parameters; **stop** halts it mid-turn.
+
+*Editing styles.* Pick one from the chip in the chat — cinematic, dynamic/social,
+documentary, vlog, trailer, music video, minimal, retro/VHS — and it guides every choice:
+cut rhythm, transitions, colour, titles, music.
 
 **7. Export.** Destination file, quality (`draft` / `medium` / `high` / `max`), codec (H.264,
 HEVC, AV1, VP9), optionally just a portion of the timeline. The extension picks the container:
