@@ -52,7 +52,8 @@ LOOKS: list[dict] = [
         "group": "Colore",
         "desc": "Temperatura verso l'arancio, luce di fine giornata.",
         "effects": [
-            {"type": "temperature", "params": {"temperature": 8200}},
+            # sotto 6500 K colortemperature scalda: 8200 dava un tramonto blu
+            {"type": "temperature", "params": {"temperature": 4200}},
             {"type": "color", "params": {"saturation": 1.12, "brightness": 0.03}},
         ],
     },
@@ -62,7 +63,7 @@ LOOKS: list[dict] = [
         "group": "Colore",
         "desc": "Blu, contrasto alto: notte o interni al neon.",
         "effects": [
-            {"type": "temperature", "params": {"temperature": 4200}},
+            {"type": "temperature", "params": {"temperature": 9000}},
             {"type": "color", "params": {"contrast": 1.2, "brightness": -0.06, "saturation": 0.9}},
         ],
     },

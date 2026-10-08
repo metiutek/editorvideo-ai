@@ -67,6 +67,9 @@ class CompileOptions:
     # clip_id -> (file .mov con alpha, tempo del suo primo fotogramma): le clip
     # html fotografate da htmlclip.prepare. Il grafo resta puro, il browser no.
     html_files: dict = field(default_factory=dict)
+    # clip_id -> (wav gia' passato nei plugin VST, attacco da cui parte):
+    # plugins.prepare. Come per l'html, il grafo usa il file e resta puro.
+    audio_files: dict = field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------
@@ -592,7 +595,17 @@ class _Builder:
 
         # la clip video ha gia' creato il proprio ingresso: ne apriamo un altro
         # solo per l'audio, cosi' i due rami restano indipendenti
-        idx = self.input_for(clip, media)
+        lavorato = self.o.audio_files.get(clip.id)
+        if lavorato:
+            path, in0 = lavorato
+            args: list[str] = []
+            salto = clip.in_ - float(in0)
+            if salto > 1e-6:
+                args += ["-ss", n(salto)]
+            args += ["-t", n(clip_visible(clip) * abs(clip.speed or 1.0) + 0.05), "-i", path]
+            idx = self.add_input(args)
+        else:
+            idx = self.input_for(clip, media)
         off = clip_offset(clip)
         f = []
         if clip.reverse:
@@ -650,6 +663,52 @@ class _Builder:
         self.chain(f"{idx}:a", f, out)
         return out
 
+    def _submix(self, labels: list[str]) -> str:
+        out = self.label("sub")
+        if len(labels) == 1:
+            self.chains.append(f"[{labels[0]}]anull[{out}]")
+        else:
+            ins = "".join(f"[{l}]" for l in labels)
+            self.chains.append(f"{ins}amix=inputs={len(labels)}:duration=longest:normalize=0"
+                               f":dropout_transition=0[{out}]")
+        return out
+
+    def _sidechain(self, per_traccia: dict[str, list[str]]) -> list[str] | None:
+        """Tracce che si abbassano quando ne suona un'altra (compressore sidechain).
+
+        Serve un sottomix per traccia: quella da abbassare passa nel
+        compressore, quella che comanda viene sdoppiata — una copia va nel mix,
+        l'altra fa da chiave. Senza sidechain attivi torna None e il mix resta
+        quello di sempre, clip per clip.
+        """
+        bersagli = {t.id: t.sidechain for t in self.p.tracks
+                    if t.sidechain and t.sidechain.get("source") in per_traccia
+                    and t.id in per_traccia and t.sidechain.get("source") != t.id}
+        if not bersagli:
+            return None
+        mix = {tid: self._submix(labs) for tid, labs in per_traccia.items()}
+        chiavi: dict[str, list[str]] = {}
+        for tid in {sc["source"] for sc in bersagli.values()}:
+            usi = sum(1 for sc in bersagli.values() if sc["source"] == tid)
+            copie = [self.label("key") for _ in range(usi)]
+            vivo = self.label("sub")
+            # la chiave non deve finire prima del brano da abbassare: il
+            # compressore si fermerebbe con lei
+            self.chains.append(f"[{mix[tid]}]asplit={usi + 1}[{vivo}]" + "".join(f"[{k}]" for k in copie))
+            mix[tid] = vivo
+            chiavi[tid] = copie
+        for tid, sc in bersagli.items():
+            chiave = chiavi[sc["source"]].pop()
+            pad, out = self.label("keyp"), self.label("sc")
+            soglia = max(0.000976563, min(1.0, 10 ** (float(sc.get("threshold", -30)) / 20)))
+            self.chains.append(f"[{chiave}]apad[{pad}]")
+            self.chains.append(
+                f"[{mix[tid]}][{pad}]sidechaincompress=threshold={n(soglia)}"
+                f":ratio={n(sc.get('ratio', 6))}:attack={n(sc.get('attack', 20))}"
+                f":release={n(sc.get('release', 400))}:makeup={n(sc.get('makeup', 1))}[{out}]")
+            mix[tid] = out
+        return list(mix.values())
+
     def build_audio(self, duration: float) -> str | None:
         labels: list[str] = []
         # Anche le clip su una traccia video portano il loro audio, quindi il mix
@@ -657,6 +716,7 @@ class _Builder:
         # e' il senso del solo, isolare un suono per sentirlo da solo.
         solo = [t for t in self.p.audio_tracks() if t.solo]
         sources = solo if solo else self.p.tracks
+        per_traccia: dict[str, list[str]] = {}
         for track in sources:
             if track.muted:
                 continue
@@ -665,11 +725,13 @@ class _Builder:
                     continue
                 lab = self.audio_clip(clip, track)
                 if lab:
+                    per_traccia.setdefault(track.id, []).append(lab)
                     labels.append(lab)
 
         if not labels:
             return None
 
+        labels = self._sidechain(per_traccia) or labels
         mixed = self.label("amix")
         if len(labels) == 1:
             self.chains.append(f"[{labels[0]}]anull[{mixed}]")

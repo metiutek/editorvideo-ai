@@ -116,6 +116,51 @@ export function dettaglioStrumento(nome, input, project) {
   return parti.join(' · ')
 }
 
+/**
+ * Risposta in dB dell'equalizzatore parametrico alla frequenza f.
+ *
+ * Stesse formule dei biquad di ffmpeg (Audio EQ Cookbook di R. Bristow-Johnson),
+ * cosi' la curva disegnata e' quella che si sente.
+ */
+export function rispostaEq(bands, f, fs = 48000) {
+  let db = 0
+  for (const b of bands || []) {
+    if (b.on === false) continue
+    const w0 = (2 * Math.PI * b.freq) / fs
+    const cw = Math.cos(w0)
+    const sw = Math.sin(w0)
+    const q = Math.max(0.1, b.q || 1)
+    const alpha = sw / (2 * q)
+    const A = 10 ** ((b.gain || 0) / 40)
+    const sA = 2 * Math.sqrt(A) * alpha
+    let c
+    switch (b.type) {
+      case 'peak':
+        c = [1 + alpha * A, -2 * cw, 1 - alpha * A, 1 + alpha / A, -2 * cw, 1 - alpha / A]; break
+      case 'lowshelf':
+        c = [A * ((A + 1) - (A - 1) * cw + sA), 2 * A * ((A - 1) - (A + 1) * cw), A * ((A + 1) - (A - 1) * cw - sA),
+          (A + 1) + (A - 1) * cw + sA, -2 * ((A - 1) + (A + 1) * cw), (A + 1) + (A - 1) * cw - sA]; break
+      case 'highshelf':
+        c = [A * ((A + 1) + (A - 1) * cw + sA), -2 * A * ((A - 1) + (A + 1) * cw), A * ((A + 1) + (A - 1) * cw - sA),
+          (A + 1) - (A - 1) * cw + sA, 2 * ((A - 1) - (A + 1) * cw), (A + 1) - (A - 1) * cw - sA]; break
+      case 'lowpass':
+        c = [(1 - cw) / 2, 1 - cw, (1 - cw) / 2, 1 + alpha, -2 * cw, 1 - alpha]; break
+      case 'highpass':
+        c = [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2, 1 + alpha, -2 * cw, 1 - alpha]; break
+      case 'notch':
+        c = [1, -2 * cw, 1, 1 + alpha, -2 * cw, 1 - alpha]; break
+      default: continue
+    }
+    const w = (2 * Math.PI * f) / fs
+    const re = (k0, k1, k2) => k0 + k1 * Math.cos(w) + k2 * Math.cos(2 * w)
+    const im = (k1, k2) => -(k1 * Math.sin(w) + k2 * Math.sin(2 * w))
+    const num = Math.hypot(re(c[0], c[1], c[2]), im(c[1], c[2]))
+    const den = Math.hypot(re(c[3], c[4], c[5]), im(c[4], c[5]))
+    db += 20 * Math.log10(Math.max(1e-9, num / den))
+  }
+  return db
+}
+
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 /**

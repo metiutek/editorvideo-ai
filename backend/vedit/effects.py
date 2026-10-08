@@ -146,9 +146,29 @@ def _f_color(p: dict, c: Ctx) -> list[str]:
 
 
 def _f_colorbalance(p: dict, c: Ctx) -> list[str]:
-    keys = ("rs", "gs", "bs", "rm", "gm", "bm", "rh", "gh", "bh")
-    args = [f"{k}={fnum(num(p, k, 0.0))}" for k in keys]
-    return ["colorbalance=" + ":".join(args)]
+    """Ombre, mezzitoni e luci per canale: lift, gamma e gain del color grading.
+
+    Non usa il filtro colorbalance di ffmpeg: i suoi mezzitoni sono
+    imprevedibili (+0.5 di rosso trasforma un grigio scuro in rosso pieno e
+    lascia identico un grigio medio). Qui per ogni canale, con x fra 0 e 1:
+
+        out = (x * gain + lift * (1 - x)) ^ (1 / gamma)
+
+    lift sposta soprattutto le ombre, gain soprattutto le luci, gamma i toni
+    di mezzo; a zero l'immagine resta identica.
+    """
+    if all(abs(num(p, f"{ch}{z}", 0.0)) < 1e-6 for ch in "rgb" for z in "smh"):
+        return []
+    args = []
+    for ch in "rgb":
+        lift = num(p, f"{ch}s", 0.0) * 0.3
+        gamma = 1.0 + num(p, f"{ch}m", 0.0) * 0.6
+        gain = 1.0 + num(p, f"{ch}h", 0.0) * 0.5
+        x = "(val/255)"
+        espr = (f"255*pow(clip({x}*{fnum(gain)}+{fnum(lift)}*(1-{x}),0,1),"
+                f"{fnum(1.0 / max(gamma, 0.05))})")
+        args.append(f"{ch}='clip({espr},0,255)'")
+    return ["lutrgb=" + ":".join(args)]
 
 
 def _f_temperature(p: dict, c: Ctx) -> list[str]:
@@ -393,6 +413,69 @@ def _f_fps_blend(p: dict, c: Ctx) -> list[str]:
     return [f"tmix=frames={int(num(p, 'frames', 3))}:weights='1 1 1'"]
 
 
+def _f_exposure(p: dict, c: Ctx) -> list[str]:
+    """Esposizione in stop, come in fotografia: +1 raddoppia la luce."""
+    return [f"exposure=exposure={fnum(num(p, 'exposure', 0.0))}:black={fnum(num(p, 'black', 0.0))}"]
+
+
+def _f_vibrance(p: dict, c: Ctx) -> list[str]:
+    """Saturazione intelligente: spinge i colori spenti, risparmia quelli gia' carichi e la pelle."""
+    return [f"vibrance=intensity={fnum(num(p, 'intensity', 0.3))}"]
+
+
+def _f_whitebalance(p: dict, c: Ctx) -> list[str]:
+    """Bilanciamento del bianco: temperatura (blu-arancio) e tinta (verde-magenta).
+
+    colortemperature simula la luce di quella temperatura: sotto 6500 K
+    l'immagine si scalda (arancio), sopra si raffredda (blu). La tinta sposta
+    i mezzitoni: positiva verso il magenta, negativa verso il verde.
+    """
+    out = []
+    k = num(p, "temperature", 6500)
+    if abs(k - 6500) > 1:
+        out.append(f"colortemperature=temperature={fnum(k)}")
+    tinta = num(p, "tint", 0.0)
+    if abs(tinta) > 1e-6:
+        # magenta = piu' rosso e blu, meno verde; verde il contrario
+        out.append(f"colorchannelmixer=rr={fnum(1 + tinta * 0.1)}:gg={fnum(1 - tinta * 0.2)}"
+                   f":bb={fnum(1 + tinta * 0.1)}")
+    return out
+
+
+def _f_autowhite(p: dict, c: Ctx) -> list[str]:
+    """Bilanciamento automatico: in media la scena dev'essere grigia (gray world)."""
+    return ["format=gbrpf32le", "grayworld"]
+
+
+def _f_hue(p: dict, c: Ctx) -> list[str]:
+    return [f"hue=h={quoted(anim(p, 'hue', 0.0, c))}"]
+
+
+_COLORI = {"rossi": "r", "gialli": "y", "verdi": "g", "ciano": "c", "blu": "b",
+           "magenta": "m", "tutti": "a"}
+
+
+def _f_hsl(p: dict, c: Ctx) -> list[str]:
+    """Correzione secondaria: tocca una sola famiglia di colori (il cielo, l'erba, la pelle)."""
+    colori = _COLORI.get(str(val(p, "colors", "blu")), "b")
+    return [
+        f"huesaturation=hue={fnum(num(p, 'hue', 0.0))}:saturation={fnum(num(p, 'saturation', 0.0))}"
+        f":intensity={fnum(num(p, 'brightness', 0.0))}:colors={colori}"
+        f":strength={fnum(num(p, 'softness', 5.0))}"
+    ]
+
+
+def _f_levels(p: dict, c: Ctx) -> list[str]:
+    """Livelli: punto del nero e del bianco in ingresso e in uscita."""
+    bi, wi = num(p, "black_in", 0.0), num(p, "white_in", 1.0)
+    bo, wo = num(p, "black_out", 0.0), num(p, "white_out", 1.0)
+    args = []
+    for ch in "rgb":
+        args += [f"{ch}imin={fnum(bi)}", f"{ch}imax={fnum(wi)}",
+                 f"{ch}omin={fnum(bo)}", f"{ch}omax={fnum(wo)}"]
+    return ["colorlevels=" + ":".join(args)]
+
+
 # --------------------------------------------------------------------------
 # effetti audio
 # --------------------------------------------------------------------------
@@ -472,6 +555,96 @@ def _a_censor(p: dict, c: Ctx) -> list[str]:
     return [f"volume=volume=0{en}"]
 
 
+def _a_deesser(p: dict, c: Ctx) -> list[str]:
+    """Smorza le "s" e le "z" sibilanti della voce senza spegnere il resto.
+
+    Non usa il filtro deesser di ffmpeg: su questa versione non rileva mai
+    niente e lascia l'audio identico. Si fa come in studio: il suono si divide
+    in due bande (acrossover), si comprime solo quella acuta, dove stanno le
+    sibilanti, e si rimettono insieme.
+    """
+    quanto = max(0.0, min(1.0, num(p, "amount", 0.6)))
+    soglia = 10 ** ((-12 - 30 * quanto) / 20)
+    rapporto = 2 + 10 * quanto
+    f = fnum(max(2000.0, min(12000.0, num(p, "frequency", 5500))))
+    lo, hi, hc = c.uid("dslo"), c.uid("dshi"), c.uid("dshc")
+    return [
+        f"acrossover=split={f}[{lo}][{hi}];"
+        f"[{hi}]acompressor=threshold={fnum(soglia)}:ratio={fnum(rapporto)}:attack=1:release=60[{hc}];"
+        f"[{lo}][{hc}]amix=inputs=2:normalize=0"
+    ]
+
+
+TIPI_BANDA = ("peak", "lowshelf", "highshelf", "highpass", "lowpass", "notch")
+MAX_BANDE = 10
+BANDE_DEFAULT = [
+    {"type": "highpass", "freq": 70, "q": 0.7},
+    {"type": "lowshelf", "freq": 200, "gain": 0, "q": 0.7},
+    {"type": "peak", "freq": 1000, "gain": 0, "q": 1.0},
+    {"type": "peak", "freq": 3500, "gain": 0, "q": 1.0},
+    {"type": "highshelf", "freq": 9000, "gain": 0, "q": 0.7},
+]
+
+
+def bande_valide(bands) -> list[dict]:
+    """Normalizza le bande dell'equalizzatore parametrico; ValueError se impossibili."""
+    if isinstance(bands, str):
+        import json
+
+        bands = json.loads(bands or "[]")
+    if not isinstance(bands, list):
+        raise ValueError("bands dev'essere una lista di bande")
+    if len(bands) > MAX_BANDE:
+        raise ValueError(f"al massimo {MAX_BANDE} bande")
+    out = []
+    for b in bands:
+        if not isinstance(b, dict):
+            raise ValueError("ogni banda e' un oggetto {type, freq, gain, q}")
+        tipo = str(b.get("type", "peak"))
+        if tipo not in TIPI_BANDA:
+            raise ValueError(f"tipo di banda {tipo!r} non ammesso: {list(TIPI_BANDA)}")
+        freq = float(b.get("freq", 1000))
+        gain = float(b.get("gain", 0))
+        q = float(b.get("q", 1.0))
+        if not 20 <= freq <= 20000:
+            raise ValueError(f"frequenza {freq} fuori da 20-20000 Hz")
+        if not -24 <= gain <= 24:
+            raise ValueError(f"guadagno {gain} fuori da -24..24 dB")
+        if not 0.1 <= q <= 18:
+            raise ValueError(f"Q {q} fuori da 0.1-18")
+        out.append({"type": tipo, "freq": freq, "gain": gain, "q": q,
+                    "on": bool(b.get("on", True))})
+    return out
+
+
+def _a_eqparam(p: dict, c: Ctx) -> list[str]:
+    """Equalizzatore parametrico: fino a dieci bande, ognuna col suo filtro."""
+    out = []
+    for b in bande_valide(p.get("bands", BANDE_DEFAULT)):
+        if not b["on"]:
+            continue
+        f, g, q = fnum(b["freq"]), fnum(b["gain"]), fnum(b["q"])
+        if b["type"] == "peak":
+            if abs(b["gain"]) > 1e-6:
+                out.append(f"equalizer=f={f}:t=q:w={q}:g={g}")
+        elif b["type"] in ("lowshelf", "highshelf"):
+            if abs(b["gain"]) > 1e-6:
+                out.append(f"{b['type']}=f={f}:g={g}:t=q:w={q}")
+        elif b["type"] in ("highpass", "lowpass"):
+            out.append(f"{b['type']}=f={f}:t=q:w={q}")
+        else:  # notch
+            out.append(f"bandreject=f={f}:t=q:w={q}")
+    uscita = num(p, "output", 0.0)
+    if abs(uscita) > 1e-6:
+        out.append(f"volume={fnum(uscita)}dB")
+    return out
+
+
+def _a_vst(p: dict, c: Ctx) -> list[str]:
+    """Il plugin non e' un filtro ffmpeg: il suono arriva gia' lavorato (plugins.py)."""
+    return []
+
+
 def _a_dynnorm(p: dict, c: Ctx) -> list[str]:
     return [f"dynaudnorm=f={int(num(p, 'frame_ms', 200))}:g={int(num(p, 'gauss', 15))}:p={fnum(num(p, 'peak', 0.9))}"]
 
@@ -494,12 +667,12 @@ _DEFS: tuple[EffectDef, ...] = (
     EffectDef(
         "colorbalance", "video", "Bilanciamento colore",
         tuple(Param(k, 0.0, min=-1, max=1) for k in ("rs", "gs", "bs", "rm", "gm", "bm", "rh", "gh", "bh")),
-        _f_colorbalance, "Ombre (s), mezzitoni (m), alte luci (h) per canale RGB.",
+        _f_colorbalance, "Ombre (s), mezzitoni (m), alte luci (h) per canale RGB: lift, gamma, gain.",
     ),
     EffectDef(
         "temperature", "video", "Temperatura colore",
         (Param("temperature", 6500, min=1000, max=40000), Param("mix", 1.0, min=0, max=1)),
-        _f_temperature, "Kelvin: sotto 6500 raffredda, sopra scalda.",
+        _f_temperature, "Kelvin: sotto 6500 scalda (arancio), sopra raffredda (blu).",
     ),
     EffectDef(
         "curves", "video", "Curve",
@@ -624,6 +797,49 @@ _DEFS: tuple[EffectDef, ...] = (
         (Param("mode", "blend", kind="enum", choices=("blend", "interpolate")), Param("frames", 3, min=2, max=9)),
         _f_fps_blend, "blend = scia morbida; interpolate = frame interpolati (lento).",
     ),
+    EffectDef(
+        "exposure", "video", "Esposizione",
+        (Param("exposure", 0.0, min=-3, max=3, desc="stop: +1 = il doppio della luce"),
+         Param("black", 0.0, min=-0.1, max=0.1, desc="livello del nero")),
+        _f_exposure, "Schiarisce o scurisce come il diaframma, senza appiattire il contrasto.",
+    ),
+    EffectDef(
+        "vibrance", "video", "Vividezza",
+        (Param("intensity", 0.3, min=-2, max=2),),
+        _f_vibrance, "Satura i colori spenti e risparmia quelli gia' carichi e la pelle.",
+    ),
+    EffectDef(
+        "whitebalance", "video", "Bilanciamento del bianco",
+        (Param("temperature", 6500, min=2000, max=12000,
+               desc="K: sotto 6500 scalda (arancio), sopra raffredda (blu)"),
+         Param("tint", 0.0, min=-1, max=1, desc="negativa verso il verde, positiva verso il magenta")),
+        _f_whitebalance, "Temperatura e tinta: toglie la dominante di una luce sbagliata.",
+    ),
+    EffectDef(
+        "autowhite", "video", "Bilanciamento automatico", (),
+        _f_autowhite, "Neutralizza da solo la dominante di colore (gray world).",
+    ),
+    EffectDef(
+        "hue", "video", "Tonalita'",
+        (Param("hue", 0.0, min=-180, max=180, anim=True, desc="gradi sulla ruota dei colori"),),
+        _f_hue, "Ruota tutti i colori; animabile.",
+    ),
+    EffectDef(
+        "hsl", "video", "Correzione di un colore",
+        (Param("colors", "blu", kind="enum", choices=tuple(_COLORI)),
+         Param("hue", 0.0, min=-180, max=180, desc="sposta la tinta di quel colore"),
+         Param("saturation", 0.0, min=-1, max=1),
+         Param("brightness", 0.0, min=-1, max=1),
+         Param("softness", 5.0, min=0, max=100,
+               desc="forza della selezione: sotto 5 l'effetto arriva solo a meta'")),
+        _f_hsl, "Tocca solo una famiglia di colori: cielo piu' blu, erba meno gialla, pelle piu' calda.",
+    ),
+    EffectDef(
+        "levels", "video", "Livelli",
+        (Param("black_in", 0.0, min=0, max=0.5), Param("white_in", 1.0, min=0.5, max=1),
+         Param("black_out", 0.0, min=0, max=0.5), Param("white_out", 1.0, min=0.5, max=1)),
+        _f_levels, "Punti del nero e del bianco: recupera un'immagine slavata o schiaccia i neri.",
+    ),
     # ---- audio ----
     EffectDef(
         "eq3", "audio", "Equalizzatore",
@@ -668,6 +884,28 @@ _DEFS: tuple[EffectDef, ...] = (
         "Copre gli intervalli indicati: mute li azzera, scramble sposta le "
         "frequenze e rende la voce incomprensibile ma presente. Gli intervalli "
         "arrivano da analyze.censor_spans (timestamp per parola).",
+    ),
+    EffectDef(
+        "deesser", "audio", "De-esser",
+        (Param("amount", 0.6, min=0, max=1, desc="quanto smorza: 0 niente, 1 molto"),
+         Param("frequency", 5500, min=2000, max=12000,
+               desc="Hz da cui partono le sibilanti: 5000-6000 voce maschile, 6000-8000 femminile")),
+        _a_deesser, "Smorza le 's' sibilanti della voce.",
+    ),
+    EffectDef(
+        "eqparam", "audio", "Equalizzatore parametrico",
+        (Param("bands", BANDE_DEFAULT, kind="bands",
+               desc="lista di bande {type: peak|lowshelf|highshelf|highpass|lowpass|notch, "
+                    "freq: Hz, gain: dB, q, on}"),
+         Param("output", 0.0, min=-24, max=24, desc="guadagno finale in dB")),
+        _a_eqparam, "Fino a dieci bande con frequenza, guadagno e larghezza a scelta.",
+    ),
+    EffectDef(
+        "vst", "audio", "Plugin VST",
+        (Param("file", "", kind="file", desc="plugin .vst3 (o .component su Mac)"),
+         Param("values", {}, kind="dict", desc="valori dei parametri del plugin, per nome"),
+         Param("mix", 1.0, min=0, max=1, desc="0 = suono originale, 1 = solo plugin")),
+        _a_vst, "Un plugin audio esterno (VST3/AU): si applica prima degli altri effetti.",
     ),
     EffectDef(
         "dynnorm", "audio", "Normalizzazione dinamica",
@@ -740,6 +978,12 @@ def validate_effect(type_: str, params: dict) -> dict:
             if p.max is not None and fv > p.max:
                 raise ValueError(f"{type_}.{p.name}={fv} sopra il massimo {p.max}")
             v = fv
+        elif p.kind == "bands":
+            v = bande_valide(v)
+        elif p.kind == "dict":
+            if not isinstance(v, dict) or not all(
+                    isinstance(x, (int, float, str, bool)) for x in v.values()):
+                raise ValueError(f"{type_}.{p.name} vuole un oggetto nome -> valore")
         elif p.kind == "enum" and p.choices and str(v) not in p.choices:
             raise ValueError(f"{type_}.{p.name}={v!r} non ammesso, scegli tra {list(p.choices)}")
         clean[p.name] = v

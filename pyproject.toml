@@ -67,6 +67,9 @@ transcribe = ["faster-whisper>=1.0"]
 # Usa Chrome o Edge gia' installati; senza, add_html funziona e l'anteprima
 # dal vivo pure, ma il render dice cosa installare.
 html = ["playwright>=1.40"]
+# plugin audio esterni (VST3, AU su Mac): pedalboard li carica, ffmpeg no.
+# Senza, l'effetto "vst" dice cosa installare e il resto non cambia.
+plugin = ["pedalboard>=0.9"]
 
 [project.scripts]
 vedit = "vedit.cli:main"

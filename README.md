@@ -174,6 +174,7 @@ pip install -e ".[chat]"        # anthropic — Claude with an API key in the as
 pip install -e ".[vision]"      # ultralytics — detect_subjects, track_mask, auto_reframe (pulls torch)
 pip install -e ".[transcribe]"  # faster-whisper — transcribe, make_captions, tighten_speech, censor_speech
 pip install -e ".[html]"        # playwright — renders HTML clips (uses the Chrome or Edge you already have)
+pip install -e ".[plugin]"      # pedalboard — VST3 / AU audio plugins (VST2 .dll are not supported)
 ```
 
 `numpy` and Pillow are **not** extras: footage analysis, music-timed editing, `preview_grid`
@@ -422,8 +423,12 @@ clip is pulled in and overlapped automatically; audio always crossfades.
 **Speed** — 0.01x to 100x with pitch-correct audio (chained `atempo`), reverse, motion blur or
 frame interpolation for slow motion.
 
-**Colour** — brightness, contrast, saturation, gamma (all animatable), shadow/midtone/highlight
-balance, temperature, curves, `.cube` LUTs, `match_color` between shots, `color_scopes`.
+**Colour** — exposure in stops, brightness, contrast, saturation, gamma (all animatable),
+vibrance, white balance (temperature and green–magenta tint) plus an automatic one,
+lift/gamma/gain per channel for shadows, midtones and highlights, levels, hue rotation,
+secondary correction of a single colour family (bluer sky, less yellow grass), curves, `.cube`
+LUTs, `match_color` between shots, `color_scopes`. Every colour tool is checked by a test that
+renders it and looks at which way the pixels moved.
 
 **Composition** — position, scale, rotation and opacity per clip, all animatable with keyframes
 and easing; PiP, graphic overlays, text with box/outline/shadow, chroma key, crop, mirror,
@@ -439,9 +444,12 @@ and you can edit its source in the properties panel while it plays. At render ti
 steps through the same frames and captures them with alpha, so what you previewed is what you
 get.
 
-**Audio** — gain in dB (animatable), pan, fades, EQ, compressor, limiter, noise reduction, gate,
-reverb, echo, pitch shift, dynamic normalisation, and two-pass EBU R128 normalisation of the
-mix; `duck_music`, `jl_cut`, `detach_audio`.
+**Audio** — gain in dB (animatable), pan, fades, a 3-band EQ and a **parametric EQ** (up to ten
+bands — bell, shelves, high/low pass, notch — with a draggable response curve), compressor,
+**sidechain compressor** (the music ducks by itself whenever the voice track plays), limiter,
+noise reduction, gate, **de-esser**, reverb, echo, pitch shift, dynamic normalisation, two-pass
+EBU R128 normalisation of the mix, and **VST3/AU plugins** through pedalboard (pick an installed
+plugin, tweak its parameters in the panel); `duck_music`, `jl_cut`, `detach_audio`.
 
 **Footage and rhythm** — `plan_edit` (segment and score the takes), `inspect_footage`,
 `music_beats` (BPM, bars, energy profile, cut grid), `check_cuts`, `smooth_cuts`,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import { EASINGS, isKf, sampleKf } from './util.js'
+import { EqGraph, PluginFile, PluginParams } from './AudioPro.jsx'
 
 /**
  * Riga del pannello proprieta'.
@@ -219,6 +220,14 @@ export function EffectParams({ spec, params, onChange, clipTime }) {
   return spec.params.map((p) => {
     const value = params?.[p.name] ?? p.default
     const set = (v) => onChange({ [p.name]: v })
+    // editor dedicati: il grafico dell'equalizzatore e il pannello del plugin
+    if (p.type === 'bands') return <EqGraph key={p.name} bands={value} onChange={set} />
+    if (p.type === 'dict' && spec.name === 'vst') {
+      return <PluginParams key={p.name} file={params?.file} values={value} onChange={set} />
+    }
+    if (p.type === 'file' && spec.name === 'vst') {
+      return <Row key={p.name} label="plugin"><PluginFile value={value} onChange={set} /></Row>
+    }
     // il valore di partenza lo dichiara gia' il catalogo del backend: il tasto
     // per rimetterlo non ha bisogno di una tabella a parte
     const reset = { onReset: () => set(p.default), modificato: value !== p.default }

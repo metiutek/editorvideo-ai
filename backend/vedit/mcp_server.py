@@ -358,6 +358,45 @@ def remove_track(track: str, project: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def list_plugins() -> dict:
+    """Plugin audio VST3/AU installati nelle cartelle standard del sistema."""
+    from . import plugins
+
+    return {"plugin": plugins.elenco()}
+
+
+@mcp.tool()
+async def plugin_info(file: str) -> dict:
+    """Parametri di un plugin (nome, limiti, valore attuale) per usarlo con l'effetto "vst".
+
+    Poi: add_effect(clip, "vst", {"file": ..., "values": {"nome_parametro": valore}, "mix": 1}).
+    """
+    from . import plugins
+
+    try:
+        return await _off(plugins.parametri, file)
+    except plugins.PluginNonDisponibile as exc:
+        return {"errore": str(exc)}
+
+
+@mcp.tool()
+def set_sidechain(track: str, source: str | None = None, threshold: float | None = None,
+                  ratio: float | None = None, attack: float | None = None,
+                  release: float | None = None, makeup: float | None = None,
+                  project: str | None = None) -> dict:
+    """Abbassa da sola una traccia quando ne suona un'altra (compressore sidechain).
+
+    Il caso tipico: la traccia della musica con source = la traccia della voce.
+    threshold in dB (piu' basso = interviene prima), ratio quanto abbassa,
+    attack/release in ms. source=None lo spegne. A differenza di duck_music non
+    scrive keyframe: segue da solo anche le modifiche fatte dopo.
+    """
+    t = _store(project).set_sidechain(track, source, threshold=threshold, ratio=ratio,
+                                      attack=attack, release=release, makeup=makeup)
+    return {"traccia": t.id, "sidechain": t.sidechain}
+
+
+@mcp.tool()
 def add_clip(media: str, track: str | None = None, start: float | None = None,
              in_point: float = 0.0, duration: float | None = None,
              project: str | None = None) -> dict:

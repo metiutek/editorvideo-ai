@@ -87,6 +87,16 @@ const paths = {
   motionblur: <><circle cx="16" cy="12" r="3.5" /><path d="M3 10h6M2 14h7M5 12h5" opacity=".7" /></>,
 
   // --- effetti audio
+  exposure: <><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" /></>,
+  vibrance: <><path d="M12 3c3 4 6 7 6 10a6 6 0 0 1-12 0c0-3 3-6 6-10z" /><path d="M9 14a3 3 0 0 0 3 3" /></>,
+  whitebalance: <><path d="M5 19 19 5" /><circle cx="8" cy="8" r="3" /><circle cx="16" cy="16" r="3" fill="currentColor" stroke="none" /></>,
+  autowhite: <><circle cx="12" cy="12" r="8" /><path d="M8.5 15.5 12 7l3.5 8.5M9.8 12.5h4.4" /></>,
+  hue: <><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 8 8M12 12l5-5" /></>,
+  hsl: <><circle cx="9" cy="12" r="5" /><circle cx="15" cy="12" r="5" /></>,
+  levels: <><path d="M4 19h16" /><path d="M5 19c3-10 5-12 7-12s4 2 7 12" /><path d="M8 19v-3M16 19v-3" /></>,
+  deesser: <><path d="M15 6c-1-1.5-5-1.5-6 .5s5 3 5 5.5-4 3-6 1" /><path d="M4 20 20 4" /></>,
+  eqparam: <><path d="M3 15c3 0 3-6 6-6s3 9 6 9 3-6 6-6" /><circle cx="9" cy="9" r="1.6" /><circle cx="15" cy="18" r="1.6" /></>,
+  vst: <><rect x="4" y="6" width="16" height="12" rx="2" /><circle cx="9" cy="12" r="2" /><circle cx="15" cy="12" r="2" /></>,
   eq3: <><path d="M7 4v16M12 4v16M17 4v16" /><circle cx="7" cy="9" r="2" /><circle cx="12" cy="15" r="2" /><circle cx="17" cy="11" r="2" /></>,
   compressor: <><path d="M3 6h18M3 18h18" /><path d="M6 12h2l1.5-3 2 6 2-4 1.5 1h3" /></>,
   limiter: <><path d="M3 7h18" /><path d="M4 18h2l1.5-7 2 9 2-11 2 9 1.5-4h5" /></>,

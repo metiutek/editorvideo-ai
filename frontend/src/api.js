@@ -68,6 +68,10 @@ export const api = {
       body: JSON.stringify({ url }),
     }),
 
+  // plugin audio VST installati e i parametri di uno
+  plugins: () => req('/api/plugins'),
+  pluginParams: (file) => req(`/api/plugin/parametri?file=${encodeURIComponent(file)}`),
+
   // file allegati a un messaggio per l'assistente (immagini, PDF, testi, media)
   allega: (files) => {
     const form = new FormData()

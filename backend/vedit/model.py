@@ -245,6 +245,10 @@ class Track:
     locked: bool = False
     # con almeno una traccia in solo, le altre dello stesso tipo tacciono/spariscono
     solo: bool = False
+    # compressore sidechain: questa traccia si abbassa quando suona ``source``
+    # (la musica sotto la voce). {"source": id, "threshold": dB, "ratio",
+    # "attack": ms, "release": ms, "makeup"}; None = spento
+    sidechain: dict | None = None
 
 
 @dataclass

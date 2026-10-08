@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import effects as fx
-from . import ffmpeg, htmlclip, hw, probe
+from . import ffmpeg, htmlclip, hw, plugins, probe
 from .graph import CompileOptions, compile_project
 from .model import Project
 
@@ -125,7 +125,8 @@ def measure_loudness(project: Project) -> dict:
         was = ln.enabled
         ln.enabled = False  # il primo passaggio misura il mix grezzo
         try:
-            c = compile_project(project, CompileOptions(video=False, audio=True, workdir=str(work)))
+            c = compile_project(project, CompileOptions(video=False, audio=True, workdir=str(work),
+                                                        audio_files=_plugin_files(project, None, None)))
         finally:
             ln.enabled = was
         if not c.audio_label:
@@ -166,6 +167,13 @@ def _html_files(project: Project, width: int | None, height: int | None, fps: fl
                             fps=float(fps or s.fps), start=start, end=end)
 
 
+def _plugin_files(project: Project, start: float | None, end: float | None) -> dict:
+    """Clip con plugin VST: il loro suono passa nel plugin prima del render."""
+    if not any(e.type == "vst" for t in project.tracks for c in t.clips for e in c.effects):
+        return {}
+    return plugins.prepare(project, start, end)
+
+
 def build_command(project: Project, opts: RenderOptions, workdir: Path) -> tuple[list[str], float, list[str], str]:
     out_path = Path(opts.output)
     ext = out_path.suffix.lower()
@@ -183,12 +191,13 @@ def build_command(project: Project, opts: RenderOptions, workdir: Path) -> tuple
 
     stab = analyze_stabilization(project)
     html = _html_files(project, opts.width, opts.height, opts.fps, opts.start, opts.end) if want_video else {}
+    suoni = _plugin_files(project, opts.start, opts.end) if want_audio else {}
     copts = CompileOptions(
         width=opts.width, height=opts.height, fps=opts.fps,
         use_proxy=opts.use_proxy, audio=want_audio, video=want_video,
         start=opts.start, end=opts.end, workdir=str(workdir),
         hwaccel=info.hwaccel if (opts.prefer_hw and opts.hwaccel_decode and info.is_hw(enc)) else "",
-        stab_files=stab, html_files=html,
+        stab_files=stab, html_files=html, audio_files=suoni,
     )
     c = compile_project(project, copts)
 

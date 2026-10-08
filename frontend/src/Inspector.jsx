@@ -405,8 +405,55 @@ function ProjectPanel({ project, effects, call, setBusy, setError, onProva }) {
         </div>
       </div>
 
+      <Sidechain project={project} call={call} />
+
       <Effects target={null} list={project.master.effects.map((e, i) => ({ ...e, i }))}
         effects={effects} clipTime={0} call={call} onProva={onProva} />
     </>
+  )
+}
+
+/**
+ * Sidechain: una traccia (la musica) si abbassa da sola quando ne suona
+ * un'altra (la voce). E' un compressore vero, quindi segue anche le modifiche
+ * fatte dopo, a differenza dei keyframe di "musica sotto la voce".
+ */
+function Sidechain({ project, call }) {
+  const tracce = project.tracks
+  const attivi = tracce.filter((t) => t.sidechain?.source)
+  const [bersaglio, setBersaglio] = useState('')
+  const [sorgente, setSorgente] = useState('')
+  const [quanto, setQuanto] = useState(-30)
+  const nome = (id) => tracce.find((t) => t.id === id)?.name || id
+  return (
+    <div className="group">
+      <h4>abbassa una traccia quando ne suona un'altra</h4>
+      {attivi.map((t) => (
+        <div key={t.id} className="row scattivo">
+          <span><b>{nome(t.id)}</b> si abbassa quando suona <b>{nome(t.sidechain.source)}</b>
+            <span className="hint"> · soglia {t.sidechain.threshold} dB</span></span>
+          <button className="ghost" onClick={() => call('set_sidechain', { track_id: t.id, source: null })}>
+            spegni</button>
+        </div>
+      ))}
+      <Row label="abbassa">
+        <select value={bersaglio} onChange={(e) => setBersaglio(e.target.value)}>
+          <option value="">scegli la traccia (es. musica)</option>
+          {tracce.map((t) => <option key={t.id} value={t.id}>{t.name || t.id}</option>)}
+        </select>
+      </Row>
+      <Row label="quando suona">
+        <select value={sorgente} onChange={(e) => setSorgente(e.target.value)}>
+          <option value="">scegli la traccia (es. voce)</option>
+          {tracce.filter((t) => t.id !== bersaglio).map((t) =>
+            <option key={t.id} value={t.id}>{t.name || t.id}</option>)}
+        </select>
+      </Row>
+      <Row label="sensibilita'"><Num value={quanto} min={-60} max={0} step={1} onChange={setQuanto} /></Row>
+      <button disabled={!bersaglio || !sorgente}
+        onClick={() => call('set_sidechain', { track_id: bersaglio, source: sorgente, threshold: quanto })}>
+        attiva</button>
+      <div className="hint">soglia in dB: piu' bassa, prima interviene. Va bene anche chiederlo all'assistente.</div>
+    </div>
   )
 }

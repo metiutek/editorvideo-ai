@@ -370,6 +370,45 @@ class Store:
         self._done()
         return t
 
+    SIDECHAIN_DEFAULT = {"threshold": -30.0, "ratio": 6.0, "attack": 20.0,
+                         "release": 400.0, "makeup": 1.0}
+    _SIDECHAIN_LIMITI = {"threshold": (-60.0, 0.0), "ratio": (1.0, 20.0), "attack": (0.01, 2000.0),
+                         "release": (0.01, 9000.0), "makeup": (1.0, 64.0)}
+
+    def set_sidechain(self, track_id: str, source: str | None = None, **valori: Any) -> Track:
+        """La traccia si abbassa da sola quando suona ``source``; source=None lo spegne.
+
+        E' un compressore vero, che ascolta l'altra traccia mentre suona: a
+        differenza di duck_music non scrive keyframe, quindi segue anche le
+        modifiche fatte dopo.
+        """
+        t = self.track_or_die(track_id)
+        if source in (None, "", False):
+            self._touch()
+            t.sidechain = None
+            self._done()
+            return t
+        src = self.track_or_die(str(source))
+        if src.id == t.id:
+            raise EditError("una traccia non puo' abbassarsi ascoltando se stessa")
+        ignoti = set(valori) - set(self.SIDECHAIN_DEFAULT)
+        if ignoti:
+            raise EditError(f"parametri sidechain sconosciuti {sorted(ignoti)}; "
+                            f"ammessi: {sorted(self.SIDECHAIN_DEFAULT)}")
+        conf = {**self.SIDECHAIN_DEFAULT, **(t.sidechain or {})}
+        for k, v in valori.items():
+            if v is None:
+                continue
+            lo, hi = self._SIDECHAIN_LIMITI[k]
+            if not lo <= float(v) <= hi:
+                raise EditError(f"sidechain {k}={v} fuori da {lo}..{hi}")
+            conf[k] = float(v)
+        conf["source"] = src.id
+        self._touch()
+        t.sidechain = conf
+        self._done()
+        return t
+
     # ---- clip ----------------------------------------------------------
     def clip_or_die(self, clip_id: str) -> tuple[Track, Clip]:
         found = self.project.find_clip(clip_id)
@@ -1035,7 +1074,7 @@ class Store:
             tr: dict[str, Any] = {
                 "id": t.id, "kind": t.kind, "name": t.name,
                 "hidden": t.hidden, "muted": t.muted, "volume": t.volume,
-                "locked": t.locked, "solo": t.solo,
+                "locked": t.locked, "solo": t.solo, "sidechain": t.sidechain,
                 "clips": [],
             }
             for c in sorted(t.clips, key=lambda x: x.start):

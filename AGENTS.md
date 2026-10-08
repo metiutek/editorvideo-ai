@@ -123,7 +123,11 @@ esponila dove serve — mai scrivere dentro il documento da `api.py`, `mcp_serve
 Conseguenze pratiche quando modifichi qualcosa:
 
 - **nuovo effetto** → `effects.py` (registro con parametri e validazione); il test parametrico
-  in `tests/test_effects.py` lo renderizza davvero, quindi un filtro sbagliato si vede subito;
+  in `tests/test_effects.py` lo renderizza davvero, quindi un filtro sbagliato si vede subito.
+  Renderizzare non basta: un effetto di colore o audio vuole anche un test che guardi il
+  *risultato* (`tests/test_colore.py`, `tests/test_audio_pro.py`) — il `colorbalance` e il
+  `deesser` di ffmpeg rendono senza errori e non fanno quello che promettono, e la temperatura
+  colore era descritta al contrario;
 - **nuovo strumento MCP** → metodo in `store.py`, wrapper in `mcp_server.py`, test in
   `tests/test_mcp.py`;
 - **cambio alla UI** → `npm run build` (o `python scripts/setup.py --rebuild`), altrimenti il
@@ -271,10 +275,11 @@ l'ultimo che salva vince, non c'è un lock. Con `open_ui` il problema non si pon
   — quest'ultimo non è facoltativo: senza, restano fuori `music_beats`, `plan_edit`,
   `inspect_footage`, `match_color` e `check_cuts`, cioè scelta del materiale e montaggio a
   tempo. Stessa cosa per Pillow: `preview_grid` e `color_scopes` ci stanno sopra, e guardare
-  il montaggio è la regola prima. Gli extra veri sono quattro: `chat` (`anthropic`, l'assistente
+  il montaggio è la regola prima. Gli extra veri sono cinque: `chat` (`anthropic`, l'assistente
   nella UI), `vision` (`ultralytics`, riconoscimento del soggetto — si tira dietro torch),
-  `transcribe` (`faster-whisper`, sottotitoli e pulizia del parlato) e `html` (`playwright`,
-  render delle clip html — usa Chrome o Edge gia' installati). Senza gli extra il resto
+  `transcribe` (`faster-whisper`, sottotitoli e pulizia del parlato), `html` (`playwright`,
+  render delle clip html — usa Chrome o Edge gia' installati) e `plugin` (`pedalboard`,
+  plugin audio VST3/AU). Senza gli extra il resto
   dell'editor funziona identico e gli strumenti che li vogliono dicono come installarli.
 - `tests/test_dipendenze.py` legge gli import del backend e pretende che ognuno sia dichiarato
   in `pyproject.toml`: un pacchetto che c'è sulla macchina di chi sviluppa ma non nel wheel

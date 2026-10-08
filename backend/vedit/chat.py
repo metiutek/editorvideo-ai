@@ -93,6 +93,12 @@ def build_tools() -> list[dict]:
         _tool("set_html",
               "Sostituisce il documento HTML di una clip html.",
               {"clip_id": _STR, "html": _STR}, ["clip_id", "html"]),
+        _tool("set_sidechain",
+              "Abbassa da sola una traccia quando ne suona un'altra (compressore sidechain): "
+              "per esempio la musica (track_id) quando parla la voce (source). source vuoto "
+              "lo spegne. threshold in dB, ratio, attack e release in ms.",
+              {"track_id": _STR, "source": _STR, "threshold": _NUM, "ratio": _NUM,
+               "attack": _NUM, "release": _NUM}, ["track_id"]),
         _tool("split_clip",
               "Taglia una clip in due al tempo di timeline indicato.",
               {"clip_id": _STR, "at": _NUM}, ["clip_id", "at"]),

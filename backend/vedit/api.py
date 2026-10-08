@@ -61,7 +61,7 @@ FRONTEND = _frontend_dir()
 # operazioni di editing esposte alla UI (nomi dei metodi di Store)
 OPS = {
     "import_media", "set_media", "remove_media", "rename_folder",
-    "add_track", "set_track", "remove_track", "move_track",
+    "add_track", "set_track", "set_sidechain", "remove_track", "move_track",
     "add_clip", "add_text", "add_color", "add_html", "set_html", "remove_clip", "move_clip", "trim_clip",
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
@@ -960,6 +960,23 @@ class LlmBody(BaseModel):
     modello: str | None = None
     indirizzo: str | None = None
     attiva: bool = True
+
+
+@app.get("/api/plugins")
+def plugin_elenco() -> dict:
+    from . import plugins
+
+    return {"plugin": plugins.elenco()}
+
+
+@app.get("/api/plugin/parametri")
+def plugin_parametri(file: str) -> dict:
+    from . import plugins
+
+    try:
+        return plugins.parametri(file)
+    except plugins.PluginNonDisponibile as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/llm")

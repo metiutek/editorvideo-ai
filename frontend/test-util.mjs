@@ -4,7 +4,7 @@
  *   node test-util.mjs
  */
 import assert from 'node:assert/strict'
-import { dettaglioStrumento, impronta, isKf, sampleKf, transformBox } from './src/util.js'
+import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox } from './src/util.js'
 
 let ok = 0
 const test = (name, fn) => {
@@ -26,6 +26,18 @@ test('passi dell\'assistente: su cosa lavorano, in parole', () => {
   assert.equal(dettaglioStrumento('x', null, project), '')
   assert.equal(dettaglioStrumento('ask_user', { domande: [{ titolo: 'Export', domanda: 'Esporto?' }] }, project),
     'Export')
+})
+
+test('curva dell\'equalizzatore: campane, scaffali e filtri al posto giusto', () => {
+  const vicino = (a, b, tol = 0.6) => assert.ok(Math.abs(a - b) < tol, `${a} invece di ${b}`)
+  vicino(rispostaEq([{ type: 'peak', freq: 1000, gain: -12, q: 2 }], 1000), -12)
+  vicino(rispostaEq([{ type: 'peak', freq: 1000, gain: -12, q: 2 }], 100), 0)
+  vicino(rispostaEq([{ type: 'lowshelf', freq: 200, gain: 6, q: 0.7 }], 30), 6, 1)
+  vicino(rispostaEq([{ type: 'highshelf', freq: 8000, gain: -6, q: 0.7 }], 18000), -6, 1)
+  assert.ok(rispostaEq([{ type: 'highpass', freq: 100, q: 0.7 }], 20) < -20)
+  assert.ok(rispostaEq([{ type: 'lowpass', freq: 5000, q: 0.7 }], 15000) < -15)
+  // banda spenta = piatto
+  vicino(rispostaEq([{ type: 'peak', freq: 1000, gain: 12, q: 1, on: false }], 1000), 0)
 })
 
 test('impronta: stabile, e cambia col documento della clip html', () => {

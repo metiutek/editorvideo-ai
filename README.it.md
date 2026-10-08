@@ -208,6 +208,13 @@ chromium`). L'anteprima dal vivo nell'interfaccia funziona anche senza:
 pip install -e ".[html]"                     # aggiunge playwright
 ```
 
+**Plugin audio (facoltativo).** I plugin VST3 (e AU su Mac) li carica pedalboard; i vecchi
+VST2 (`.dll`) non sono supportati:
+
+```bash
+pip install -e ".[plugin]"                   # aggiunge pedalboard
+```
+
 Senza gli extra, quegli strumenti dicono cosa manca e il resto dell'editor non se ne
 accorge. `numpy` e Pillow invece arrivano sempre: non sono extra, ci stanno sopra
 l'analisi del girato, il montaggio a tempo di musica e `preview_grid`.
@@ -464,8 +471,12 @@ incrocia sempre in dissolvenza.
 **Velocità** — da 0.01x a 100x con audio in tempo (`atempo` a catena), reverse, motion blur o
 interpolazione di frame per lo slow motion.
 
-**Colore** — luminosità, contrasto, saturazione, gamma (animabili), bilanciamento
-ombre/mezzitoni/alteluci, temperatura, curve, LUT `.cube`.
+**Colore** — esposizione in stop, luminosità, contrasto, saturazione, gamma (animabili),
+vividezza, bilanciamento del bianco (temperatura e tinta verde-magenta) e automatico,
+lift/gamma/gain per canale su ombre, mezzitoni e luci, livelli, rotazione della tonalità,
+correzione di una sola famiglia di colori (cielo più blu, erba meno gialla), curve, LUT
+`.cube`. Ogni strumento colore ha un test che lo renderizza e controlla in che direzione si
+spostano i pixel.
 
 **Composizione** — posizione, scala, rotazione, opacità per clip, tutte animabili con keyframe
 ed easing; PiP, overlay grafici, testi con box/bordo/ombra, chroma key, ritaglio, specchio,
@@ -481,9 +492,13 @@ testina, e il sorgente si modifica nel pannello proprieta' mentre scorre. Al ren
 ripassa gli stessi fotogrammi e li cattura con l'alpha: quello che hai visto e' quello che
 esce.
 
-**Audio** — guadagno in dB (animabile), pan, dissolvenze, equalizzatore, compressore, limiter,
-riduzione rumore, gate, riverbero, eco, pitch shift, normalizzazione dinamica e
-normalizzazione EBU R128 a due passaggi sul mix.
+**Audio** — guadagno in dB (animabile), pan, dissolvenze, equalizzatore a 3 bande ed
+**equalizzatore parametrico** (fino a dieci bande — campana, scaffali, passa-alto e passa-basso,
+notch — con la curva da trascinare), compressore, **compressore sidechain** (la musica si
+abbassa da sola quando parla la voce), limiter, riduzione rumore, gate, **de-esser**, riverbero,
+eco, pitch shift, normalizzazione dinamica, normalizzazione EBU R128 a due passaggi sul mix e
+**plugin VST3/AU** tramite pedalboard (scegli un plugin installato e regoli i suoi parametri nel
+pannello).
 
 ---
 
