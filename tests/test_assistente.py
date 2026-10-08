@@ -329,3 +329,39 @@ def test_api_link(client, sito):
     r = client.post("/api/chat/link", json={"url": f"{sito}/pagina.html"})
     assert r.status_code == 200 and r.json()["tipo"] == "pagina"
     assert client.post("/api/chat/link", json={"url": "non un link"}).status_code == 400
+
+
+# --------------------------------------------------------------------------
+# ferma
+# --------------------------------------------------------------------------
+
+
+def test_ferma_a_meta_lascia_una_cronologia_valida(monkeypatch):
+    """Fermato fra due strumenti: ogni chiamata ha la sua risposta e niente altro parte."""
+    s = Store.create("t", "720p")
+    fermato = {"si": False}
+    risposta = [{"choices": [{"delta": {"tool_calls": [
+        {"index": 0, "id": "a", "function": {"name": "add_text", "arguments": '{"text": "uno"}'}},
+        {"index": 1, "id": "b", "function": {"name": "add_text", "arguments": '{"text": "due"}'}},
+    ]}, "finish_reason": "tool_calls"}]}]
+    monkeypatch.setattr(llm, "_post_stream", lambda *a: iter(risposta))
+    llm.imposta("openai", chiave="k", modello="gpt-5")
+
+    def op(nome, args):
+        out = chat.execute(s, nome, args)
+        fermato["si"] = True      # l'utente preme "ferma" dopo il primo
+        return out
+
+    stato: dict = {}
+    eventi = list(chat.run(s, stato, "due titoli", op, fermo=lambda: fermato["si"]))
+    assert eventi[-1]["type"] == "stopped"
+    testi = [c.text.text for c in s.project.tracks[0].clips if c.type == "text"]
+    assert testi == ["uno"]
+    risposte = [m for m in stato["messaggi"] if m["role"] == "tool"]
+    assert [m["tool_call_id"] for m in risposte] == ["a", "b"]
+    assert "interrotto" in risposte[1]["content"]
+
+
+def test_api_stop(client):
+    assert client.post("/api/chat/stop").json() == {"ok": True}
+    assert api_mod.S.fermo.is_set()

@@ -226,8 +226,13 @@ def attivo() -> tuple[dict, dict]:
 # --------------------------------------------------------------------------
 
 
+def _mai() -> bool:
+    return False
+
+
 def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: list,
-                  contenuto: list[dict], run_op: Callable[[str, dict], str]) -> Iterator[dict]:
+                  contenuto: list[dict], run_op: Callable[[str, dict], str],
+                  fermo: Callable[[], bool] = _mai) -> Iterator[dict]:
     import anthropic
 
     kw: dict[str, Any] = {}
@@ -265,12 +270,23 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
                 betas=["server-side-fallback-2026-07-01"],
                 extra_body={"fallbacks": "default"},
             ) as stream:
+                fermato = False
                 for event in stream:
+                    if fermo():
+                        fermato = True
+                        break
                     if event.type == "content_block_start" and event.content_block.type == "thinking":
                         yield {"type": "thinking"}
                     elif event.type == "content_block_delta" and event.delta.type == "text_delta":
                         yield {"type": "text", "text": event.delta.text}
-                message = stream.get_final_message()
+                if not fermato:
+                    message = stream.get_final_message()
+            if fermato:
+                # la risposta a meta' non entra nella cronologia: al suo posto una
+                # nota, cosi' il turno dopo riparte da una conversazione valida
+                history.append({"role": "assistant", "content": [{"type": "text", "text": "(interrotto dall'utente)"}]})
+                yield {"type": "stopped"}
+                return
         except anthropic.AuthenticationError:
             yield {"type": "error", "message": "chiave Anthropic non valida"}
             return
@@ -299,6 +315,11 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
         for b in message.content:
             if b.type != "tool_use":
                 continue
+            # ogni tool_use vuole il suo risultato, anche quando ci si ferma
+            if fermo():
+                risultati.append({"type": "tool_result", "tool_use_id": b.id, "is_error": True,
+                                  "content": "(interrotto dall'utente)"})
+                continue
             # con eager_input_streaming l'input non e' validato dal servizio
             if not isinstance(b.input, dict):
                 risultati.append({"type": "tool_result", "tool_use_id": b.id, "is_error": True,
@@ -314,6 +335,10 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
                                   "content": f"errore: {exc}", "is_error": True})
                 yield {"type": "tool_error", "name": b.name, "message": str(exc)}
         history.append({"role": "user", "content": risultati})
+        if fermo():
+            history.append({"role": "assistant", "content": [{"type": "text", "text": "(interrotto dall'utente)"}]})
+            yield {"type": "stopped"}
+            return
     yield {"type": "error", "message": "troppi passaggi: mi fermo qui"}
 
 
@@ -362,7 +387,8 @@ def _errore_http(exc: urllib.error.HTTPError) -> str:
 
 
 def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list,
-               contenuto: list[dict], run_op: Callable[[str, dict], str]) -> Iterator[dict]:
+               contenuto: list[dict], run_op: Callable[[str, dict], str],
+               fermo: Callable[[], bool] = _mai) -> Iterator[dict]:
     url = _indirizzo(p, cfg) + "/chat/completions"
     chiave = _chiave(p, cfg)
     model = _modello(p, cfg)
@@ -379,12 +405,15 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
     history.append({"role": "user", "content": parti})
 
     for _ in range(MAX_TURNS):
-        testo, chiamate, fine = "", {}, None
+        testo, chiamate, fine, fermato = "", {}, None, False
         body = {"model": model, "stream": True, "tools": fn,
                 "messages": [{"role": "system", "content": system}] + history}
         try:
             try:
                 for ev in _post_stream(url, chiave, body):
+                    if fermo():
+                        fermato = True
+                        break
                     for ch in ev.get("choices") or []:
                         d = ch.get("delta") or {}
                         if d.get("content"):
@@ -413,6 +442,10 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
             yield {"type": "error", "message": f"non riesco a raggiungere {p['nome']}: {exc}"}
             return
 
+        if fermato:
+            history.append({"role": "assistant", "content": testo or "(interrotto dall'utente)"})
+            yield {"type": "stopped"}
+            return
         msg: dict[str, Any] = {"role": "assistant", "content": testo or None}
         if chiamate:
             msg["tool_calls"] = [{"id": c["id"] or f"call_{i}", "type": "function",
@@ -425,6 +458,9 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
 
         for tc in msg["tool_calls"]:
             nome = tc["function"]["name"]
+            if fermo():
+                history.append({"role": "tool", "tool_call_id": tc["id"], "content": "(interrotto dall'utente)"})
+                continue
             try:
                 args = json.loads(tc["function"]["arguments"] or "{}")
                 if not isinstance(args, dict):
@@ -441,6 +477,9 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
                 out = f"errore: {exc}"
                 yield {"type": "tool_error", "name": nome, "message": str(exc)}
             history.append({"role": "tool", "tool_call_id": tc["id"], "content": out})
+        if fermo():
+            yield {"type": "stopped"}
+            return
     yield {"type": "error", "message": "troppi passaggi: mi fermo qui"}
 
 
@@ -468,7 +507,7 @@ def _comando_claude(exe: str) -> list[str]:
 
 
 def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict], mcp_url: str,
-                    cwd: str | None) -> Iterator[dict]:
+                    cwd: str | None, fermo: Callable[[], bool] = _mai) -> Iterator[dict]:
     exe = claude_exe()
     if not exe:
         yield {"type": "error", "message": _pronto(p, cfg)}
@@ -498,6 +537,22 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
     except OSError as exc:
         yield {"type": "error", "message": f"non riesco ad avviare Claude Code: {exc}"}
         return
+    # la lettura dell'uscita blocca: e' un filo a parte che ferma il processo
+    # quando l'utente preme "ferma"
+    import threading
+    import time
+
+    fermato = threading.Event()
+
+    def sorveglia() -> None:
+        while proc.poll() is None:
+            if fermo():
+                fermato.set()
+                proc.kill()
+                return
+            time.sleep(0.2)
+
+    threading.Thread(target=sorveglia, daemon=True).start()
     try:
         assert proc.stdin is not None and proc.stdout is not None
         proc.stdin.write(prompt.encode("utf-8"))
@@ -548,6 +603,9 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
                 else:
                     yield {"type": "done"}
         code = proc.wait()
+        if fermato.is_set():
+            yield {"type": "stopped"}
+            return
         if code != 0:
             err = (proc.stderr.read() if proc.stderr else b"").decode("utf-8", "replace").strip()
             if err:

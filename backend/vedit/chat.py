@@ -388,7 +388,8 @@ def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
 
 
 def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict], str],
-        refs: list[dict] | None = None, mcp_url: str | None = None) -> Iterator[dict]:
+        refs: list[dict] | None = None, mcp_url: str | None = None,
+        fermo: Callable[[], bool] = lambda: False) -> Iterator[dict]:
     """Un turno di conversazione con il modello attivo, come flusso di eventi.
 
     ``stato_chat`` conserva la cronologia nel formato del motore che l'ha
@@ -430,10 +431,10 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
             yield {"type": "error", "message": "il server MCP dell'editor non e' attivo"}
             return
         cwd = str(Path(store.path).parent) if store.path else None
-        yield from llm.run_claude_code(p, cfg, stato_chat, contenuto, mcp_url, cwd)
+        yield from llm.run_claude_code(p, cfg, stato_chat, contenuto, mcp_url, cwd, fermo)
     elif p["tipo"] == "anthropic":
         yield from llm.run_anthropic(p, cfg, SYSTEM, build_tools(), stato_chat["messaggi"],
-                                     contenuto, run_op)
+                                     contenuto, run_op, fermo)
     else:
         yield from llm.run_openai(p, cfg, SYSTEM, build_tools(), stato_chat["messaggi"],
-                                  contenuto, run_op)
+                                  contenuto, run_op, fermo)

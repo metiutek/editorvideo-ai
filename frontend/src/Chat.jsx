@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api, chat as sendChat } from './api.js'
 import { FileBrowser } from './Dialogs.jsx'
 import Icon from './Icons.jsx'
-import { fmt } from './util.js'
+import { dettaglioStrumento, fmt } from './util.js'
 
 const TOOL_LABEL = {
   project_info: 'guarda la timeline', import_media: 'importa file', add_clip: 'aggiunge una clip',
@@ -15,6 +15,15 @@ const TOOL_LABEL = {
   add_track: 'aggiunge una traccia', close_gaps: 'chiude i buchi', undo: 'annulla',
   preview_frame: 'guarda un fotogramma', preview_grid: 'guarda il montaggio',
   music_beats: 'ascolta il ritmo', Read: 'guarda un\'immagine', render_video: 'esporta',
+  marker: 'aggiunge un marker', remove_marker: 'toglie un marker', markers: 'legge i marker',
+  set_clip: 'modifica la clip', set_track: 'modifica la traccia', move_track: 'sposta la traccia',
+  remove_track: 'elimina una traccia', delete: 'elimina', redo: 'ripete', move_effect: 'riordina gli effetti',
+  update_effect: 'regola un effetto', remove_effect: 'toglie un effetto', list_effects: 'guarda gli effetti',
+  inspect_footage: 'guarda il girato', plan_edit: 'pianifica il montaggio', analyze_media: 'analizza un file',
+  transcribe: 'trascrive il parlato', make_captions: 'crea i sottotitoli', duck_music: 'abbassa la musica sotto la voce',
+  normalize_audio: 'normalizza l\'audio', audio_levels: 'misura i livelli', check_cuts: 'controlla i tagli',
+  verify_edit: 'controlla il montaggio', snapshot: 'salva una versione', match_color: 'uguaglia i colori',
+  Glob: 'cerca file', WebFetch: 'legge una pagina web',
 }
 
 /** Etichetta breve di un riferimento, per le pastiglie e per il messaggio. */
@@ -134,7 +143,10 @@ export default function Chat({
         else if (ev.type === 'thinking') patch((m) => ({ ...m, thinking: true }))
         else if (ev.type === 'note') patch((m) => ({ ...m, note: ev.message }))
         else if (ev.type === 'tool') {
-          patch((m) => ({ ...m, thinking: false, tools: [...m.tools, { name: ev.name, state: 'run' }] }))
+          patch((m) => ({
+            ...m, thinking: false,
+            tools: [...m.tools, { name: ev.name, state: 'run', input: ev.input }],
+          }))
         } else if (ev.type === 'tool_done' || ev.type === 'tool_error') {
           patch((m) => {
             const tools = [...m.tools]
@@ -146,6 +158,12 @@ export default function Chat({
             }
             return { ...m, tools }
           })
+        } else if (ev.type === 'stopped') {
+          patch((m) => ({
+            ...m, thinking: false,
+            tools: m.tools.map((t) => (t.state === 'run' ? { ...t, state: 'err', message: 'fermato' } : t)),
+            note: 'Fermato. Le modifiche gia\' fatte restano: Ctrl+Z per annullarle.',
+          }))
         } else if (ev.type === 'error') {
           patch((m) => ({ ...m, error: ev.message }))
         } else if (ev.type === 'end') {
@@ -228,12 +246,7 @@ export default function Chat({
             ) : (
               <>
                 {m.tools?.map((t, j) => (
-                  <div key={j} className={`toolrow ${t.state}`}>
-                    <Icon size={13} className={t.state === 'run' ? 'spin' : ''}
-                      name={t.state === 'run' ? 'attesa' : t.state === 'ok' ? 'spunta' : 'chiudi'} />
-                    {TOOL_LABEL[t.name] || t.name.replace(/_/g, ' ')}
-                    {t.message && <span className="hint"> — {t.message}</span>}
-                  </div>
+                  <Passo key={j} passo={t} project={project} />
                 ))}
                 {m.thinking && !m.text && (
                   <div className="toolrow"><Icon size={13} name="attesa" className="spin" />sto pensando…</div>
@@ -337,10 +350,39 @@ export default function Chat({
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
             }}
           />
-          <button className="primary icon" disabled={busy || caricando > 0 || !input.trim()} onClick={send}
-            title="Invia (Invio)"><Icon name="invia" /></button>
+          {busy ? (
+            <button className="primary icon ferma" title="Ferma l'assistente"
+              onClick={() => api.chatStop().catch(() => {})}><Icon name="ferma" /></button>
+          ) : (
+            <button className="primary icon" disabled={caricando > 0 || !input.trim()} onClick={send}
+              title="Invia (Invio)"><Icon name="invia" /></button>
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Un passo dell'assistente: cosa fa, su cosa, e con un clic i parametri esatti.
+ */
+function Passo({ passo, project }) {
+  const [aperto, setAperto] = useState(false)
+  const det = dettaglioStrumento(passo.name, passo.input, project)
+  const haInput = passo.input && Object.keys(passo.input).length > 0
+  return (
+    <div className={`toolrow ${passo.state} ${aperto ? 'aperto' : ''}`}>
+      <button className="toolhead" disabled={!haInput} title={haInput ? 'Mostra i parametri' : ''}
+        onClick={() => setAperto((v) => !v)}>
+        <Icon size={13} className={passo.state === 'run' ? 'spin' : ''}
+          name={passo.state === 'run' ? 'attesa' : passo.state === 'ok' ? 'spunta' : 'chiudi'} />
+        <span className="toolname">{TOOL_LABEL[passo.name] || passo.name.replace(/_/g, ' ')}</span>
+        {det && <span className="tooldet">{det}</span>}
+      </button>
+      {passo.message && <div className="toolmsg">{passo.message}</div>}
+      {aperto && (
+        <pre className="toolargs">{JSON.stringify(passo.input, null, 2)}</pre>
+      )}
     </div>
   )
 }

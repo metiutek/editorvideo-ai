@@ -909,3 +909,25 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 /* link da aggiungere ai riferimenti */
 .linkbar { display: flex; gap: 6px; align-items: center; }
 .linkbar input { height: 28px; border-radius: 999px; padding: 0 12px; }
+
+/* passi dell'assistente: cosa, su cosa, e i parametri a richiesta */
+.toolrow { display: block; margin-bottom: 4px; }
+.toolhead {
+  height: auto; min-height: 22px; padding: 2px 6px 2px 2px; border-radius: 8px; gap: 6px;
+  background: transparent; border: none; color: inherit; font-size: 12px; font-weight: 600;
+  justify-content: flex-start; text-align: left; white-space: normal; max-width: 100%;
+}
+.toolhead:hover:not(:disabled) { background: var(--raised); transform: none; }
+.toolhead:disabled { opacity: 1; cursor: default; }
+.toolrow.ok .toolhead .ico { color: var(--ok); }
+.toolrow.err .toolhead { color: var(--danger); }
+.tooldet { color: var(--faint); font-weight: 500; overflow-wrap: anywhere; }
+.toolmsg { color: var(--danger); font-size: 11px; margin: 0 0 2px 21px; }
+.toolargs {
+  margin: 3px 0 6px 21px; padding: 7px 9px; border-radius: 8px; background: #100f16;
+  border: 1px solid var(--line-soft); color: var(--dim); font-size: 11px; line-height: 1.45;
+  max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  font-family: ui-monospace, Consolas, 'Cascadia Mono', monospace; user-select: text;
+}
+.chatbar button.ferma { background: var(--danger); border-color: var(--danger); color: #2a0a10; }
+.chatbar button.ferma:hover:not(:disabled) { background: #ff8592; border-color: #ff8592; }

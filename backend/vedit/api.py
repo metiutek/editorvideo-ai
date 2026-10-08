@@ -82,6 +82,8 @@ class Session:
         # conversazione con l'assistente: contiene i blocchi tool_use/tool_result,
         # che i turni successivi devono rimandare intatti
         self.chat: dict = {}
+        # "ferma" premuto nella chat: il turno in corso si interrompe al primo passo utile
+        self.fermo = threading.Event()
         # porta su cui ascolta l'interfaccia: serve a dire a Claude Code dov'e'
         # il server MCP dell'editor
         self.porta: int | None = None
@@ -1026,6 +1028,13 @@ async def chat_allega(files: list[UploadFile] = File(...)) -> dict:
     return {"allegati": out}
 
 
+@app.post("/api/chat/stop")
+def chat_stop() -> dict:
+    """Interrompe il turno dell'assistente in corso (le modifiche gia' fatte restano)."""
+    S.fermo.set()
+    return {"ok": True}
+
+
 @app.post("/api/chat/reset")
 def chat_reset() -> dict:
     S.chat.clear()
@@ -1053,8 +1062,9 @@ def chat(body: ChatBody) -> StreamingResponse:
             return f"data: {json.dumps(obj, ensure_ascii=False, default=str)}\n\n"
 
         try:
+            S.fermo.clear()
             for ev in chat_mod.run(store, S.chat, body.message, run_op,
-                                   refs=body.refs, mcp_url=mcp_url()):
+                                   refs=body.refs, mcp_url=mcp_url(), fermo=S.fermo.is_set):
                 yield send(ev)
         except chat_mod.ChatUnavailable as exc:
             yield send({"type": "error", "message": str(exc)})

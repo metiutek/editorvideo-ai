@@ -57,6 +57,61 @@ export function impronta(testo) {
   return h.toString(36)
 }
 
+const base = (p) => String(p).split(/[\\/]/).filter(Boolean).pop() || String(p)
+const corto = (s, n = 32) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
+
+/**
+ * Su cosa lavora un passo dell'assistente, in poche parole: "clip intro ·
+ * 0:23.5" invece del solo "posizione e scala". Legge gli argomenti dello
+ * strumento cosi' come arrivano (UI, API o MCP: i nomi cambiano un po').
+ */
+export function dettaglioStrumento(nome, input, project) {
+  const a = input && typeof input === 'object' ? input : {}
+  const clips = project ? project.tracks.flatMap((t) => t.clips) : []
+  const media = project?.media || []
+  const parti = []
+  const nomeClip = (id) => {
+    const c = clips.find((x) => x.id === id)
+    return `clip ${c ? (c.name || c.id) : id}`
+  }
+  for (const k of ['clip_id', 'clip', 'clip_a']) {
+    if (typeof a[k] === 'string') { parti.push(nomeClip(a[k])); break }
+  }
+  if (typeof a.clip_b === 'string') parti.push(`→ ${nomeClip(a.clip_b)}`)
+  for (const k of ['media_id', 'media']) {
+    if (typeof a[k] === 'string') {
+      const m = media.find((x) => x.id === a[k])
+      parti.push(m ? m.name : a[k]); break
+    }
+  }
+  if (typeof a.track_id === 'string' || typeof a.track === 'string') parti.push(`traccia ${a.track_id || a.track}`)
+  const percorsi = a.paths || a.files || (typeof a.path === 'string' ? [a.path] : null)
+    || (typeof a.file_path === 'string' ? [a.file_path] : null)
+  if (Array.isArray(percorsi) && percorsi.length) parti.push(corto(percorsi.map(base).join(', ')))
+  if (Array.isArray(a.clips)) parti.push(`${a.clips.length} tagli`)
+  const t = [a.at, a.t, a.time, a.quando].find((v) => typeof v === 'number')
+  if (t != null) parti.push(fmt(t))
+  if (typeof a.start === 'number' && typeof a.duration === 'number') {
+    parti.push(`${fmt(a.start)} → ${fmt(a.start + a.duration)}`)
+  } else if (typeof a.start === 'number') parti.push(`da ${fmt(a.start)}`)
+  else if (typeof a.duration === 'number') parti.push(`${a.duration}s`)
+  if (typeof a.effect === 'string') parti.push(a.effect)
+  if (typeof a.preset_id === 'string') parti.push(a.preset_id)
+  if (typeof a.type === 'string' && /transition|crossfade/.test(nome)) parti.push(a.type)
+  if (typeof a.speed === 'number') parti.push(`${a.speed}x`)
+  if (typeof a.text === 'string') parti.push(`«${corto(a.text, 28)}»`)
+  if (typeof a.note === 'string') parti.push(`«${corto(a.note, 28)}»`)
+  if (typeof a.html === 'string') parti.push(`${a.html.length} caratteri`)
+  if (typeof a.kind === 'string') parti.push(a.kind)
+  if (typeof a.color === 'string' && nome === 'add_color') parti.push(a.color)
+  const tr = ['x', 'y', 'scale', 'rotation', 'opacity'].filter((k) => a[k] != null)
+  if (tr.length) parti.push(tr.join(', '))
+  if (typeof a.url === 'string') { try { parti.push(new URL(a.url).host) } catch { parti.push(corto(a.url)) } }
+  if (typeof a.pattern === 'string') parti.push(corto(a.pattern))
+  if (typeof a.output === 'string') parti.push(base(a.output))
+  return parti.join(' · ')
+}
+
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 /**

@@ -4,13 +4,27 @@
  *   node test-util.mjs
  */
 import assert from 'node:assert/strict'
-import { impronta, isKf, sampleKf, transformBox } from './src/util.js'
+import { dettaglioStrumento, impronta, isKf, sampleKf, transformBox } from './src/util.js'
 
 let ok = 0
 const test = (name, fn) => {
   try { fn(); ok++; console.log('ok   ' + name) }
   catch (e) { console.log('FAIL ' + name + ': ' + e.message); process.exitCode = 1 }
 }
+
+test('passi dell\'assistente: su cosa lavorano, in parole', () => {
+  const project = {
+    media: [{ id: 'm1', name: 'ripresa.mp4' }],
+    tracks: [{ id: 'V1', clips: [{ id: 'c1', name: 'intro' }] }],
+  }
+  assert.equal(dettaglioStrumento('set_transform', { clip_id: 'c1', x: 10, scale: 2 }, project),
+    'clip intro · x, scale')
+  assert.equal(dettaglioStrumento('add_clip', { media_id: 'm1', start: 2, duration: 3 }, project),
+    'ripresa.mp4 · 0:02.0 → 0:05.0')
+  assert.equal(dettaglioStrumento('import_media', { paths: ['C:\\video\\a.mp4'] }, project), 'a.mp4')
+  assert.equal(dettaglioStrumento('project_info', {}, project), '')
+  assert.equal(dettaglioStrumento('x', null, project), '')
+})
 
 test('impronta: stabile, e cambia col documento della clip html', () => {
   assert.equal(impronta('<p>a</p>'), impronta('<p>a</p>'))

@@ -115,6 +115,8 @@ export const api = {
     }),
 
   chatReset: () => req('/api/chat/reset', { method: 'POST' }),
+  // ferma il turno in corso: le modifiche gia' fatte restano e si annullano con Ctrl+Z
+  chatStop: () => req('/api/chat/stop', { method: 'POST' }),
 
   // modello dell'assistente: quale usare e con che chiave (resta su questo computer)
   llm: () => req('/api/llm'),
