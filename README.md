@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/vedit-demo.gif" alt="vedit promo — you say what you want, the agent edits the timeline, checks its own work, and you stay in control with Ctrl+Z" width="820"/>
+  <img src="docs/vedit-promo.gif" alt="vedit promo — you say what you want, the agent edits the timeline, checks its own work, and you stay in control with Ctrl+Z" width="820"/>
 </p>
 
 ---
