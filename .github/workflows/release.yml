@@ -3,7 +3,7 @@
 # Non serve nessun token: PyPI riconosce questa repo tramite la pubblicazione
 # fidata (Trusted Publisher). Da configurare una volta sola su
 # pypi.org -> il progetto -> Publishing:
-#   owner: metiu1   repo: editorvideo-ai   workflow: release.yml   environment: pypi
+#   owner: metiutek   repo: editorvideo-ai   workflow: release.yml   environment: pypi
 name: release
 
 on:

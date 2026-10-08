@@ -6,7 +6,7 @@ Thanks for taking a look. Issues and pull requests are welcome — bug reports w
 ## Setup
 
 ```bash
-git clone https://github.com/metiu1/editorvideo-ai.git
+git clone https://github.com/metiutek/editorvideo-ai.git
 cd editorvideo-ai
 python scripts/setup.py
 ```

@@ -46,10 +46,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/metiu1/editorvideo-ai"
-Source = "https://github.com/metiu1/editorvideo-ai"
-Issues = "https://github.com/metiu1/editorvideo-ai/issues"
-Documentation = "https://github.com/metiu1/editorvideo-ai#readme"
+Homepage = "https://github.com/metiutek/editorvideo-ai"
+Source = "https://github.com/metiutek/editorvideo-ai"
+Issues = "https://github.com/metiutek/editorvideo-ai/issues"
+Documentation = "https://github.com/metiutek/editorvideo-ai#readme"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]

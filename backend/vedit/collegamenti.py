@@ -21,7 +21,7 @@ MAX_PAGINA = 3_000_000       # byte letti da una pagina web
 MAX_SCARICO = 500_000_000    # byte scaricati per un media
 MAX_VOCI = 150               # file elencati per una cartella
 
-_UA = "Mozilla/5.0 (vedit; +https://github.com/metiu1/editorvideo-ai)"
+_UA = "Mozilla/5.0 (vedit; +https://github.com/metiutek/editorvideo-ai)"
 
 _MEDIA_CT = ("image/", "video/", "audio/", "application/pdf")
 

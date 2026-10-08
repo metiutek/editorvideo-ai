@@ -10,6 +10,39 @@ lavorare un agente da fuori.
 
 ![vedit: lo dici, l'agente monta in timeline, controlla il suo lavoro e tu resti al comando con Ctrl+Z](docs/vedit-promo.gif)
 
+## Installazione — 3 passi
+
+**1. Installa uv** (installa le app Python al posto tuo). Poi **chiudi e riapri il terminale**.
+
+| Windows (PowerShell) | macOS | Linux |
+|---|---|---|
+| `winget install astral-sh.uv` | `brew install uv` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+
+**2. Installa vedit e ffmpeg**
+
+```bash
+uv tool install vedit-mcp
+vedit install-ffmpeg
+```
+
+Se il terminale dice che `vedit` non è riconosciuto: `uv tool update-shell`, poi chiudi e
+riapri il terminale.
+
+**3. Apri l'editor**
+
+```bash
+vedit ui
+```
+
+Si apre nel browser su <http://127.0.0.1:8760>. Fatto.
+
+**Facoltativo — far montare a Claude Code:** `claude mcp add vedit -- vedit-mcp`. Questo
+collega soltanto Claude Code a vedit, non installa niente: prima fai il passo 2.
+
+Qualcosa non va? `vedit doctor` dice cosa manca e come sistemarlo.
+
+---
+
 Il progetto è un documento JSON. Il render è una funzione pura di quel documento, compilata
 in un unico `filter_complex` di ffmpeg: niente stato nascosto, lo stesso progetto produce
 sempre lo stesso file. Ed è il motivo per cui i tre modi non possono divergere — passano
@@ -19,6 +52,7 @@ tutti dalle stesse operazioni.
 
 ## Indice
 
+- [Installazione — 3 passi](#installazione--3-passi)
 - [Usarlo senza installare niente](#usarlo-senza-installare-niente)
 - [Installazione in un comando (per modificarlo)](#installazione-in-un-comando-per-modificarlo)
 - [Darlo in mano a un agente](#darlo-in-mano-a-un-agente)
@@ -46,23 +80,20 @@ tutti dalle stesse operazioni.
 
 ## Usarlo senza installare niente
 
-Se ti interessa **usare** l'editor (non modificarlo), non serve clonare la repo. Il pacchetto
-sta su PyPI e `uvx` lo scarica ed esegue da solo, uguale su Windows, macOS e Linux:
+I tre passi sono [in cima alla pagina](#installazione--3-passi). Dettagli:
 
-```bash
-claude mcp add vedit -- uvx vedit-mcp        # Claude Code: una riga e basta
-uvx --from vedit-mcp vedit ui                # oppure solo l'interfaccia web
-```
+- Su PyPI il pacchetto si chiama **`vedit-mcp`** (il nome `vedit` era occupato; i comandi
+  restano `vedit` e `vedit-mcp`). L'interfaccia compilata è già dentro: niente da costruire.
+- `claude mcp add` *registra* soltanto il server in Claude Code, non installa niente. Senza il
+  passo 2 il comando `vedit` non esiste.
+- Senza installare in modo permanente: `uvx --from vedit-mcp vedit ui` lo scarica e lo avvia.
+- Con pipx: `pipx install vedit-mcp` equivale a `uv tool install`.
 
 Per gli altri client la stessa cosa in JSON (Cursor `.cursor/mcp.json`, Codex, VS Code):
 
 ```json
-{ "mcpServers": { "vedit": { "command": "uvx", "args": ["vedit-mcp"] } } }
+{ "mcpServers": { "vedit": { "command": "vedit-mcp", "args": [] } } }
 ```
-
-Serve [uv](https://docs.astral.sh/uv/getting-started/installation/) (`pipx install uv`, o
-`winget install astral-sh.uv`, o `brew install uv`). Chi preferisce l'installazione classica:
-`pipx install vedit-mcp`, poi i comandi `vedit` e `vedit-mcp` sono nel `PATH`.
 
 **ffmpeg** è l'unica cosa che pip non può portare con sé, perché è un programma e non un
 pacchetto Python. Se manca, non serve cercarlo in giro: `vedit install-ffmpeg` scarica una
@@ -90,7 +121,7 @@ claude mcp add --transport http vedit-live http://127.0.0.1:8760/mcp/
 ## Installazione in un comando (per modificarlo)
 
 ```bash
-git clone https://github.com/metiu1/editorvideo-ai.git
+git clone https://github.com/metiutek/editorvideo-ai.git
 cd editorvideo-ai
 python scripts/setup.py
 ```
@@ -124,7 +155,7 @@ riesce, installalo a mano ([ffmpeg.org](https://ffmpeg.org/download.html)) o ind
 
 Serve solo l'indirizzo della repo. Da incollare al proprio agente di codice:
 
-> Clona `https://github.com/metiu1/editorvideo-ai.git`, entra nella cartella, leggi `AGENTS.md`
+> Clona `https://github.com/metiutek/editorvideo-ai.git`, entra nella cartella, leggi `AGENTS.md`
 > e installa tutto seguendo quelle istruzioni. Poi dimmi com'è andata.
 
 `AGENTS.md` (che `CLAUDE.md` importa, così vale per Claude Code, Codex, Cursor e gli altri)
@@ -157,7 +188,7 @@ Verifica ffmpeg con `ffmpeg -version`. Se manca: [ffmpeg.org/download](https://f
 Gli stessi passi che fa `python scripts/setup.py`, uno per uno, per chi li vuole in mano.
 
 ```bash
-git clone https://github.com/metiu1/editorvideo-ai.git
+git clone https://github.com/metiutek/editorvideo-ai.git
 cd editorvideo-ai
 
 pip install -e .                 # installa i comandi vedit e vedit-mcp

@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/metiu1/editorvideo-ai/actions/workflows/ci.yml"><img src="https://github.com/metiu1/editorvideo-ai/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
+  <a href="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml"><img src="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/v/vedit-mcp.svg?style=flat-square" alt="PyPI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/pyversions/vedit-mcp.svg?style=flat-square" alt="Python versions"/></a>
   <img src="https://img.shields.io/badge/AI%20tools-77-blueviolet?style=flat-square" alt="77 AI tools"/>
@@ -19,6 +19,39 @@
 <p align="center">
   <img src="docs/vedit-promo.gif" alt="vedit promo — you say what you want, the agent edits the timeline, checks its own work, and you stay in control with Ctrl+Z" width="820"/>
 </p>
+
+> 🇮🇹 Italiano: [README.it.md](README.it.md)
+
+## Install — 3 steps
+
+**1. Install uv** (it installs Python apps for you). Then **close and reopen the terminal**.
+
+| Windows (PowerShell) | macOS | Linux |
+|---|---|---|
+| `winget install astral-sh.uv` | `brew install uv` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+
+**2. Install vedit and ffmpeg**
+
+```bash
+uv tool install vedit-mcp
+vedit install-ffmpeg
+```
+
+If the terminal says `vedit` is not recognized, run `uv tool update-shell`, then close and
+reopen the terminal.
+
+**3. Open the editor**
+
+```bash
+vedit ui
+```
+
+The editor opens in your browser at <http://127.0.0.1:8760>. That's it.
+
+**Optional — let Claude Code edit for you:** `claude mcp add vedit -- vedit-mcp`. This only
+connects Claude Code to vedit; it does not install anything, so do step 2 first.
+
+Something wrong? `vedit doctor` tells you what is missing and how to fix it.
 
 ---
 
@@ -59,12 +92,7 @@ finished file you cannot touch — it is your editing software, with a second pa
 | **vs. an ffmpeg script** | Same speed and precision, but you can actually see what happened, scrub it, and undo it. |
 | **Cost and privacy** | Runs on your machine. No subscription, no upload, no watermark, no render queue. MIT licensed. |
 
-```bash
-claude mcp add vedit -- uvx vedit-mcp     # that is the whole install
-```
-
-> 🇮🇹 Questo README in italiano: [README.it.md](README.it.md). Code, comments and UI messages
-> are in Italian — that is the project convention.
+> Code, comments and UI messages are in Italian — that is the project convention.
 
 ---
 
@@ -86,7 +114,8 @@ difference between a demo and something you would actually cut a video with:
 
 ## Table of contents
 
-- [Install](#install)
+- [Install — 3 steps](#install--3-steps)
+- [Install, in detail](#install)
 - [Quick start](#quick-start)
 - [Driving it from an agent (MCP)](#driving-it-from-an-agent-mcp)
 - [The web interface, panel by panel](#the-web-interface-panel-by-panel)
@@ -107,24 +136,20 @@ difference between a demo and something you would actually cut a video with:
 
 ### Just to use it — nothing to clone
 
-The package is on PyPI as **`vedit-mcp`** (the name `vedit` was taken; the Python module is
-still `vedit`). The compiled web interface ships **inside the package**, so there is no build
-step:
+The three steps are at the [top of this page](#install--3-steps). Details:
 
-```bash
-claude mcp add vedit -- uvx vedit-mcp        # Claude Code: one line
-uvx --from vedit-mcp vedit ui                # or just the web editor
-```
+- The package on PyPI is **`vedit-mcp`** (the name `vedit` was taken; the commands are still
+  `vedit` and `vedit-mcp`). The compiled web interface ships inside it: no build step.
+- `claude mcp add` only *registers* the server with Claude Code, it installs nothing. Without
+  step 2 the `vedit` command does not exist.
+- No permanent install? `uvx --from vedit-mcp vedit ui` downloads and runs it on the spot.
+- Prefer pipx? `pipx install vedit-mcp` does the same as `uv tool install`.
 
 Same JSON for every other client (Cursor `.cursor/mcp.json`, Codex, VS Code):
 
 ```json
-{ "mcpServers": { "vedit": { "command": "uvx", "args": ["vedit-mcp"] } } }
+{ "mcpServers": { "vedit": { "command": "vedit-mcp", "args": [] } } }
 ```
-
-You need [uv](https://docs.astral.sh/uv/getting-started/installation/) (`pipx install uv`,
-`winget install astral-sh.uv`, `brew install uv`). Prefer a classic install?
-`pipx install vedit-mcp`, then `vedit` and `vedit-mcp` are on your `PATH`.
 
 **ffmpeg** is the one thing pip cannot bring along — it is a program, not a Python package.
 If it is missing, don't go hunting: `vedit install-ffmpeg` downloads a static build of ffmpeg
@@ -135,7 +160,7 @@ already on your `PATH`, that one wins — it usually has more hardware encoders.
 ### To hack on it — one command
 
 ```bash
-git clone https://github.com/metiu1/editorvideo-ai.git
+git clone https://github.com/metiutek/editorvideo-ai.git
 cd editorvideo-ai
 python scripts/setup.py
 ```
