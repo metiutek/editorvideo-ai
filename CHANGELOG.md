@@ -12,7 +12,14 @@ Le voci più recenti stanno in cima.
   i test, costruisce il pacchetto con l'interfaccia dentro e lo carica su PyPI tramite
   pubblicazione fidata (Trusted Publisher).
 - Primo tentativo col tag `v0.1.0` fermato dai test in CI, per i due difetti qui sotto:
-  niente è stato pubblicato.
+  niente è stato pubblicato. Tag ricreato sul commit corretto (`0c6e193`).
+- Secondo tentativo: test e build passati, caricamento rifiutato (`invalid-publisher`)
+  perché su pypi.org mancava il publisher. Registrato il pending publisher (`vedit-mcp`,
+  owner `metiutek`, repo `editorvideo-ai`, workflow `release.yml`, environment `pypi`) e
+  rilanciato il solo caricamento.
+- **Pubblicato**: https://pypi.org/project/vedit-mcp/ . Provato da zero con
+  `uv tool install vedit-mcp`: installa `vedit` e `vedit-mcp`, l'interfaccia web è nel
+  pacchetto, `vedit doctor` risponde.
 - La repo si è spostata da `metiu1/editorvideo-ai` a `metiutek/editorvideo-ai`: aggiornati
   `origin`, i link in README, `pyproject.toml`, `CONTRIBUTING.md`, `collegamenti.py` e
   l'owner indicato in `release.yml`.
