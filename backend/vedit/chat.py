@@ -257,6 +257,28 @@ def _fotogramma(store: Any, t: float, area: dict | None = None) -> str | None:
     return str(out)
 
 
+IMMAGINI_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+TESTO_EXT = {".txt", ".md", ".html", ".htm", ".css", ".js", ".json", ".srt", ".vtt", ".ass",
+             ".csv", ".xml", ".svg", ".py", ".cube", ".lrc"}
+MEDIA_EXT = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".mp3", ".wav", ".aac", ".m4a",
+             ".flac", ".ogg", ".opus"}
+MAX_TESTO = 60_000   # caratteri di un allegato di testo passati al modello
+
+
+def tipo_allegato(path: str | Path) -> str:
+    """image | pdf | testo | media | altro: decide come arriva al modello."""
+    ext = Path(path).suffix.lower()
+    if ext in IMMAGINI_EXT:
+        return "image"
+    if ext == ".pdf":
+        return "pdf"
+    if ext in TESTO_EXT:
+        return "testo"
+    if ext in MEDIA_EXT:
+        return "media"
+    return "altro"
+
+
 def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
     """Testo che descrive i riferimenti, piu' le immagini dei fotogrammi indicati.
 
@@ -297,6 +319,28 @@ def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
                 f"larghezza={round(aw * w)} altezza={round(ah * h)} "
                 f"(set_transform usa x/y dal centro: centro dell'area = "
                 f"{round((x + aw / 2 - .5) * w)}, {round((y + ah / 2 - .5) * h)}){nota}")
+        elif k == "file":
+            f = Path(r.get("path", ""))
+            if not f.is_file():
+                righe.append(f"[{i}] file allegato {r.get('name', '')} (non trovato){nota}")
+                continue
+            tipo = tipo_allegato(f)
+            if tipo in ("image", "pdf"):
+                cosa = "immagine" if tipo == "image" else "documento PDF"
+                righe.append(f"[{i}] {cosa} allegato \"{f.name}\" (percorso: {f}){nota}")
+                if len(immagini) < llm.MAX_IMMAGINI:
+                    immagini.append({"etichetta": f"[{i}]", "path": str(f), "tipo": tipo})
+            elif tipo == "testo":
+                testo_file = f.read_text(encoding="utf-8", errors="replace")
+                taglio = "\n[... tagliato ...]" if len(testo_file) > MAX_TESTO else ""
+                righe.append(f"[{i}] file allegato \"{f.name}\" (percorso: {f}){nota}, contenuto:\n"
+                             f"```\n{testo_file[:MAX_TESTO]}{taglio}\n```")
+            elif tipo == "media":
+                righe.append(f"[{i}] file multimediale allegato \"{f.name}\", percorso: {f}{nota}. "
+                             "Per usarlo nel montaggio importalo con import_media.")
+            else:
+                righe.append(f"[{i}] file allegato \"{f.name}\", percorso: {f}{nota}")
+            continue
         else:
             continue
         if len(immagini) < llm.MAX_IMMAGINI:
@@ -307,7 +351,7 @@ def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
                 png2 = _fotogramma(store, max(a, b - 0.05))
                 if png2:
                     immagini.append({"etichetta": f"[{i}] fine", "path": png2})
-    testo = ("L'utente indica questi riferimenti (le immagini sono i fotogrammi, "
+    testo = ("L'utente indica questi riferimenti (fotogrammi e allegati seguono "
              "nello stesso ordine):\n" + "\n".join(righe))
     return testo, immagini
 
@@ -342,10 +386,17 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
     if testo_rif:
         contenuto.append({"type": "text", "text": testo_rif})
     for im in immagini:
+        pdf = im.get("tipo") == "pdf"
         if p["tipo"] == "claude_code":
-            contenuto.append({"type": "text", "text": f"Immagine {im['etichetta']}: {im['path']}"})
+            # Claude Code legge da se' immagini e PDF con Read
+            cosa = "Documento" if pdf else "Immagine"
+            contenuto.append({"type": "text", "text": f"{cosa} {im['etichetta']}: {im['path']}"})
+        elif pdf and p["tipo"] != "anthropic":
+            contenuto.append({"type": "text", "text": f"(il PDF {im['etichetta']} non si puo' "
+                                                      "passare a questo modello: chiedi all'utente "
+                                                      "di incollarne il testo se serve)"})
         else:
-            contenuto.append(llm.immagine(im["path"]))
+            contenuto.append(llm.documento(im["path"]) if pdf else llm.immagine(im["path"]))
     contenuto.append({"type": "text", "text": question})
 
     if p["tipo"] == "claude_code":

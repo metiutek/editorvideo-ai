@@ -972,6 +972,38 @@ def llm_imposta(body: LlmBody) -> dict:
     return {**chat_available(), "mcp": mcp_url()}
 
 
+@app.post("/api/chat/allega")
+async def chat_allega(files: list[UploadFile] = File(...)) -> dict:
+    """File allegati a un messaggio: immagini, PDF, testi, video, audio.
+
+    Restano accanto al progetto (cartella ``allegati``) cosi' il modello, e
+    l'utente, li ritrovano; senza progetto salvato vanno nella cartella
+    temporanea.
+    """
+    import tempfile
+
+    store = S.store
+    dest = (Path(store.path).parent / "allegati") if store and store.path \
+        else Path(tempfile.gettempdir()) / "vedit_allegati"
+    dest.mkdir(parents=True, exist_ok=True)
+    out = []
+    for f in files:
+        name = Path(f.filename or "file").name
+        target = dest / name
+        i = 1
+        while target.exists():
+            target = dest / f"{Path(name).stem}_{i}{Path(name).suffix}"
+            i += 1
+        size = 0
+        with target.open("wb") as fh:
+            while chunk := await f.read(1 << 20):
+                fh.write(chunk)
+                size += len(chunk)
+        out.append({"name": target.name, "path": str(target), "size": size,
+                    "tipo": chat_mod.tipo_allegato(target)})
+    return {"allegati": out}
+
+
 @app.post("/api/chat/reset")
 def chat_reset() -> dict:
     S.chat.clear()

@@ -60,6 +60,13 @@ export const api = {
   // documento di una clip html con l'orologio virtuale: v cambia col contenuto
   htmlUrl: (id, v) => `/api/html/${id}?v=${v}`,
 
+  // file allegati a un messaggio per l'assistente (immagini, PDF, testi, media)
+  allega: (files) => {
+    const form = new FormData()
+    for (const f of files) form.append('files', f)
+    return req('/api/chat/allega', { method: 'POST', body: form })
+  },
+
   upload: (files, folder = '') => {
     const form = new FormData()
     for (const f of files) form.append('files', f)

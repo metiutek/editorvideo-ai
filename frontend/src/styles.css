@@ -896,3 +896,12 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 
 .toast { border-radius: 14px; }
 .dialog { border-radius: 18px; }
+
+/* allegati trascinati sulla chat */
+.chat { position: relative; }
+.chat.sopra { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.chatdrop {
+  position: absolute; inset: 0; z-index: 6; display: grid; place-items: center;
+  background: rgba(18,17,25,.82); color: var(--text); font-weight: 800; font-size: 14px;
+  pointer-events: none;
+}

@@ -207,3 +207,52 @@ async def test_mcp_dentro_l_editor_lavora_sul_progetto_aperto(tmp_path):
         api_mod.S.store = None
         srv._stores.clear()
         srv._current[0] = None
+
+
+# --------------------------------------------------------------------------
+# allegati
+# --------------------------------------------------------------------------
+
+
+def test_tipo_allegato():
+    assert chat.tipo_allegato("a.PNG") == "image"
+    assert chat.tipo_allegato("doc.pdf") == "pdf"
+    assert chat.tipo_allegato("titolo.html") == "testo"
+    assert chat.tipo_allegato("ripresa.mov") == "media"
+    assert chat.tipo_allegato("x.zip") == "altro"
+
+
+def test_allegati_arrivano_al_modello(tmp_path):
+    from PIL import Image
+
+    s = Store.create("t", "720p")
+    img = tmp_path / "logo.png"
+    Image.new("RGB", (8, 8), "red").save(img)
+    html = tmp_path / "grafica.html"
+    html.write_text("<h1>Ciao</h1>", encoding="utf-8")
+    video = tmp_path / "ripresa.mp4"
+    video.write_bytes(b"0")
+    testo, immagini = chat.riferimenti(s, [
+        {"kind": "file", "path": str(img), "name": "logo.png"},
+        {"kind": "file", "path": str(html), "name": "grafica.html"},
+        {"kind": "file", "path": str(video), "name": "ripresa.mp4"},
+        {"kind": "file", "path": str(tmp_path / "sparito.png"), "name": "sparito.png"},
+    ])
+    assert immagini == [{"etichetta": "[1]", "path": str(img), "tipo": "image"}]
+    assert "<h1>Ciao</h1>" in testo                     # il testo arriva per intero
+    assert "importalo con import_media" in testo        # il video si puo' montare
+    assert "[4] file allegato sparito.png (non trovato)" in testo
+    blocco = llm.immagine(str(img))
+    assert blocco["mime"] == "image/png" and blocco["b64"]
+
+
+def test_api_allega_accanto_al_progetto(client, tmp_path):
+    r = client.post("/api/chat/allega", files=[
+        ("files", ("schizzo.png", b"\x89PNG-finto", "image/png")),
+        ("files", ("schizzo.png", b"\x89PNG-altro", "image/png")),
+    ])
+    assert r.status_code == 200, r.text
+    a, b = r.json()["allegati"]
+    assert a["tipo"] == "image" and a["name"] == "schizzo.png"
+    assert b["name"] == "schizzo_1.png"                 # non sovrascrive
+    assert (tmp_path / "allegati" / "schizzo.png").read_bytes() == b"\x89PNG-finto"

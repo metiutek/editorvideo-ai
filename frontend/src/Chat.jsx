@@ -21,6 +21,7 @@ export function rifLabel(r, project) {
   if (r.kind === 'time') return fmt(r.t)
   if (r.kind === 'range') return `${fmt(Math.min(r.a, r.b))} → ${fmt(Math.max(r.a, r.b))}`
   if (r.kind === 'area') return `area a ${fmt(r.t)}`
+  if (r.kind === 'file') return r.name
   if (r.kind === 'clip') {
     const c = project?.tracks.flatMap((t) => t.clips).find((x) => x.id === r.id)
     return c ? `clip ${c.name || c.id}` : `clip ${r.id}`
@@ -28,7 +29,7 @@ export function rifLabel(r, project) {
   return '?'
 }
 
-const RIF_ICON = { time: 'orologio', range: 'taglia', area: 'riquadro', clip: 'video' }
+const RIF_ICON = { time: 'orologio', range: 'taglia', area: 'riquadro', clip: 'video', file: 'graffetta' }
 
 /**
  * Chat con l'assistente. Gli strumenti che usa sono le stesse operazioni dei
@@ -48,6 +49,9 @@ export default function Chat({
   const [busy, setBusy] = useState(false)
   const [settings, setSettings] = useState(false)
   const [tratto, setTratto] = useState(null)   // inizio di un tratto in costruzione
+  const [caricando, setCaricando] = useState(0)  // allegati in arrivo
+  const [sopra, setSopra] = useState(false)      // file trascinati sopra la chat
+  const fileRef = useRef(null)
   const endRef = useRef(null)
   const abortRef = useRef(null)
 
@@ -72,6 +76,17 @@ export default function Chat({
   }
 
   const addRef = (r) => setRefs((xs) => [...xs, r])
+
+  /** Carica i file e li aggiunge come riferimenti numerati, come gli altri. */
+  const allega = async (lista) => {
+    const files = [...(lista || [])]
+    if (!files.length) return
+    setCaricando((n) => n + files.length)
+    try {
+      const r = await api.allega(files)
+      setRefs((xs) => [...xs, ...r.allegati.map((a) => ({ kind: 'file', ...a }))])
+    } catch (e) { setError(e.message) } finally { setCaricando((n) => Math.max(0, n - files.length)) }
+  }
 
   const send = async () => {
     const q = input.trim()
@@ -132,7 +147,20 @@ export default function Chat({
   }
 
   return (
-    <div className="chat">
+    <div className={`chat ${sopra ? 'sopra' : ''}`}
+      // i file lasciati qui sono allegati per l'assistente, non media del
+      // progetto: il trascinamento non deve arrivare all'import della finestra
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault(); e.stopPropagation(); setSopra(true)
+      }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setSopra(false) }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files?.length) return
+        e.preventDefault(); e.stopPropagation(); setSopra(false)
+        allega(e.dataTransfer.files)
+      }}>
+      {sopra && <div className="chatdrop">rilascia per allegare al messaggio</div>}
       <div className="section-title">
         <button className="modelpill" title="Cambia modello" onClick={() => setSettings(true)}>
           <span className="dot" />
@@ -157,8 +185,9 @@ export default function Chat({
               ))}
             </div>
             <div className="hint">
-              Vuoi indicare un punto preciso? Usa i pulsanti qui sotto: istante, tratto, clip
-              oppure disegna un'area sull'inquadratura. Ogni modifica si annulla con Ctrl+Z.
+              Vuoi indicare un punto preciso? Usa i pulsanti qui sotto: istante, tratto, clip,
+              un'area disegnata sull'inquadratura, oppure allega un file (anche trascinandolo
+              qui o incollando uno screenshot). Ogni modifica si annulla con Ctrl+Z.
             </div>
           </div>
         )}
@@ -238,6 +267,12 @@ export default function Chat({
             title="Disegna un riquadro sull'inquadratura"
             onClick={() => setPickArea((v) => !v)}>
             <Icon name={RIF_ICON.area} size={13} />{pickArea ? 'disegna…' : 'area'}</button>
+          <button className="chip" disabled={caricando > 0}
+            title="Allega immagini, PDF, testi, video o audio (anche trascinandoli qui o con Ctrl+V)"
+            onClick={() => fileRef.current?.click()}>
+            <Icon name={RIF_ICON.file} size={13} />{caricando ? 'carico…' : 'file'}</button>
+          <input ref={fileRef} type="file" multiple hidden
+            onChange={(e) => { allega(e.target.files); e.target.value = '' }} />
         </div>
         <div className="chatbar">
           <textarea
@@ -245,11 +280,16 @@ export default function Chat({
             placeholder={busy ? 'sto lavorando…'
               : refs.length ? 'cosa vuoi cambiare? (puoi scrivere "in 1", "nel 2"…)' : 'chiedi una modifica…'}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              // un'immagine copiata (uno screenshot) si incolla come allegato
+              const files = [...(e.clipboardData?.files || [])]
+              if (files.length) { e.preventDefault(); allega(files) }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
             }}
           />
-          <button className="primary icon" disabled={busy || !input.trim()} onClick={send}
+          <button className="primary icon" disabled={busy || caricando > 0 || !input.trim()} onClick={send}
             title="Invia (Invio)"><Icon name="invia" /></button>
         </div>
       </div>

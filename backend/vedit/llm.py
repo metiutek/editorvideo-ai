@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import json
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -240,8 +241,13 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
     blocchi = []
     for c in contenuto:
         if c["type"] == "image":
-            blocchi.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
+            blocchi.append({"type": "image", "source": {"type": "base64",
+                                                        "media_type": c.get("mime", "image/png"),
                                                         "data": c["b64"]}})
+        elif c["type"] == "document":
+            blocchi.append({"type": "document", "source": {"type": "base64",
+                                                           "media_type": "application/pdf",
+                                                           "data": c["b64"]}})
         else:
             blocchi.append({"type": "text", "text": c["text"]})
     history.append({"role": "user", "content": blocchi})
@@ -365,7 +371,8 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
     parti = []
     for c in contenuto:
         if c["type"] == "image":
-            parti.append({"type": "image_url", "image_url": {"url": "data:image/png;base64," + c["b64"]}})
+            mime = c.get("mime", "image/png")
+            parti.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64," + c["b64"]}})
         else:
             parti.append({"type": "text", "text": c["text"]})
     solo_testo = "\n\n".join(c["text"] for c in contenuto if c["type"] == "text")
@@ -555,5 +562,13 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
 
 
 def immagine(path: str) -> dict:
-    return {"type": "image", "path": path,
+    mime = mimetypes.guess_type(path)[0] or "image/png"
+    if mime == "image/jpg":
+        mime = "image/jpeg"
+    return {"type": "image", "path": path, "mime": mime,
+            "b64": base64.b64encode(Path(path).read_bytes()).decode("ascii")}
+
+
+def documento(path: str) -> dict:
+    return {"type": "document", "path": path,
             "b64": base64.b64encode(Path(path).read_bytes()).decode("ascii")}
