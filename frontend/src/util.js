@@ -183,3 +183,21 @@ export const allClips = (project) =>
   project ? project.tracks.flatMap((t) => t.clips.map((c) => ({ ...c, trackId: t.id, kind: t.kind }))) : []
 
 export const findClip = (project, id) => allClips(project).find((c) => c.id === id)
+
+/**
+ * Cosa produce davvero una clip nel render: immagine, suono o tutti e due.
+ *
+ * Decide cosa ha senso mostrare nell'ispettore. Una clip su traccia audio non
+ * viene mai disegnata, quindi colore, posizione e transizioni non le fanno
+ * niente; testo, colore e html non hanno suono. La regola e' quella del grafo:
+ * una clip su traccia video da' audio solo se e' un media che ne ha.
+ */
+export function natura(clip, project) {
+  if (!clip) return { video: false, audio: false }
+  const track = project?.tracks?.find((t) => t.clips.some((c) => c.id === clip.id))
+  const kind = track?.kind || clip.kind || 'video'
+  const media = clip.type === 'media'
+    ? (project?.media || []).find((m) => m.id === clip.media) : null
+  if (kind === 'audio') return { video: false, audio: true }
+  return { video: true, audio: !!media?.has_audio }
+}

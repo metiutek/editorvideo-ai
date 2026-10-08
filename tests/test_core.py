@@ -115,6 +115,38 @@ def test_effetti_validati(assets, tmp_path):
     assert not s.project.clip(c.id).effects
 
 
+def test_effetti_solo_dove_cambiano_qualcosa(assets, tmp_path):
+    """Un colore su una clip audio, o un compressore su un testo, non fanno niente: non entrano."""
+    s = Store.create("t", path=str(tmp_path / "p.json"))
+    video, muto, musica = s.import_media([assets["red"], assets["green"], assets["music"]])
+    cv = s.add_clip(video.id)
+    cm = s.add_clip(muto.id)
+    ca = s.add_clip(musica.id)
+    ct = s.add_text("ciao")
+
+    assert s.clip_produces(cv.id) == {"video", "audio"}
+    assert s.clip_produces(cm.id) == {"video"}
+    assert s.clip_produces(ca.id) == {"audio"}
+    assert s.clip_produces(ct.id) == {"video"}
+
+    s.add_effect(cv.id, "color", {"saturation": 1.2})
+    s.add_effect(cv.id, "compressor", {})
+    s.add_effect(ca.id, "compressor", {})
+    with pytest.raises(EditError, match="non ha immagine"):
+        s.add_effect(ca.id, "color", {})
+    with pytest.raises(EditError, match="non ha suono"):
+        s.add_effect(ct.id, "compressor", {})
+    with pytest.raises(EditError, match="non ha suono"):
+        s.add_effect(cm.id, "reverb", {})
+    # la catena e' atomica: un effetto fuori posto ferma tutti
+    with pytest.raises(EditError):
+        s.add_effects(ca.id, [{"type": "compressor"}, {"type": "blur"}])
+    assert len(s.project.clip(ca.id).effects) == 1
+    # il master ha sia immagine sia suono
+    s.add_effect(None, "color", {})
+    s.add_effect(None, "compressor", {})
+
+
 def test_crossfade_accosta_le_clip(assets, tmp_path):
     s = Store.create("t", path=str(tmp_path / "p.json"))
     a_m, b_m = s.import_media([assets["red"], assets["blue"]])

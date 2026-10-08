@@ -815,6 +815,8 @@ class Store:
     def add_effect(self, clip_id: str | None, effect: str, params: dict | None = None) -> Effect:
         """clip_id=None applica l'effetto al master."""
         clean = fx.validate_effect(effect, params or {})
+        if clip_id is not None:
+            self._effect_fits(clip_id, [effect])
         target = self.project.master.effects if clip_id is None else self.clip_for_edit(clip_id)[1].effects
         self._touch()
         e = Effect(type=effect, params=clean)
@@ -833,12 +835,36 @@ class Store:
         target = self._effect_list(clip_id)
         made = [Effect(type=it["type"], params=fx.validate_effect(it["type"], it.get("params") or {}))
                 for it in items]
+        if clip_id is not None:
+            self._effect_fits(clip_id, [e.type for e in made])
         if not made:
             return []
         self._touch()
         target.extend(made)
         self._done()
         return made
+
+    def clip_produces(self, clip_id: str) -> set[str]:
+        """Cosa esce davvero da una clip nel render: ``video``, ``audio`` o tutti e due.
+
+        Stessa regola del grafo: una traccia audio non viene mai disegnata, e su
+        traccia video il suono c'e' solo se la clip e' un media che ne ha.
+        """
+        track, clip = self.clip_or_die(clip_id)
+        if track.kind == "audio":
+            return {"audio"}
+        media = self.project.media_by_id(clip.media) if clip.type == "media" and clip.media else None
+        return {"video", "audio"} if media is not None and media.has_audio else {"video"}
+
+    def _effect_fits(self, clip_id: str, effects: list[str]) -> None:
+        """Un effetto che la clip non puo' usare non entra: non cambierebbe niente."""
+        ha = self.clip_produces(clip_id)
+        for name in effects:
+            kind = fx._spec(name).kind
+            if kind not in ha:
+                cosa = "suono" if kind == "audio" else "immagine"
+                raise EditError(f"{name!r} e' un effetto {kind} e la clip {clip_id} non ha {cosa}: "
+                                f"non cambierebbe niente")
 
     def _effect_list(self, clip_id: str | None) -> list[Effect]:
         return self.project.master.effects if clip_id is None else self.clip_for_edit(clip_id)[1].effects

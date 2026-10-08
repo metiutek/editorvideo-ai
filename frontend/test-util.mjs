@@ -4,7 +4,7 @@
  *   node test-util.mjs
  */
 import assert from 'node:assert/strict'
-import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox } from './src/util.js'
+import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura } from './src/util.js'
 
 let ok = 0
 const test = (name, fn) => {
@@ -102,6 +102,25 @@ test('riquadro: sorgente piu piccola del canvas (fit=none)', () => {
   })
   assert.equal(r.width, 200)   // 200 * 2 * 0.5
   assert.equal(r.height, 120)
+})
+
+test('natura della clip: cosa produce davvero, quindi cosa mostrare', () => {
+  const project = {
+    media: [{ id: 'mv', has_audio: true }, { id: 'muto', has_audio: false }, { id: 'ma', has_audio: true }],
+    tracks: [
+      { id: 'V1', kind: 'video', clips: [
+        { id: 'c1', type: 'media', media: 'mv' }, { id: 'c2', type: 'media', media: 'muto' },
+        { id: 't1', type: 'text' }, { id: 'h1', type: 'html' }] },
+      { id: 'A1', kind: 'audio', clips: [{ id: 'a1', type: 'media', media: 'ma' }] },
+    ],
+  }
+  const n = (id) => natura(project.tracks.flatMap((t) => t.clips).find((c) => c.id === id), project)
+  assert.deepEqual(n('c1'), { video: true, audio: true })
+  assert.deepEqual(n('c2'), { video: true, audio: false })
+  assert.deepEqual(n('t1'), { video: true, audio: false })
+  assert.deepEqual(n('h1'), { video: true, audio: false })
+  assert.deepEqual(n('a1'), { video: false, audio: true })
+  assert.deepEqual(natura(null, project), { video: false, audio: false })
 })
 
 console.log(`\n${ok} verifiche superate`)

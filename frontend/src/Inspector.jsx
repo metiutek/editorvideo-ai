@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import { Anim, Check, EffectParams, Num, Row, Select, Text } from './Params.jsx'
+import { natura } from './util.js'
 
 /** Pannello proprieta': clip selezionata, oppure progetto e master. */
 export default function Inspector({
@@ -23,6 +24,8 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
   const set = (patch) => call('set_clip', { clip_id: clip.id, ...patch })
   const tr = clip.transform || {}
   const au = clip.audio || {}
+  // si mostra solo quello che la clip produce davvero nel render
+  const ha = natura(clip, project)
 
   return (
     <>
@@ -50,16 +53,18 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
             onChange={(v) => set({ in_: v })} /></Row>
         )}
         <Row label="attiva"><Check value={clip.enabled !== false} onChange={(v) => set({ enabled: v })} /></Row>
-        {clip.type === 'media' && (
+        {clip.type === 'media' && ha.video && (
           <Row label="inquadra"><Select value={clip.fit || 'contain'} onChange={(v) => set({ fit: v })}
             options={['contain', 'cover', 'stretch', 'none']} /></Row>
         )}
         {clip.type === 'color' && (
           <Row label="colore"><Text value={clip.color} onChange={(v) => set({ color: v })} /></Row>
         )}
-        <div className="hint">
-          contain: tutto visibile · cover: riempie tagliando · none: dimensione originale
-        </div>
+        {clip.type === 'media' && ha.video && (
+          <div className="hint">
+            contain: tutto visibile · cover: riempie tagliando · none: dimensione originale
+          </div>
+        )}
       </div>
 
       {clip.type === 'media' && (
@@ -77,6 +82,7 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
         </div>
       )}
 
+      {ha.video && (<>
       <div className="group">
         <h4>dissolvenze</h4>
         <Row label="entrata"><Num value={clip.fade_in || 0} min={0} step={0.05}
@@ -105,10 +111,12 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
         ))}
         <div className="hint">x/y in pixel dal centro, y negativo verso l'alto</div>
       </div>
+      </>)}
 
       {clip.type === 'text' && <TextPanel clip={clip} call={call} />}
       {clip.type === 'html' && <HtmlPanel clip={clip} call={call} />}
 
+      {ha.audio && (
       <div className="group">
         <h4>
           audio
@@ -130,9 +138,10 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
         <Row label="fade out"><Num value={au.fade_out ?? 0} min={0} step={0.05}
           onChange={(v) => call('set_audio', { clip_id: clip.id, fade_out: v })} /></Row>
       </div>
+      )}
 
       <Effects target={clip.id} list={clip.effects || []} effects={effects}
-        clipTime={clipTime} call={call} onProva={onProva} />
+        clipTime={clipTime} call={call} onProva={onProva} ha={ha} />
     </>
   )
 }
@@ -288,7 +297,7 @@ function HtmlPanel({ clip, call }) {
   )
 }
 
-function Effects({ target, list, effects, clipTime, call, onProva }) {
+function Effects({ target, list, effects, clipTime, call, onProva, ha = { video: true, audio: true } }) {
   const byName = Object.fromEntries(effects.map((e) => [e.name, e]))
   const args = (extra) => (target ? { clip_id: target, ...extra } : { clip_id: null, ...extra })
 
@@ -353,14 +362,23 @@ function Effects({ target, list, effects, clipTime, call, onProva }) {
             <EffectParams spec={spec} params={e.params} clipTime={clipTime}
               onChange={(patch) => call('update_effect', args({ index: e.i, params: patch }))} />
             {spec.desc && <div className="hint">{spec.desc}</div>}
+            {!ha[spec.kind] && (
+              <div className="hint">questa clip non ha {spec.kind === 'audio' ? 'suono' : 'immagine'}: l'effetto non cambia niente</div>
+            )}
           </div>
         )
       })}
       <h4 className="fxtitolo">aggiungi effetto</h4>
-      <div className="hint fxnota">video — passa sopra per vedere l'anteprima</div>
-      <Catalogo kind="video" />
-      <div className="hint fxnota">audio</div>
-      <Catalogo kind="audio" />
+      {/* solo gli effetti che la clip puo' usare: un colore su una clip audio
+          non cambierebbe niente, un compressore su un testo nemmeno */}
+      {ha.video && (<>
+        <div className="hint fxnota">video — passa sopra per vedere l'anteprima</div>
+        <Catalogo kind="video" />
+      </>)}
+      {ha.audio && (<>
+        <div className="hint fxnota">audio</div>
+        <Catalogo kind="audio" />
+      </>)}
     </div>
   )
 }
