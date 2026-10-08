@@ -106,7 +106,7 @@ test('riquadro: sorgente piu piccola del canvas (fit=none)', () => {
 
 test('natura della clip: cosa produce davvero, quindi cosa mostrare', () => {
   const project = {
-    media: [{ id: 'mv', has_audio: true }, { id: 'muto', has_audio: false }, { id: 'ma', has_audio: true }],
+    media: [{ id: 'mv', audio: true }, { id: 'muto', audio: false }, { id: 'ma', audio: true }],
     tracks: [
       { id: 'V1', kind: 'video', clips: [
         { id: 'c1', type: 'media', media: 'mv' }, { id: 'c2', type: 'media', media: 'muto' },

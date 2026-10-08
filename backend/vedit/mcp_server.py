@@ -12,6 +12,8 @@ Avvio: ``vedit-mcp`` (stdio).
 
 from __future__ import annotations
 
+import functools
+import inspect
 import os
 import sys
 import tempfile
@@ -20,6 +22,7 @@ from typing import Any
 
 import anyio
 from mcp.server.mcpserver import Image, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from . import analyze, captions, cleanup, colormatch, ops
 # domande_mod: in ask_user il parametro si chiama domande
@@ -126,6 +129,43 @@ mcp = MCPServer(
     instructions=ISTRUZIONI,
 )
 
+# Errori che l'agente deve leggere per correggersi: "clip inesistente", "nessun
+# progetto aperto", parametro fuori range. Da mcp 2.3 tutto cio' che non e'
+# ToolError conta come crash e al modello arriva solo "Error executing tool x",
+# cioe' niente da cui capire cosa sistemare.
+_PREVISTI = (ValueError, KeyError, FileNotFoundError)
+
+
+def _messaggio(exc: BaseException) -> str:
+    # str(KeyError("x")) e' "'x'": il testo vero sta in args
+    return str(exc.args[0]) if isinstance(exc, KeyError) and exc.args else str(exc)
+
+
+def _strumento(*args, **kwargs):
+    """``mcp.tool`` che consegna all'agente il testo degli errori previsti."""
+    registra = mcp.tool(*args, **kwargs)
+
+    def applica(fn):
+        if inspect.iscoroutinefunction(fn):
+            @functools.wraps(fn)
+            async def avvolta(*a, **k):
+                try:
+                    return await fn(*a, **k)
+                except _PREVISTI as exc:
+                    raise ToolError(_messaggio(exc)) from exc
+        else:
+            @functools.wraps(fn)
+            def avvolta(*a, **k):
+                try:
+                    return fn(*a, **k)
+                except _PREVISTI as exc:
+                    raise ToolError(_messaggio(exc)) from exc
+        registra(avvolta)
+        return fn
+
+    return applica
+
+
 _stores: dict[str, Store] = {}
 _current: list[str | None] = [None]
 
@@ -198,7 +238,7 @@ async def _off(fn, *args, **kwargs):
 # --------------------------------------------------------------------------
 
 
-@mcp.tool()
+@_strumento()
 def project_create(path: str, name: str = "untitled", preset: str = "1080p",
                    width: int | None = None, height: int | None = None,
                    fps: float | None = None) -> dict:
@@ -214,7 +254,7 @@ def project_create(path: str, name: str = "untitled", preset: str = "1080p",
     return {"path": s.path, "settings": s.summary()["settings"], "tracks": ["V1", "A1"]}
 
 
-@mcp.tool()
+@_strumento()
 def project_open(path: str) -> dict:
     """Apre un progetto esistente (.json) e lo rende quello corrente."""
     # sempre riletto da disco: il file puo' essere cambiato dalla UI o da un
@@ -227,7 +267,7 @@ def project_open(path: str) -> dict:
     return _stores[key].summary()
 
 
-@mcp.tool()
+@_strumento()
 def project_info(detail: str = "normal", project: str | None = None) -> dict:
     """Stato completo della timeline: media, tracce, clip, effetti, durata.
 
@@ -236,13 +276,13 @@ def project_info(detail: str = "normal", project: str | None = None) -> dict:
     return _store(project).summary(detail)
 
 
-@mcp.tool()
+@_strumento()
 def project_save(path: str | None = None, project: str | None = None) -> dict:
     """Salva il progetto (di norma non serve: il salvataggio e' automatico)."""
     return {"saved": _store(project).save(path)}
 
 
-@mcp.tool()
+@_strumento()
 def project_settings(width: int | None = None, height: int | None = None, fps: float | None = None,
                      background: str | None = None, sample_rate: int | None = None,
                      project: str | None = None) -> dict:
@@ -253,13 +293,13 @@ def project_settings(width: int | None = None, height: int | None = None, fps: f
     return {"width": st.width, "height": st.height, "fps": st.fps, "background": st.background}
 
 
-@mcp.tool()
+@_strumento()
 def undo(project: str | None = None) -> dict:
     """Annulla l'ultima modifica."""
     return {"undone": _store(project).undo()}
 
 
-@mcp.tool()
+@_strumento()
 def redo(project: str | None = None) -> dict:
     """Ripete la modifica annullata."""
     return {"redone": _store(project).redo()}
@@ -270,7 +310,7 @@ def redo(project: str | None = None) -> dict:
 # --------------------------------------------------------------------------
 
 
-@mcp.tool()
+@_strumento()
 async def import_media(paths: list[str] | None = None, files: list[str] | None = None,
                        project: str | None = None) -> list[dict]:
     """Importa file video/audio/immagine nel progetto leggendone i metadati.
@@ -287,7 +327,7 @@ async def import_media(paths: list[str] | None = None, files: list[str] | None =
              "fps": m.fps or None, "audio": m.has_audio} for m in media]
 
 
-@mcp.tool()
+@_strumento()
 async def analyze_media(path: str) -> dict:
     """Legge i metadati di un file senza importarlo nel progetto."""
     m = await _off(probe.probe, path)
@@ -296,7 +336,7 @@ async def analyze_media(path: str) -> dict:
             "channels": m.channels, "path": m.path}
 
 
-@mcp.tool()
+@_strumento()
 async def build_proxies(height: int = 540, project: str | None = None) -> dict:
     """Genera i proxy a bassa risoluzione: rende preview e frame molto piu' rapidi."""
     s = _store(project)
@@ -312,14 +352,14 @@ async def build_proxies(height: int = 540, project: str | None = None) -> dict:
 # --------------------------------------------------------------------------
 
 
-@mcp.tool()
+@_strumento()
 def add_track(kind: str = "video", name: str | None = None, project: str | None = None) -> dict:
     """Aggiunge una traccia. Le tracce video successive stanno sopra le precedenti."""
     t = _store(project).add_track(kind, name)
     return {"id": t.id, "kind": t.kind, "name": t.name}
 
 
-@mcp.tool()
+@_strumento()
 def set_track(track: str, hidden: bool | None = None, muted: bool | None = None,
               volume: Any = None, name: str | None = None, locked: bool | None = None,
               solo: bool | None = None, project: str | None = None) -> dict:
@@ -335,7 +375,7 @@ def set_track(track: str, hidden: bool | None = None, muted: bool | None = None,
             "locked": t.locked, "volume": t.volume}
 
 
-@mcp.tool()
+@_strumento()
 def move_track(track: str, index: int, project: str | None = None) -> dict:
     """Cambia l'ordine di una traccia tra quelle dello stesso tipo.
 
@@ -345,7 +385,7 @@ def move_track(track: str, index: int, project: str | None = None) -> dict:
     return {"ordine": order}
 
 
-@mcp.tool()
+@_strumento()
 def remove_track(track: str, project: str | None = None) -> dict:
     """Elimina una traccia e tutte le sue clip."""
     _store(project).remove_track(track)
@@ -357,7 +397,7 @@ def remove_track(track: str, project: str | None = None) -> dict:
 # --------------------------------------------------------------------------
 
 
-@mcp.tool()
+@_strumento()
 async def list_plugins() -> dict:
     """Plugin audio VST3/AU installati nelle cartelle standard del sistema."""
     from . import plugins
@@ -365,7 +405,7 @@ async def list_plugins() -> dict:
     return {"plugin": plugins.elenco()}
 
 
-@mcp.tool()
+@_strumento()
 async def plugin_info(file: str) -> dict:
     """Parametri di un plugin (nome, limiti, valore attuale) per usarlo con l'effetto "vst".
 
@@ -379,7 +419,7 @@ async def plugin_info(file: str) -> dict:
         return {"errore": str(exc)}
 
 
-@mcp.tool()
+@_strumento()
 def set_sidechain(track: str, source: str | None = None, threshold: float | None = None,
                   ratio: float | None = None, attack: float | None = None,
                   release: float | None = None, makeup: float | None = None,
@@ -396,7 +436,7 @@ def set_sidechain(track: str, source: str | None = None, threshold: float | None
     return {"traccia": t.id, "sidechain": t.sidechain}
 
 
-@mcp.tool()
+@_strumento()
 def add_clip(media: str, track: str | None = None, start: float | None = None,
              in_point: float = 0.0, duration: float | None = None,
              project: str | None = None) -> dict:
@@ -409,7 +449,7 @@ def add_clip(media: str, track: str | None = None, start: float | None = None,
     return _clip_view(c)
 
 
-@mcp.tool()
+@_strumento()
 def add_text(text: str, start: float = 0.0, duration: float = 3.0, track: str | None = None,
              font_size: int = 64, color: str = "white", align: str = "center",
              box: bool = False, box_color: str = "black", box_opacity: float = 0.5,
@@ -428,7 +468,7 @@ def add_text(text: str, start: float = 0.0, duration: float = 3.0, track: str | 
     return _clip_view(c)
 
 
-@mcp.tool()
+@_strumento()
 def add_clips(clips: list[dict], track: str | None = None, gap: float = 0.0,
               project: str | None = None) -> dict:
     """Mette in timeline una lista di tagli in una chiamata sola.
@@ -449,14 +489,14 @@ def add_clips(clips: list[dict], track: str | None = None, gap: float = 0.0,
             "fine": round(max((c.start + c.duration for c in fatte), default=0.0), 3)}
 
 
-@mcp.tool()
+@_strumento()
 def add_color(color: str = "black", start: float = 0.0, duration: float = 2.0,
               track: str | None = None, project: str | None = None) -> dict:
     """Aggiunge una clip di colore pieno (stacco, fondale, schermata finale)."""
     return _clip_view(_store(project).add_color(color, track, start, duration))
 
 
-@mcp.tool()
+@_strumento()
 def add_html(html: str | None = None, path: str | None = None, start: float = 0.0,
              duration: float = 4.0, track: str | None = None, base: str | None = None,
              project: str | None = None) -> dict:
@@ -484,7 +524,7 @@ def add_html(html: str | None = None, path: str | None = None, start: float = 0.
     return {**_clip_view(c), "html": f"{len(c.html or '')} caratteri", "base": c.html_base}
 
 
-@mcp.tool()
+@_strumento()
 def set_html(clip: str, html: str | None = None, path: str | None = None,
              base: str | None = None, project: str | None = None) -> dict:
     """Sostituisce il documento di una clip html (o solo la cartella ``base``)."""
@@ -492,35 +532,35 @@ def set_html(clip: str, html: str | None = None, path: str | None = None,
     return {**_clip_view(c), "html": f"{len(c.html or '')} caratteri", "base": c.html_base}
 
 
-@mcp.tool()
+@_strumento()
 def split(clip: str, at: float, project: str | None = None) -> dict:
     """Taglia una clip in due nel punto ``at`` (tempo di timeline)."""
     a, b = _store(project).split_clip(clip, at)
     return {"prima": _clip_view(a), "dopo": _clip_view(b)}
 
 
-@mcp.tool()
+@_strumento()
 def trim(clip: str, in_point: float | None = None, out_point: float | None = None,
          duration: float | None = None, project: str | None = None) -> dict:
     """Cambia il punto di attacco/stacco nella sorgente o la durata in timeline."""
     return _clip_view(_store(project).trim_clip(clip, in_point, duration, out_point))
 
 
-@mcp.tool()
+@_strumento()
 def move(clip: str, start: float | None = None, track: str | None = None,
          project: str | None = None) -> dict:
     """Sposta una clip nel tempo e/o su un'altra traccia."""
     return _clip_view(_store(project).move_clip(clip, start, track))
 
 
-@mcp.tool()
+@_strumento()
 def delete(clip: str, ripple: bool = False, project: str | None = None) -> dict:
     """Elimina una clip. ripple=True chiude il buco spostando indietro le successive."""
     _store(project).remove_clip(clip, ripple)
     return {"eliminata": clip, "ripple": ripple}
 
 
-@mcp.tool()
+@_strumento()
 def set_speed(clip: str, speed: float, keep_duration: bool = False,
               reverse: bool | None = None, project: str | None = None) -> dict:
     """Cambia velocita' (2.0 = doppia, 0.5 = slow motion) ed eventualmente inverte.
@@ -535,7 +575,7 @@ def set_speed(clip: str, speed: float, keep_duration: bool = False,
     return _clip_view(c)
 
 
-@mcp.tool()
+@_strumento()
 def set_clip(clip: str, enabled: bool | None = None, fit: str | None = None,
              name: str | None = None, color: str | None = None,
              project: str | None = None) -> dict:
@@ -547,7 +587,7 @@ def set_clip(clip: str, enabled: bool | None = None, fit: str | None = None,
     return _clip_view(c)
 
 
-@mcp.tool()
+@_strumento()
 def set_text(clip: str, text: str | None = None, font_size: int | None = None,
              color: str | None = None, align: str | None = None, box: bool | None = None,
              box_color: str | None = None, box_opacity: float | None = None,
@@ -561,7 +601,7 @@ def set_text(clip: str, text: str | None = None, font_size: int | None = None,
     return {"id": c.id, "text": c.text.text, "font_size": c.text.font_size}
 
 
-@mcp.tool()
+@_strumento()
 def set_transform(clip: str, x: Any = None, y: Any = None, scale: Any = None,
                   rotation: Any = None, opacity: Any = None, project: str | None = None) -> dict:
     """Posizione, dimensione, rotazione e opacita' della clip sul canvas.
@@ -575,7 +615,7 @@ def set_transform(clip: str, x: Any = None, y: Any = None, scale: Any = None,
     return {"id": c.id, "transform": vars(c.transform)}
 
 
-@mcp.tool()
+@_strumento()
 def set_audio(clip: str, gain_db: Any = None, mute: bool | None = None,
               fade_in: float | None = None, fade_out: float | None = None,
               pan: float | None = None, project: str | None = None) -> dict:
@@ -585,7 +625,7 @@ def set_audio(clip: str, gain_db: Any = None, mute: bool | None = None,
     return {"id": c.id, "audio": vars(c.audio)}
 
 
-@mcp.tool()
+@_strumento()
 def set_fades(clip: str, fade_in: float | None = None, fade_out: float | None = None,
               audio: bool = True, project: str | None = None) -> dict:
     """Dissolvenza video in entrata/uscita (in secondi), audio incluso di default."""
@@ -598,7 +638,7 @@ def set_fades(clip: str, fade_in: float | None = None, fade_out: float | None = 
 # --------------------------------------------------------------------------
 
 
-@mcp.tool()
+@_strumento()
 def crossfade(clip_a: str, clip_b: str, duration: float = 1.0, type: str = "dissolve",
               project: str | None = None) -> dict:
     """Transizione tra due clip consecutive della stessa traccia.
@@ -610,7 +650,7 @@ def crossfade(clip_a: str, clip_b: str, duration: float = 1.0, type: str = "diss
     return _store(project).crossfade(clip_a, clip_b, duration, type)
 
 
-@mcp.tool()
+@_strumento()
 def set_transition(clip: str, type: str = "dissolve", duration: float = 1.0,
                    project: str | None = None) -> dict:
     """Cambia la transizione in uscita di una clip senza spostare nulla.
@@ -621,20 +661,20 @@ def set_transition(clip: str, type: str = "dissolve", duration: float = 1.0,
     return _store(project).set_transition(clip, type, duration)
 
 
-@mcp.tool()
+@_strumento()
 def list_transitions() -> list[str]:
     """Tipi di transizione disponibili."""
     return list(TRANSITIONS)
 
 
-@mcp.tool()
+@_strumento()
 def append_sequence(media: list[str], track: str | None = None, crossfade: float = 0.0,
                     project: str | None = None) -> list[dict]:
     """Accoda piu' media in fila, con dissolvenza incrociata opzionale tra loro."""
     return [_clip_view(c) for c in _store(project).append_sequence(media, track, crossfade)]
 
 
-@mcp.tool()
+@_strumento()
 def close_gaps(track: str, project: str | None = None) -> dict:
     """Compatta la traccia eliminando i buchi tra le clip."""
     return {"clip_spostate": _store(project).close_gaps(track)}
@@ -645,7 +685,7 @@ def close_gaps(track: str, project: str | None = None) -> dict:
 # --------------------------------------------------------------------------
 
 
-@mcp.tool()
+@_strumento()
 def list_effects(kind: str | None = None) -> list[dict]:
     """Catalogo degli effetti disponibili con parametri, range e animabilita'.
 
@@ -654,7 +694,7 @@ def list_effects(kind: str | None = None) -> list[dict]:
     return fx.describe(kind)
 
 
-@mcp.tool()
+@_strumento()
 def add_effect(type: str, clip: str | None = None, params: dict | None = None,
                project: str | None = None) -> dict:
     """Applica un effetto a una clip (clip=None lo applica al master).
@@ -666,7 +706,7 @@ def add_effect(type: str, clip: str | None = None, params: dict | None = None,
     return {"clip": clip, "index": len(lst) - 1, "type": e.type, "params": e.params}
 
 
-@mcp.tool()
+@_strumento()
 def update_effect(index: int, clip: str | None = None, params: dict | None = None,
                   enabled: bool | None = None, project: str | None = None) -> dict:
     """Modifica i parametri di un effetto gia' applicato (index da project_info)."""
@@ -674,7 +714,7 @@ def update_effect(index: int, clip: str | None = None, params: dict | None = Non
     return {"clip": clip, "index": index, "type": e.type, "params": e.params, "enabled": e.enabled}
 
 
-@mcp.tool()
+@_strumento()
 def move_effect(index: int, to: int, clip: str | None = None,
                 project: str | None = None) -> dict:
     """Sposta un effetto nella catena: l'ordine cambia il risultato.
@@ -686,7 +726,7 @@ def move_effect(index: int, to: int, clip: str | None = None,
     return {"clip": clip, "catena": [e.type for e in lst]}
 
 
-@mcp.tool()
+@_strumento()
 def remove_effect(index: int, clip: str | None = None, project: str | None = None) -> dict:
     """Rimuove un effetto dalla clip (o dal master se clip=None)."""
     _store(project).remove_effect(clip, index)
@@ -698,7 +738,7 @@ def remove_effect(index: int, clip: str | None = None, project: str | None = Non
 # --------------------------------------------------------------------------
 
 
-@mcp.tool()
+@_strumento()
 async def normalize_audio(target_lufs: float = -14.0, measure: bool = True,
                           true_peak: float = -1.0, project: str | None = None) -> dict:
     """Normalizza il volume complessivo allo standard EBU R128.
@@ -714,7 +754,7 @@ async def normalize_audio(target_lufs: float = -14.0, measure: bool = True,
     return s.set_loudnorm(True, target_lufs, true_peak, measured=measured)
 
 
-@mcp.tool()
+@_strumento()
 async def audio_levels(clip: str | None = None, project: str | None = None) -> dict:
     """Misura il livello (LUFS integrato, true peak, range) del mix o di una clip."""
     s = _store(project)
@@ -774,7 +814,7 @@ def _source(path: str | None, clip: str | None, project: str | None,
     return s.media_or_die(c.media).path
 
 
-@mcp.tool()
+@_strumento()
 async def inspect_footage(path: str | None = None, clip: str | None = None,
                           media: str | None = None, deep: bool = False,
                           model: str = "small", language: str | None = None,
@@ -795,7 +835,7 @@ async def inspect_footage(path: str | None = None, clip: str | None = None,
     return await _off(analyze.report, src, deep, model_size=model, language=language)
 
 
-@mcp.tool()
+@_strumento()
 async def music_beats(path: str | None = None, clip: str | None = None,
                       media: str | None = None, start: float = 0.0,
                       end: float | None = None, every: int = 0,
@@ -821,7 +861,7 @@ async def music_beats(path: str | None = None, clip: str | None = None,
     return out
 
 
-@mcp.tool()
+@_strumento()
 async def transcribe(path: str | None = None, clip: str | None = None,
                      model: str = "small", language: str | None = None,
                      with_words: bool = False, project: str | None = None) -> dict:
@@ -840,7 +880,7 @@ async def transcribe(path: str | None = None, clip: str | None = None,
             "segments": segs}
 
 
-@mcp.tool()
+@_strumento()
 async def list_styles() -> dict:
     """Gli stili di montaggio disponibili e i numeri che li definiscono."""
     return {"stili": [{"nome": s.name, "label": s.label, "desc": s.desc,
@@ -849,7 +889,7 @@ async def list_styles() -> dict:
                        "transizione": s.transition} for s in story.STYLES.values()]}
 
 
-@mcp.tool()
+@_strumento()
 async def plan_edit(folder: str | None = None, files: list[str] | None = None,
                     style: str = "vlog", target_duration: float | None = None,
                     deep: bool = False, apply: bool = False, order: str = "score",
@@ -883,7 +923,7 @@ async def plan_edit(folder: str | None = None, files: list[str] | None = None,
     return p
 
 
-@mcp.tool()
+@_strumento()
 async def match_color(clip: str, reference: str, strength: float = 1.0,
                       apply: bool = True, project: str | None = None) -> dict:
     """Uniforma il colore di una clip a quello di una clip di riferimento.
@@ -909,7 +949,7 @@ async def match_color(clip: str, reference: str, strength: float = 1.0,
             "sorgente": res["sorgente"]["mean"], "riferimento": res["riferimento"]["mean"]}
 
 
-@mcp.tool()
+@_strumento()
 async def make_captions(clip: str | None = None, path: str | None = None,
                         output: str | None = None, format: str = "ass",
                         karaoke: bool = True, burn: bool = True,
@@ -959,7 +999,7 @@ async def make_captions(clip: str | None = None, path: str | None = None,
             "anteprima": [{"t": r["start"], "text": r["text"]} for r in righe[:5]]}
 
 
-@mcp.tool()
+@_strumento()
 async def tighten_speech(clip: str, min_silence: float = 0.5, pad: float = 0.12,
                          fillers: bool = True, extra_fillers: list[str] | None = None,
                          ripple: bool = True, model: str = "small",
@@ -979,7 +1019,7 @@ async def tighten_speech(clip: str, min_silence: float = 0.5, pad: float = 0.12,
                       tuple(extra_fillers or ()), ripple, model, language)
 
 
-@mcp.tool()
+@_strumento()
 async def censor_speech(clip: str, words: list[str] | None = None,
                         mode: str = "mute", pad: float = 0.08,
                         model: str = "small", language: str | None = None,
@@ -1015,7 +1055,7 @@ async def censor_speech(clip: str, words: list[str] | None = None,
 # --------------------------------------------------------------------------
 
 
-@mcp.tool()
+@_strumento()
 async def preview_frame(t: float | None = None, width: int = 640, path: str | None = None,
                         time: float | None = None, project: str | None = None) -> Image:
     """Renderizza il fotogramma della timeline al tempo ``t`` e lo restituisce.
@@ -1036,7 +1076,7 @@ async def preview_frame(t: float | None = None, width: int = 640, path: str | No
     return Image(path=p)
 
 
-@mcp.tool()
+@_strumento()
 async def detect_subjects(clip: str | None = None, path: str | None = None,
                           classes: list[str] | None = None, fps: float = 2.0,
                           conf: float = 0.35, project: str | None = None) -> dict:
@@ -1056,7 +1096,7 @@ async def detect_subjects(clip: str | None = None, path: str | None = None,
                         for p in res["traccia"]]}
 
 
-@mcp.tool()
+@_strumento()
 async def auto_reframe(clip: str, classes: list[str] | None = None, fps: float = 2.0,
                        apply: bool = True, project: str | None = None) -> dict:
     """Tiene il soggetto al centro quando cambia il formato (16:9 -> 9:16).
@@ -1083,7 +1123,7 @@ async def auto_reframe(clip: str, classes: list[str] | None = None, fps: float =
                     "controlla con preview_grid" if res["copertura"] < 0.5 else None}
 
 
-@mcp.tool()
+@_strumento()
 async def track_mask(clip: str, kind: str = "mask_blur", padding: float = 1.25,
                      classes: list[str] | None = None, fps: float = 2.0,
                      project: str | None = None) -> dict:
@@ -1104,7 +1144,7 @@ async def track_mask(clip: str, kind: str = "mask_blur", padding: float = 1.25,
             "punti": len(m["x"]["kf"]), "copertura": res["copertura"]}
 
 
-@mcp.tool()
+@_strumento()
 async def preview_grid(count: int = 12, width: int = 320, cols: int = 4,
                        start: float | None = None, end: float | None = None,
                        path: str | None = None, project: str | None = None) -> Image:
@@ -1120,7 +1160,7 @@ async def preview_grid(count: int = 12, width: int = 320, cols: int = 4,
     return Image(path=res["file"])
 
 
-@mcp.tool()
+@_strumento()
 async def audio_waveform(start: float | None = None, end: float | None = None,
                          points: int = 120, project: str | None = None) -> dict:
     """Picchi audio del mix renderizzato in un intervallo, piu' i livelli.
@@ -1132,7 +1172,7 @@ async def audio_waveform(start: float | None = None, end: float | None = None,
     return await _off(review.waveform, _store(project).project, start, end, points)
 
 
-@mcp.tool()
+@_strumento()
 async def check_cuts(clip: str, model: str = "small", language: str | None = None,
                      project: str | None = None) -> dict:
     """Controlla che i bordi della clip non taglino a meta' una parola.
@@ -1143,7 +1183,7 @@ async def check_cuts(clip: str, model: str = "small", language: str | None = Non
     return await _off(review.cuts_on_speech, _store(project), clip, model, language)
 
 
-@mcp.tool()
+@_strumento()
 def marker(t: float, note: str = "", kind: str = "nota", duration: float = 0.0,
            project: str | None = None) -> dict:
     """Ancora una nota a un istante della timeline.
@@ -1155,20 +1195,20 @@ def marker(t: float, note: str = "", kind: str = "nota", duration: float = 0.0,
     return versions.add_marker(_store(project), t, note, kind, duration)
 
 
-@mcp.tool()
+@_strumento()
 def markers(kind: str | None = None, start: float | None = None,
             end: float | None = None, project: str | None = None) -> list[dict]:
     """I marker del progetto, filtrabili per tipo e per tratto."""
     return versions.markers(_store(project), kind, start, end)
 
 
-@mcp.tool()
+@_strumento()
 def remove_marker(marker_id: str, project: str | None = None) -> dict:
     """Toglie un marker."""
     return versions.remove_marker(_store(project), marker_id)
 
 
-@mcp.tool()
+@_strumento()
 def snapshot(name: str, note: str = "", project: str | None = None) -> dict:
     """Salva una versione nominata del montaggio, senza toccare quello corrente.
 
@@ -1178,19 +1218,19 @@ def snapshot(name: str, note: str = "", project: str | None = None) -> dict:
     return versions.snapshot(_store(project), name, note)
 
 
-@mcp.tool()
+@_strumento()
 def snapshots(project: str | None = None) -> list[dict]:
     """Le versioni salvate, dalla piu' recente."""
     return versions.snapshots(_store(project))
 
 
-@mcp.tool()
+@_strumento()
 def restore_snapshot(name: str, project: str | None = None) -> dict:
     """Riporta il progetto a una versione salvata. Si annulla con undo."""
     return versions.restore(_store(project), name)
 
 
-@mcp.tool()
+@_strumento()
 def compare_versions(a: str, b: str | None = None,
                      project: str | None = None) -> dict:
     """Cosa cambia tra due versioni (o tra una versione e il montaggio corrente).
@@ -1201,7 +1241,7 @@ def compare_versions(a: str, b: str | None = None,
     return versions.compare(_store(project), a, b)
 
 
-@mcp.tool()
+@_strumento()
 async def preview_clip(start: float | None = None, end: float | None = None,
                        height: int = 360, max_seconds: float = 30.0,
                        output: str | None = None, project: str | None = None) -> dict:
@@ -1215,7 +1255,7 @@ async def preview_clip(start: float | None = None, end: float | None = None,
                       start, end, height, max_seconds)
 
 
-@mcp.tool()
+@_strumento()
 async def color_scopes(t: float, project: str | None = None) -> dict:
     """Misure del colore su un fotogramma: esposizione, clipping, dominante.
 
@@ -1226,7 +1266,7 @@ async def color_scopes(t: float, project: str | None = None) -> dict:
     return await _off(review.scopes, _store(project).project, t)
 
 
-@mcp.tool()
+@_strumento()
 def insert_clip(media: str, at: float, track: str | None = None,
                 duration: float | None = None, in_point: float = 0.0,
                 project: str | None = None) -> dict:
@@ -1238,7 +1278,7 @@ def insert_clip(media: str, at: float, track: str | None = None,
     return ops.insert_clip(_store(project), media, at, track, duration, in_point)
 
 
-@mcp.tool()
+@_strumento()
 def smooth_cuts(track: str | None = None, duration: float = 0.06,
                 project: str | None = None) -> dict:
     """Micro-dissolvenza audio su ogni giunzione tra clip.
@@ -1250,7 +1290,7 @@ def smooth_cuts(track: str | None = None, duration: float = 0.06,
     return ops.smooth_cuts(_store(project), track, duration)
 
 
-@mcp.tool()
+@_strumento()
 async def duck_music(music: str, voice: str, amount_db: float = -12.0,
                      attack: float = 0.25, release: float = 0.6,
                      project: str | None = None) -> dict:
@@ -1264,7 +1304,7 @@ async def duck_music(music: str, voice: str, amount_db: float = -12.0,
                       amount_db, attack, release)
 
 
-@mcp.tool()
+@_strumento()
 def detach_audio(clip: str, track: str | None = None,
                  project: str | None = None) -> dict:
     """Porta l'audio della clip su una traccia separata e muta l'originale.
@@ -1274,7 +1314,7 @@ def detach_audio(clip: str, track: str | None = None,
     return ops.detach_audio(_store(project), clip, track)
 
 
-@mcp.tool()
+@_strumento()
 def jl_cut(clip: str, seconds: float = 0.5, kind: str = "J",
            project: str | None = None) -> dict:
     """J cut: l'audio entra prima dell'immagine. L cut: continua dopo lo stacco.
@@ -1286,7 +1326,7 @@ def jl_cut(clip: str, seconds: float = 0.5, kind: str = "J",
     return ops.jl_cut(_store(project), clip, seconds, kind)
 
 
-@mcp.tool()
+@_strumento()
 async def verify_edit(start: float | None = None, end: float | None = None,
                       height: int = 270, project: str | None = None) -> dict:
     """Renderizza davvero un tratto e verifica che sia quello che la timeline dice.
@@ -1298,7 +1338,7 @@ async def verify_edit(start: float | None = None, end: float | None = None,
     return await _off(review.verify, _store(project).project, start, end, height)
 
 
-@mcp.tool()
+@_strumento()
 async def render_video(output: str, quality: str = "high", codec: str = "h264",
                        start: float | None = None, end: float | None = None,
                        preview: bool = False, bitrate: str | None = None,
@@ -1331,7 +1371,7 @@ async def render_video(output: str, quality: str = "high", codec: str = "h264",
             "encoder": res.encoder, "mb": round(res.size / 1e6, 2), "avvisi": res.warnings}
 
 
-@mcp.tool()
+@_strumento()
 async def ask_user(domande: list[dict]) -> dict:
     """Fa all'utente da 1 a 4 domande con opzioni cliccabili, nell'editor, e aspetta.
 
@@ -1352,7 +1392,7 @@ async def ask_user(domande: list[dict]) -> dict:
     return await _off(api.chiedi, norm)
 
 
-@mcp.tool()
+@_strumento()
 async def open_ui(port: int = 8760, open_browser: bool = True,
                   project: str | None = None) -> dict:
     """Apre l'interfaccia web sul progetto corrente e restituisce l'indirizzo.
@@ -1376,7 +1416,7 @@ async def open_ui(port: int = 8760, open_browser: bool = True,
     return esito
 
 
-@mcp.tool()
+@_strumento()
 def close_ui() -> dict:
     """Chiude l'interfaccia web avviata con open_ui."""
     api = sys.modules.get("vedit.api")
@@ -1385,7 +1425,7 @@ def close_ui() -> dict:
     return {"chiusa": api.stop_background()}
 
 
-@mcp.tool()
+@_strumento()
 async def install_ffmpeg(force: bool = False) -> dict:
     """Scarica ffmpeg e ffprobe nella cache di vedit, se il sistema non li ha.
 
@@ -1401,7 +1441,7 @@ async def install_ffmpeg(force: bool = False) -> dict:
     return esito
 
 
-@mcp.tool()
+@_strumento()
 async def system_info() -> dict:
     """Versione di ffmpeg, encoder hardware disponibili, cartella di cache."""
     info = await _off(hw.detect)
@@ -1413,7 +1453,7 @@ async def system_info() -> dict:
             "interfaccia": (api.background_info() if api else None)}
 
 
-@mcp.tool()
+@_strumento()
 async def clear_cache(kind: str | None = None) -> dict:
     """Svuota la cache di proxy/miniature/stabilizzazione."""
     freed = await _off(proxy.clear, kind)

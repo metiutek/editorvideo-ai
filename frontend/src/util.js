@@ -199,5 +199,5 @@ export function natura(clip, project) {
   const media = clip.type === 'media'
     ? (project?.media || []).find((m) => m.id === clip.media) : null
   if (kind === 'audio') return { video: false, audio: true }
-  return { video: true, audio: !!media?.has_audio }
+  return { video: true, audio: !!media?.audio }
 }
