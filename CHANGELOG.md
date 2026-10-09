@@ -2,7 +2,7 @@
 
 Le voci più recenti stanno in cima.
 
-## Non ancora rilasciato · UX: effetti, titoli, davanti/dietro, stili personali
+## v0.1.2 — 2026-10-09 · UX: effetti, titoli, davanti/dietro, stili personali
 
 ### Correzioni
 - **Gli effetti (video e audio) non si applicavano al clic** nel pannello proprietà. Il

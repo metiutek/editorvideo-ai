@@ -5,7 +5,7 @@
 # che si incolla nella configurazione di qualunque client. Il modulo Python
 # importabile resta `vedit`.
 name = "vedit-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "Non-linear video editor an AI agent can actually drive (MCP), with a web UI. Timeline -> ffmpeg."
 readme = "README.md"
 requires-python = ">=3.10"
