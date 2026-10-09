@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo/logo.png" alt="vedit logo" width="120"/></p>
+<p align="center"><img src="https://raw.githubusercontent.com/metiutek/editorvideo-ai/main/docs/logo/logo.png" alt="vedit logo" width="120"/></p>
 
 <h1 align="center">vedit — tell an AI to edit your video, and watch it happen</h1>
 
@@ -11,16 +11,16 @@
   <a href="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml"><img src="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/v/vedit-mcp.svg?style=flat-square" alt="PyPI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/pyversions/vedit-mcp.svg?style=flat-square" alt="Python versions"/></a>
-  <img src="https://img.shields.io/badge/AI%20tools-77-blueviolet?style=flat-square" alt="77 AI tools"/>
+  <img src="https://img.shields.io/badge/AI%20tools-83-blueviolet?style=flat-square" alt="83 AI tools"/>
   <img src="https://img.shields.io/badge/runs-100%25%20local-brightgreen?style=flat-square" alt="Runs locally"/>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"/>
 </p>
 
 <p align="center">
-  <img src="docs/vedit-promo.gif" alt="vedit promo — you say what you want, the agent edits the timeline, checks its own work, and you stay in control with Ctrl+Z" width="820"/>
+  <img src="https://raw.githubusercontent.com/metiutek/editorvideo-ai/main/docs/vedit-promo.gif" alt="vedit promo — you say what you want, the agent edits the timeline, checks its own work, and you stay in control with Ctrl+Z" width="820"/>
 </p>
 
-> 🇮🇹 Italiano: [README.it.md](README.it.md)
+> 🇮🇹 Italiano: [README.it.md](https://github.com/metiutek/editorvideo-ai/blob/main/README.it.md)
 
 ## Install — 3 steps
 
@@ -61,7 +61,7 @@ vedit is a video editor. The ordinary kind: a timeline, video and audio tracks, 
 drag, cut, speed up, colour-grade and fade into each other.
 
 The difference is that **everything you can do with the mouse, an AI can also do on command** —
-because the buttons and the AI call the exact same 77 operations. Nothing is AI-only, nothing
+because the buttons and the AI call the exact same 83 operations. Nothing is AI-only, nothing
 is mouse-only.
 
 So instead of half an hour of trimming, you type:
@@ -103,7 +103,7 @@ difference between a demo and something you would actually cut a video with:
 
 | | |
 |---|---|
-| **An agent can actually edit** | 77 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
+| **An agent can actually edit** | 83 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
 | **The agent can see what it did** | `preview_frame` returns the **real rendered frame**, `preview_grid` the whole edit as a contact sheet. An agent that guesses produces garbage; this one looks. |
 | **It cuts on the beat, for real** | `music_beats` returns BPM, beat and bar length, first-beat offset and an energy profile, so cuts land on the music instead of near it. |
 | **It picks the takes** | `plan_edit` splits shots longer than 12s into their own segments and scores them individually — three minutes of continuous footage becomes dozens of candidates with a real in-point. |
@@ -297,7 +297,7 @@ here — decisions not made, not tool limits:
    ten half-seconds.
 
 Full agent contract, including the code map and the rules for modifying it:
-[`AGENTS.md`](AGENTS.md) (imported by `CLAUDE.md`, so it applies to Claude Code, Codex, Cursor
+[`AGENTS.md`](https://github.com/metiutek/editorvideo-ai/blob/main/AGENTS.md) (imported by `CLAUDE.md`, so it applies to Claude Code, Codex, Cursor
 and the rest).
 
 > **One project per file at a time.** The UI and the MCP server both autosave; if you keep the
@@ -625,9 +625,9 @@ one of three front ends, not a requirement.
 
 ## Contributing
 
-Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). In short:
+Issues and pull requests are welcome — see [CONTRIBUTING.md](https://github.com/metiutek/editorvideo-ai/blob/main/CONTRIBUTING.md). In short:
 
-- read [`AGENTS.md`](AGENTS.md) — it is the contract for humans and coding agents alike;
+- read [`AGENTS.md`](https://github.com/metiutek/editorvideo-ai/blob/main/AGENTS.md) — it is the contract for humans and coding agents alike;
 - code, comments and user-facing messages are **in Italian**, like the rest of the project
   (this README and the docs are the English front door);
 - every new behaviour comes with a test; real renders go behind the `slow` marker;
@@ -643,4 +643,4 @@ and Pillow.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/metiutek/editorvideo-ai/blob/main/LICENSE).

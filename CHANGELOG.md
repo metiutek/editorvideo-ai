@@ -2,6 +2,22 @@
 
 Le voci più recenti stanno in cima.
 
+## Non ancora pubblicato
+
+### Vetrina (GitHub, PyPI, motori di ricerca)
+- **Logo, GIF e link del README rotti sulla pagina PyPI**: il README è anche la descrizione
+  del pacchetto, ma usava percorsi relativi (`docs/logo/logo.png`, `docs/vedit-promo.gif`,
+  `AGENTS.md`, `LICENSE`…) che PyPI non risolve. Ora puntano a `raw.githubusercontent.com` e
+  a `github.com/.../blob/main`: funzionano su GitHub e su PyPI. Si vede su PyPI alla
+  prossima versione.
+- Il conteggio degli strumenti MCP diceva 77, sono 83: corretto in README, README.it e
+  descrizione della repo su GitHub.
+- Parole chiave del pacchetto: aggiunte `ai-video-editor`, `claude-code`, `cursor`, `llm`,
+  `subtitles`, `agentic-ai`.
+- Verificata l'installazione da utente esterno con cache vuota: `uvx vedit-mcp`,
+  `vedit doctor`, `vedit ui` (interfaccia servita dal pacchetto) e un render
+  `new -> import -> add -> render` andato a buon fine.
+
 ## v0.1.0 — 2026-10-08 · prima pubblicazione su PyPI
 
 ### Pubblicazione

@@ -12,7 +12,8 @@ requires-python = ">=3.10"
 keywords = [
     "video", "video-editing", "video-editor", "ffmpeg", "mcp",
     "model-context-protocol", "timeline", "nle", "ai-agent", "claude",
-    "automation", "keyframes",
+    "automation", "keyframes", "ai-video-editor", "claude-code", "cursor",
+    "llm", "subtitles", "agentic-ai",
 ]
 authors = [{ name = "metiu1" }]
 license = { text = "MIT" }
