@@ -27,6 +27,8 @@ const paths = {
 
   // --- riproduzione
   play: <path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none" />,
+  // effetto generico: per quelli che non hanno ancora un glifo loro
+  fx: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4" /><path d="m6 6 2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18" /></>,
   pausa: <><rect x="6.5" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none" /><rect x="13.5" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none" /></>,
   inizio: <><path d="M6 5v14" /><path d="M20 5 9 12l11 7z" fill="currentColor" stroke="none" /></>,
 
@@ -153,8 +155,9 @@ const ALIAS = {
   sala_grande: 'reverb',
 }
 
-export default function Icon({ name, size = 16, className = '', title }) {
-  const d = paths[name] || paths[ALIAS[name]]
+export default function Icon({ name, size = 16, className = '', title, fallback }) {
+  // fallback: in una griglia di riquadri un riquadro senza icona sembra rotto
+  const d = paths[name] || paths[ALIAS[name]] || (fallback && (paths[fallback] || paths[ALIAS[fallback]]))
   if (!d) return null
   return (
     <svg className={`ico ${className}`} width={size} height={size} viewBox="0 0 24 24"

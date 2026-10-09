@@ -62,7 +62,7 @@ FRONTEND = _frontend_dir()
 OPS = {
     "import_media", "set_media", "remove_media", "rename_folder",
     "add_track", "set_track", "set_sidechain", "remove_track", "move_track",
-    "add_clip", "add_text", "add_color", "add_html", "set_html", "remove_clip", "move_clip", "trim_clip",
+    "add_clip", "add_text", "add_color", "add_html", "set_html", "remove_clip", "move_clip", "move_layer", "trim_clip",
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
@@ -995,6 +995,38 @@ def llm_imposta(body: LlmBody) -> dict:
     return {**chat_available(), "mcp": mcp_url()}
 
 
+class StileBody(BaseModel):
+    nome: str
+    guida: str
+    breve: str = ""
+    piano: str = "vlog"
+    id: str | None = None
+
+
+@app.get("/api/stili")
+def stili_elenco() -> dict:
+    return {"stili": stili.descrivi()}
+
+
+@app.post("/api/stili")
+def stili_salva(body: StileBody) -> dict:
+    """Stile di montaggio scritto dall'utente: resta su questo computer (~/.vedit)."""
+    try:
+        nuovo = stili.salva(body.nome, body.guida, body.breve, body.piano, body.id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"stile": nuovo["id"], "stili": stili.descrivi()}
+
+
+@app.delete("/api/stili/{stile_id}")
+def stili_elimina(stile_id: str) -> dict:
+    try:
+        stili.elimina(stile_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"stili": stili.descrivi()}
+
+
 def _cartella_allegati() -> Path:
     import tempfile
 
@@ -1189,9 +1221,25 @@ def _edit_error(_request, exc: EditError):
     return JSONResponse({"detail": str(exc)}, status_code=400)
 
 
+class _Interfaccia(StaticFiles):
+    """File della UI; la pagina d'ingresso non resta mai in cache.
+
+    Gli script compilati hanno l'impronta nel nome e possono restare in cache
+    per sempre, ma index.html no: il browser la teneva e dopo un aggiornamento
+    continuava a caricare l'interfaccia vecchia — le correzioni sembravano non
+    funzionare finche' non si forzava il ricaricamento.
+    """
+
+    async def get_response(self, path, scope):
+        r = await super().get_response(path, scope)
+        if path in ("", ".", "index.html") or r.media_type == "text/html":
+            r.headers["Cache-Control"] = "no-cache"
+        return r
+
+
 def mount_frontend() -> None:
     if FRONTEND.is_dir():
-        app.mount("/", StaticFiles(directory=str(FRONTEND), html=True), name="ui")
+        app.mount("/", _Interfaccia(directory=str(FRONTEND), html=True), name="ui")
     else:
         @app.get("/")
         def _missing() -> dict:

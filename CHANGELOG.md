@@ -2,6 +2,42 @@
 
 Le voci più recenti stanno in cima.
 
+## Non ancora rilasciato · UX: effetti, titoli, davanti/dietro, stili personali
+
+### Correzioni
+- **Gli effetti (video e audio) non si applicavano al clic** nel pannello proprietà. Il
+  catalogo era un componente dichiarato dentro un altro: a ogni ridisegno React buttava via
+  e ricreava tutti i riquadri, e il passaggio del mouse (che accende l'anteprima) bastava
+  perché il riquadro premuto non fosse più quello rilasciato. Ora il clic arriva sempre;
+  l'effetto aggiunto viene portato in vista ed evidenziato, così si vede subito dove
+  regolarlo. Nuovo test `frontend/fxclick.mjs` che ripete il gesto (fallisce sul codice
+  vecchio).
+- **Un titolo aggiunto non si vedeva nel video**: `add_text` (e `add_html`) senza traccia
+  andavano sulla *prima* traccia video, cioè quella in fondo, sotto qualunque ripresa delle
+  tracce sopra. Ora vanno sulla traccia video più in alto (non bloccata).
+- **L'anteprima "diretta" mostrava un ordine dei livelli diverso dal render**: ordinava
+  tutte le clip insieme, così un titolo coperto nel file finale qui si vedeva. Ora impila
+  traccia per traccia come `graph.build_video`.
+- `index.html` servito con `Cache-Control: no-cache`: dopo un aggiornamento il browser
+  teneva l'interfaccia vecchia e le correzioni sembravano non funzionare.
+- Gli effetti senza icona propria hanno un'icona generica invece di un riquadro vuoto.
+
+### Davanti / dietro
+- Le testate delle tracce video dicono quale sta **davanti** e quale **dietro**; le frecce
+  si chiamano "porta avanti" / "manda dietro".
+- Nuovo gruppo *davanti / dietro* nelle proprietà della clip: su che livello sta, quali
+  clip sopra di lei nello stesso momento possono coprirla, e i pulsanti per spostarla.
+- Nuova operazione `Store.move_layer(clip_id, direction)` (`up` / `down` / `top` /
+  `bottom`): se la traccia di arrivo è occupata in quel tratto ne inserisce una nuova lì,
+  così le clip non finiscono sovrapposte. Un solo passo di undo.
+
+### Stili di montaggio personali
+- Nel menu *stile* della chat: **crea il tuo stile** con nome, descrizione e istruzioni
+  libere per l'assistente (arrivano al modello a ogni messaggio, come un prompt di sistema)
+  più il ritmo di base per `plan_edit`. Si modificano ed eliminano dallo stesso menu.
+- Salvati in `~/.vedit/stili.json`, accanto a `llm.json`: sono una preferenza di chi
+  monta, non del progetto. API: `GET/POST /api/stili`, `DELETE /api/stili/{id}`.
+
 ## v0.1.1 — 2026-10-09 · README leggibile su PyPI
 
 ### Vetrina (GitHub, PyPI, motori di ricerca)

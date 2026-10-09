@@ -130,6 +130,15 @@ export const api = {
       body: JSON.stringify({ risposte }),
     }),
 
+  // stili di montaggio scritti dall'utente (restano su questo computer)
+  salvaStile: (body) =>
+    req('/api/stili', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  eliminaStile: (id) => req(`/api/stili/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
   // modello dell'assistente: quale usare e con che chiave (resta su questo computer)
   llm: () => req('/api/llm'),
   setLlm: (body) =>

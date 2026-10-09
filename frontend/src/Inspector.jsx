@@ -91,6 +91,8 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
           onChange={(v) => call('set_fades', { clip_id: clip.id, fade_out: v })} /></Row>
       </div>
 
+      <Livello clip={clip} project={project} call={call} />
+
       <TransitionPanel clip={clip} transitions={transitions} project={project} call={call} />
 
       <div className="group">
@@ -143,6 +145,58 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
       <Effects target={clip.id} list={clip.effects || []} effects={effects}
         clipTime={clipTime} call={call} onProva={onProva} ha={ha} />
     </>
+  )
+}
+
+/**
+ * Davanti o dietro: su quale traccia sta la clip e chi la copre.
+ *
+ * L'ordine di sovrapposizione e' quello delle tracce video (la piu' in alto in
+ * timeline copre le altre), ma dalla clip non si capiva: si aggiungeva un
+ * titolo, finiva sotto una ripresa e semplicemente non si vedeva. Qui lo si
+ * dice in chiaro e lo si cambia con un clic.
+ */
+function Livello({ clip, project, call }) {
+  const video = (project?.tracks || []).filter((t) => t.kind === 'video')
+  const i = video.findIndex((t) => t.clips.some((c) => c.id === clip.id))
+  if (i < 0) return null
+  const fine = clip.start + clip.duration
+  // chi sta sopra nello stesso tratto di tempo: e' quello che la puo' coprire
+  const sopra = video.slice(i + 1).filter((t) => !t.hidden).flatMap((t) => t.clips
+    // un testo non riempie l'inquadratura: non e' lui che la nasconde
+    .filter((c) => c.enabled !== false && c.type !== 'text'
+      && c.start < fine - 1e-3 && c.start + c.duration > clip.start + 1e-3)
+    .map((c) => `${c.name || c.type} (${t.name || t.id})`))
+  const muovi = (direction) => call('move_layer', { clip_id: clip.id, direction })
+  const dove = video.length === 1 ? 'unica traccia video'
+    : i === video.length - 1 ? 'davanti a tutto' : i === 0 ? 'in fondo, dietro a tutto' : `livello ${i + 1} di ${video.length}`
+  return (
+    <div className="group">
+      <h4>davanti / dietro</h4>
+      <div className="livello">
+        <div className="pila" title="Le tracce video: in alto quella davanti">
+          {video.map((t, k) => <i key={t.id} className={k === i ? 'qui' : ''} />)}
+        </div>
+        <div className="dove">
+          <b>{video[i].name || video[i].id}</b> · {dove}
+          {sopra.length > 0 && (
+            <div className="hint coperta">
+              sopra, nello stesso momento: {sopra.slice(0, 3).join(', ')}{sopra.length > 3 ? '…' : ''}
+              {' '}— se riempiono l'inquadratura questa clip non si vede
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="livello-azioni">
+        <button onClick={() => muovi('up')} title="Sposta la clip sulla traccia sopra (ne crea una se serve)">
+          <Icon name="su" size={13} />porta avanti</button>
+        <button disabled={i === 0} onClick={() => muovi('down')} title="Sposta la clip sulla traccia sotto">
+          <Icon name="giu" size={13} />manda dietro</button>
+      </div>
+      {sopra.length > 0 && (
+        <button className="ghost" onClick={() => muovi('top')}>porta davanti a tutto</button>
+      )}
+    </div>
   )
 }
 
@@ -297,46 +351,71 @@ function HtmlPanel({ clip, call }) {
   )
 }
 
-function Effects({ target, list, effects, clipTime, call, onProva, ha = { video: true, audio: true } }) {
-  const byName = Object.fromEntries(effects.map((e) => [e.name, e]))
-  const args = (extra) => (target ? { clip_id: target, ...extra } : { clip_id: null, ...extra })
-
-  /**
-   * Il catalogo: un riquadro per effetto, con l'icona.
-   *
-   * Col mouse sopra, il monitor mostra come verrebbe senza applicarlo — il
-   * fotogramma lo rende il server su una copia del progetto, quindi non c'e'
-   * niente da annullare se poi non lo si vuole. Gli effetti audio non cambiano
-   * un fotogramma fermo: per quelli non si prova niente e si dice perche'.
-   */
-  const Catalogo = ({ kind }) => (
+/**
+ * Il catalogo: un riquadro per effetto, con l'icona.
+ *
+ * Sta fuori da ``Effects`` di proposito. Dichiarato dentro, era un componente
+ * nuovo a ogni render: React smontava e rimontava tutti i pulsanti, e bastava
+ * il passaggio del mouse (che accende l'anteprima e quindi ridisegna) perche'
+ * il pulsante premuto non fosse piu' quello rilasciato. Il clic non arrivava
+ * mai e l'effetto non si applicava.
+ *
+ * Col mouse sopra, il monitor mostra come verrebbe senza applicarlo — il
+ * fotogramma lo rende il server su una copia del progetto, quindi non c'e'
+ * niente da annullare se poi non lo si vuole. Gli effetti audio non cambiano
+ * un fotogramma fermo: per quelli non si prova niente.
+ */
+function Catalogo({ kind, effects, onProva, onAdd }) {
+  const prova = (e) => kind === 'video' && onProva?.(e ? { effect: e.name, label: e.label } : null)
+  return (
     <div className="fxgrid">
       {effects.filter((e) => e.kind === kind).map((e) => (
         <button
           key={e.name} className="fxcard"
           title={`${e.label}${e.desc ? ` — ${e.desc}` : ''}`
-            + (kind === 'video' ? '\nPassa sopra per vedere l\'anteprima.' : '')}
-          onMouseEnter={() => kind === 'video' && onProva?.({ effect: e.name, label: e.label })}
-          onMouseLeave={() => kind === 'video' && onProva?.(null)}
-          onFocus={() => kind === 'video' && onProva?.({ effect: e.name, label: e.label })}
-          onBlur={() => kind === 'video' && onProva?.(null)}
-          onClick={() => { onProva?.(null); call('add_effect', args({ effect: e.name })) }}
+            + (kind === 'video' ? '\nPassa sopra per vedere l\'anteprima, clic per applicarlo.' : '\nClic per applicarlo.')}
+          onMouseEnter={() => prova(e)}
+          onMouseLeave={() => prova(null)}
+          onFocus={() => prova(e)}
+          onBlur={() => prova(null)}
+          onClick={() => { prova(null); onAdd(e) }}
         >
-          <Icon name={e.name} size={20} />
+          <Icon name={e.name} fallback={kind === 'audio' ? 'audio' : 'fx'} size={20} />
           <span>{e.label}</span>
         </button>
       ))}
     </div>
   )
+}
+
+function Effects({ target, list, effects, clipTime, call, onProva, ha = { video: true, audio: true } }) {
+  const byName = Object.fromEntries(effects.map((e) => [e.name, e]))
+  const args = (extra) => (target ? { clip_id: target, ...extra } : { clip_id: null, ...extra })
+  // l'effetto appena aggiunto: si porta in vista e si evidenzia, altrimenti
+  // compare piu' in alto, fuori schermo, e sembra che il clic non abbia fatto niente
+  const [nuovo, setNuovo] = useState(null)
+  const refs = useRef(new Map())
+  useEffect(() => {
+    if (nuovo == null) return
+    refs.current.get(nuovo)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    const t = setTimeout(() => setNuovo(null), 1600)
+    return () => clearTimeout(t)
+  }, [nuovo, list.length])
+  const aggiungi = (e) => {
+    const indice = list.length
+    call('add_effect', args({ effect: e.name })).then((r) => { if (r !== undefined) setNuovo(indice) })
+  }
 
   return (
     <div className="group">
-      <h4>effetti</h4>
+      <h4>effetti {list.length > 0 && <span className="hint">· {list.length} applicat{list.length === 1 ? 'o' : 'i'}, in ordine di catena</span>}</h4>
+      {!list.length && <div className="hint">Nessun effetto. Scegline uno qui sotto: comparira' qui con i suoi parametri.</div>}
       {list.map((e) => {
         const spec = byName[e.type]
         if (!spec) return null
         return (
-          <div className="effect" key={e.i}>
+          <div className={`effect ${nuovo === e.i ? 'appena' : ''}`} key={e.i}
+            ref={(el) => { if (el) refs.current.set(e.i, el); else refs.current.delete(e.i) }}>
             <header>
               <Check value={e.enabled !== false} title="Attiva o disattiva l'effetto"
                 onChange={(v) => call('update_effect', args({ index: e.i, enabled: v }))} />
@@ -372,12 +451,12 @@ function Effects({ target, list, effects, clipTime, call, onProva, ha = { video:
       {/* solo gli effetti che la clip puo' usare: un colore su una clip audio
           non cambierebbe niente, un compressore su un testo nemmeno */}
       {ha.video && (<>
-        <div className="hint fxnota">video — passa sopra per vedere l'anteprima</div>
-        <Catalogo kind="video" />
+        <div className="hint fxnota">immagine — passa sopra per l'anteprima, clic per applicare</div>
+        <Catalogo kind="video" effects={effects} onProva={onProva} onAdd={aggiungi} />
       </>)}
       {ha.audio && (<>
-        <div className="hint fxnota">audio</div>
-        <Catalogo kind="audio" />
+        <div className="hint fxnota">suono — clic per applicare, si sente in riproduzione</div>
+        <Catalogo kind="audio" effects={effects} onProva={onProva} onAdd={aggiungi} />
       </>)}
     </div>
   )

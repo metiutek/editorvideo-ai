@@ -492,6 +492,7 @@ export default function App() {
                 onProject={applyState} project={project} playhead={playhead} seek={seek}
                 selected={selected} refs={refs} setRefs={setRefs}
                 stili={sys?.stili || []} domanda={domanda}
+                onStili={(l) => setSys((x) => (x ? { ...x, stili: l } : x))}
                 onRisposta={(risposte) => {
                   const d = domanda
                   setDomanda(null)

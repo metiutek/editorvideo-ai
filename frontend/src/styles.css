@@ -534,6 +534,28 @@ input[type=range]::-moz-range-thumb {
 }
 .effect header { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
 .effect header b { font-weight: 600; }
+/* effetto appena aggiunto: si vede dove e' finito */
+.effect.appena { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); transition: box-shadow .4s; }
+
+/* livello della clip: davanti / dietro */
+.livello { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.livello .pila { display: flex; flex-direction: column-reverse; gap: 2px; flex: none; }
+.livello .pila i {
+  display: block; width: 34px; height: 6px; border-radius: 2px;
+  background: var(--line); opacity: .8;
+}
+.livello .pila i.qui { background: var(--accent); opacity: 1; }
+.livello-azioni { display: flex; gap: 6px; margin: 8px 0 4px; }
+.livello-azioni button { flex: 1; }
+.livello .dove { flex: 1; min-width: 120px; font-size: 12px; }
+.coperta { color: var(--warn); }
+
+/* testata della traccia: quale copre quale */
+.track-head .strato {
+  font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--faint); flex: none; margin-left: 3px;
+}
+.track-head .strato.davanti { color: var(--accent); }
 
 /* ---------------------------------------------------------------- libreria */
 .libgroup {
@@ -994,6 +1016,14 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 /* voci del menu stili: titolo e descrizione su due righe vere */
 .stilevoce { padding: 8px 12px; gap: 2px; line-height: 1.3; min-height: 44px; flex: none; }
 .stilevoce b, .stilevoce span { display: block; }
+.stiligruppo { padding: 6px 2px 0; }
+.stilemio { display: flex; gap: 4px; align-items: center; }
+.stilemio .stilevoce { flex: 1; min-width: 0; }
+.stilenuovo { justify-content: flex-start; color: var(--grape); flex: none; }
+.editorstile { display: flex; flex-direction: column; gap: 8px; }
+.editorstile label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--dim); }
+.editorstile textarea { resize: vertical; min-height: 120px; font-size: 12px; line-height: 1.45; }
+.editorstile-azioni { display: flex; gap: 6px; align-items: center; }
 .msg.assistant { white-space: pre-wrap; }
 
 /* il logo: nella barra prende il posto del pallino, nella prima schermata saluta */
@@ -1037,3 +1067,5 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .pvalore { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 /* sidechain */
 .scattivo { display: flex; align-items: center; gap: 6px; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+/* mentre si scrive uno stile il menu si allarga: le istruzioni vanno lette per intero */
+.stilimenu:has(.editorstile) { max-height: 85%; }

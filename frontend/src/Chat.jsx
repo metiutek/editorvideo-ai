@@ -57,7 +57,7 @@ const URL_SOLO = /^https?:\/\/\S+$/i
  */
 export default function Chat({
   available, onAvailable, onProject, setError, project, playhead, seek, selected,
-  refs, setRefs, pickArea, setPickArea, stili = [], domanda, onRisposta,
+  refs, setRefs, pickArea, setPickArea, stili = [], onStili, domanda, onRisposta,
 }) {
   const [turns, setTurns] = useState([])   // {role, text, tools:[], refs}
   const [input, setInput] = useState('')
@@ -72,6 +72,7 @@ export default function Chat({
     try { localStorage.setItem('vedit.stile', v) } catch { /* senza storage resta per questa sessione */ }
   }
   const [menuStili, setMenuStili] = useState(false)
+  const [editStile, setEditStile] = useState(null)   // stile personale in scrittura
   const [tratto, setTratto] = useState(null)   // inizio di un tratto in costruzione
   const [caricando, setCaricando] = useState(0)  // allegati in arrivo
   const [sopra, setSopra] = useState(false)      // file trascinati sopra la chat
@@ -230,17 +231,44 @@ export default function Chat({
 
       {menuStili && (
         <div className="stilimenu">
-          <div className="hint">Lo stile guida l'assistente in ogni scelta: ritmo, transizioni, colore, testi.</div>
-          <button className={`stilevoce ${!stile ? 'on' : ''}`}
-            onClick={() => { setStile(''); setMenuStili(false) }}>
-            <b>Nessuno</b><span>decide l'assistente caso per caso</span>
-          </button>
-          {stili.map((s) => (
-            <button key={s.id} className={`stilevoce ${stile === s.id ? 'on' : ''}`}
-              onClick={() => { setStile(s.id); setMenuStili(false) }}>
-              <b>{s.nome}</b><span>{s.breve}</span>
+          {editStile ? (
+            <EditorStile stile={editStile} setError={setError}
+              onClose={() => setEditStile(null)}
+              onSalvato={(r) => { onStili?.(r.stili); if (r.stile) setStile(r.stile); setEditStile(null) }}
+              onEliminato={(r, id) => {
+                onStili?.(r.stili)
+                if (stile === id) setStile('')
+                setEditStile(null)
+              }} />
+          ) : (<>
+            <div className="hint">Lo stile guida l'assistente in ogni scelta: ritmo, transizioni, colore, testi.</div>
+            <button className={`stilevoce ${!stile ? 'on' : ''}`}
+              onClick={() => { setStile(''); setMenuStili(false) }}>
+              <b>Nessuno</b><span>decide l'assistente caso per caso</span>
             </button>
-          ))}
+            {stili.filter((s) => !s.personale).map((s) => (
+              <button key={s.id} className={`stilevoce ${stile === s.id ? 'on' : ''}`}
+                onClick={() => { setStile(s.id); setMenuStili(false) }}>
+                <b>{s.nome}</b><span>{s.breve}</span>
+              </button>
+            ))}
+            <div className="libgroup stiligruppo">i tuoi stili</div>
+            {stili.filter((s) => s.personale).map((s) => (
+              <div key={s.id} className="stilemio">
+                <button className={`stilevoce ${stile === s.id ? 'on' : ''}`}
+                  onClick={() => { setStile(s.id); setMenuStili(false) }}>
+                  <b>{s.nome}</b><span>{s.breve}</span>
+                </button>
+                <button className="icon sm" title="Modifica lo stile" onClick={() => setEditStile(s)}>
+                  <Icon name="ingranaggio" size={14} />
+                </button>
+              </div>
+            ))}
+            <button className="ghost stilenuovo"
+              onClick={() => setEditStile({ nome: '', breve: '', guida: '', piano: 'vlog' })}>
+              <Icon name="piu" size={14} />crea il tuo stile
+            </button>
+          </>)}
         </div>
       )}
 
@@ -588,6 +616,61 @@ function ModelSettings({ available, setError, onSaved }) {
           <div className="hint">Le chiavi restano su questo computer (~/.vedit/llm.json), mai nel progetto.</div>
         </div>
       )}
+    </div>
+  )
+}
+
+const PIANI = [
+  ['vlog', 'medio — vlog, racconto personale'],
+  ['shortform', 'veloce — social, tagli brevi'],
+  ['documentary', 'calmo — guidato dal parlato'],
+  ['cinematic', 'lento — inquadrature tenute'],
+]
+
+/**
+ * Uno stile scritto dall'utente: e' un'istruzione all'assistente, con parole
+ * sue, che arriva al modello a ogni messaggio come gli stili gia' pronti.
+ * Resta su questo computer (~/.vedit/stili.json), non nel progetto.
+ */
+function EditorStile({ stile, setError, onClose, onSalvato, onEliminato }) {
+  const [f, setF] = useState(stile)
+  const [salvo, setSalvo] = useState(false)
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
+  const salva = async () => {
+    setSalvo(true)
+    try {
+      onSalvato(await api.salvaStile({ id: f.id || null, nome: f.nome, breve: f.breve, guida: f.guida, piano: f.piano }))
+    } catch (e) { setError(e.message) } finally { setSalvo(false) }
+  }
+  return (
+    <div className="editorstile">
+      <b>{f.id ? 'Modifica stile' : 'Nuovo stile'}</b>
+      <label>nome<input value={f.nome} onChange={set('nome')} placeholder="es. Il mio canale" autoFocus /></label>
+      <label>in breve<input value={f.breve} onChange={set('breve')} placeholder="una riga che lo descrive (facoltativa)" /></label>
+      <label>come deve montare l'assistente
+        <textarea rows={8} value={f.guida} onChange={set('guida')}
+          placeholder={'Scrivilo come lo diresti a un montatore. Es.:\n'
+            + 'Apri sempre con la frase piu\' forte. Tagli di 1-2 s, mai dissolvenze. '
+            + 'Sottotitoli gialli grandi in basso. Colore caldo e saturo. '
+            + 'Musica che sale nel finale, chiudi con il logo.'} />
+      </label>
+      <label>ritmo di base
+        <select value={f.piano} onChange={set('piano')}>
+          {PIANI.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </label>
+      <div className="hint">Le istruzioni arrivano all'assistente a ogni messaggio, come un prompt di sistema. Il ritmo di base sceglie quanto durano i tagli quando prepara un montaggio dal girato.</div>
+      <div className="editorstile-azioni">
+        {f.id && (
+          <button className="ghost danger" onClick={() => api.eliminaStile(f.id)
+            .then((r) => onEliminato(r, f.id)).catch((e) => setError(e.message))}>
+            <Icon name="cestino" size={13} />elimina</button>
+        )}
+        <span className="spacer" />
+        <button className="ghost" onClick={onClose}>annulla</button>
+        <button className="primary" disabled={salvo || !f.nome.trim() || !f.guida.trim()} onClick={salva}>
+          salva e usa</button>
+      </div>
     </div>
   )
 }

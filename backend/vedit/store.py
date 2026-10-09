@@ -473,7 +473,7 @@ class Store:
             setattr(st, k, v)
         if float(duration) <= 0:
             raise EditError("la durata deve essere > 0")
-        track = self.track_for_edit(track_id or self._default_track("video"))
+        track = self.track_for_edit(track_id or self._traccia_in_cima())
         self._touch()
         c = Clip(type="text", start=float(start), duration=float(duration), text=st,
                  name=(text[:24] or "testo"))
@@ -532,7 +532,7 @@ class Store:
             cartella = str(Path(base).resolve())
         if float(duration) <= 0:
             raise EditError("la durata deve essere > 0")
-        track = self.track_for_edit(track_id or self._default_track("video"))
+        track = self.track_for_edit(track_id or self._traccia_in_cima())
         if track.kind != "video":
             raise EditError("una clip html va su una traccia video")
         self._touch()
@@ -563,6 +563,16 @@ class Store:
             clip.html_base = str(Path(base).resolve()) if base else None
         self._done()
         return clip
+
+    def _traccia_in_cima(self) -> str:
+        """Traccia video piu' in alto: dove va un titolo senza traccia indicata.
+
+        Sulla prima traccia (quella in fondo) un titolo finiva sotto qualunque
+        ripresa delle tracce sopra e nel file non si vedeva. In cima si vede
+        sempre: dentro una traccia testi e grafica stanno gia' sopra i media.
+        """
+        libere = [t for t in self.project.video_tracks() if not t.locked]
+        return libere[-1].id if libere else self._default_track("video")
 
     def _default_track(self, kind: str) -> str:
         t = next((t for t in self.project.tracks if t.kind == kind), None)
@@ -600,6 +610,53 @@ class Store:
         track.clips.sort(key=lambda x: x.start)
         self._done()
         return clip
+
+    def move_layer(self, clip_id: str, direction: str = "up") -> Clip:
+        """Porta una clip davanti o dietro: la sposta su un'altra traccia video.
+
+        ``direction``: up (un livello avanti), down (uno indietro), top (davanti
+        a tutto), bottom (dietro a tutto). Chi copre chi lo decide l'ordine
+        delle tracce, quindi "porta avanti" vuol dire cambiare traccia.
+
+        La traccia di arrivo deve essere libera in quel tratto di tempo: due
+        clip sovrapposte sulla stessa traccia si nascondono a vicenda in
+        timeline e l'ordine fra loro non e' quello che ci si aspetta. Se non lo
+        e', si inserisce una traccia nuova proprio li'. Un solo passo di undo.
+        """
+        if direction not in ("up", "down", "top", "bottom"):
+            raise EditError("direction deve essere up, down, top o bottom")
+        track, clip = self.clip_for_edit(clip_id)
+        if track.kind != "video":
+            raise EditError("le clip audio non hanno un davanti e un dietro")
+        video = self.project.video_tracks()
+        i = video.index(track)
+        if direction in ("down", "bottom") and i == 0:
+            raise EditError("la clip e' gia' sulla traccia piu' in fondo")
+
+        def libera(t: Track) -> bool:
+            return not t.locked and all(
+                c.end <= clip.start + 1e-6 or c.start >= clip.end - 1e-6
+                for c in t.clips if c is not clip)
+
+        dst: Track | None = None
+        if direction == "up" and i + 1 < len(video) and libera(video[i + 1]):
+            dst = video[i + 1]
+        elif direction == "down" and libera(video[i - 1]):
+            dst = video[i - 1]
+        elif direction == "top" and i < len(video) - 1 and libera(video[-1]):
+            dst = video[-1]
+        elif direction == "bottom" and libera(video[0]):
+            dst = video[0]
+
+        with self.batch():
+            if dst is None:
+                # posizione nella lista completa (video e audio mescolati)
+                vicino = {"up": track, "down": track,
+                          "top": video[-1], "bottom": video[0]}[direction]
+                dopo = direction in ("up", "top")
+                pos = self.project.tracks.index(vicino) + (1 if dopo else 0)
+                dst = self.add_track("video", index=pos)
+            return self.move_clip(clip_id, track_id=dst.id)
 
     def trim_clip(self, clip_id: str, in_: float | None = None, duration: float | None = None,
                   out: float | None = None) -> Clip:

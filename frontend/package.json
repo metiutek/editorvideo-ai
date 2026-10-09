@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test-util.mjs && node smoke.mjs && node uiaudit.mjs && node clipclick.mjs"
+    "test": "node test-util.mjs && node smoke.mjs && node uiaudit.mjs && node clipclick.mjs && node fxclick.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

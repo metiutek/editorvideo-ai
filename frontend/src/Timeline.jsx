@@ -35,6 +35,7 @@ export default function Timeline({
     const audio = project.tracks.filter((t) => t.kind === 'audio')
     return [...video, ...audio]
   }, [project])
+  const nVideo = lanes.filter((t) => t.kind === 'video').length
 
   /**
    * Sposta una traccia di una posizione in su o in giu' *a schermo*.
@@ -255,10 +256,20 @@ export default function Timeline({
                     <span className="tname" title="Doppio clic per rinominare"
                       onDoubleClick={() => setRenaming(track.id)}>{track.name || track.id}</span>
                   )}
-                  <button className="icon sm" title="Sposta in su"
+                  {track.kind === 'video' && nVideo > 1 && (
+                    // chi copre chi non si indovina dal nome: la traccia in alto
+                    // copre quelle sotto, come i livelli di un programma di grafica
+                    <span className={`strato ${lanes[0]?.id === track.id ? 'davanti' : ''}`}
+                      title="Le tracce video in alto coprono quelle in basso">
+                      {lanes[0]?.id === track.id ? 'davanti' : track.id === lanes[nVideo - 1]?.id ? 'dietro' : ''}
+                    </span>
+                  )}
+                  <button className="icon sm"
+                    title={track.kind === 'video' ? 'Porta avanti: copre le tracce sotto' : 'Sposta in su'}
                     disabled={lanes[0]?.id === track.id}
                     onClick={() => shiftTrack(track, true)}><Icon name="su" size={13} /></button>
-                  <button className="icon sm" title="Sposta in giù"
+                  <button className="icon sm"
+                    title={track.kind === 'video' ? 'Manda dietro: le tracce sopra la coprono' : 'Sposta in giù'}
                     disabled={lanes[lanes.length - 1]?.id === track.id}
                     onClick={() => shiftTrack(track, false)}><Icon name="giu" size={13} /></button>
                 </div>

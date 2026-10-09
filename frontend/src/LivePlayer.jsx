@@ -130,16 +130,23 @@ export default function LivePlayer({
    */
   const visibili = (t) => {
     const out = []
+    let livello = 0
     for (const track of project?.tracks || []) {
+      // le tracce video si impilano nell'ordine della lista: la prima sta in fondo
+      const z = track.kind === 'video' ? livello++ : -1
       for (const c of track.clips) {
         if (c.enabled === false) continue
         if (t < c.start - 1e-6 || t > c.end + 1e-6) continue
-        out.push({ clip: c, track, disegna: !invisibile(track) })
+        out.push({ clip: c, track, z, disegna: !invisibile(track) })
       }
     }
-    // le clip che iniziano dopo stanno sotto, testi e colori sempre sopra:
-    // stesso ordine del compilatore, altrimenti l'anteprima mente
+    // stesso ordine del compilatore (graph.build_video), altrimenti l'anteprima
+    // mente: prima la traccia, poi dentro la traccia testi e colori sopra i
+    // media e le clip che iniziano dopo sotto. Ordinare tutto insieme metteva
+    // un titolo della traccia in fondo sopra una ripresa della traccia in alto:
+    // qui si vedeva, nel file esportato no.
     return out.sort((a, b) => {
+      if (a.z !== b.z) return a.z - b.z
       const grafica = (x) => (GRAFICA.has(x.clip.type) ? 1 : 0)
       if (grafica(a) !== grafica(b)) return grafica(a) - grafica(b)
       return b.clip.start - a.clip.start
