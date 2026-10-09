@@ -2,14 +2,14 @@
 
 Le voci più recenti stanno in cima.
 
-## Non ancora pubblicato
+## v0.1.1 — 2026-10-09 · README leggibile su PyPI
 
 ### Vetrina (GitHub, PyPI, motori di ricerca)
 - **Logo, GIF e link del README rotti sulla pagina PyPI**: il README è anche la descrizione
   del pacchetto, ma usava percorsi relativi (`docs/logo/logo.png`, `docs/vedit-promo.gif`,
   `AGENTS.md`, `LICENSE`…) che PyPI non risolve. Ora puntano a `raw.githubusercontent.com` e
-  a `github.com/.../blob/main`: funzionano su GitHub e su PyPI. Si vede su PyPI alla
-  prossima versione.
+  a `github.com/.../blob/main`: funzionano su GitHub e su PyPI. Si vede su PyPI da
+  questa versione.
 - Il conteggio degli strumenti MCP diceva 77, sono 83: corretto in README, README.it e
   descrizione della repo su GitHub.
 - Parole chiave del pacchetto: aggiunte `ai-video-editor`, `claude-code`, `cursor`, `llm`,
