@@ -187,6 +187,13 @@ TRANSITIONS = (
 )
 
 
+# Modalita' di fusione di una clip con quello che sta sotto.
+BLEND_MODES = (
+    "normal", "add", "multiply", "screen", "overlay", "softlight", "hardlight",
+    "darken", "lighten", "difference", "exclusion", "dodge", "burn",
+)
+
+
 @dataclass
 class Transition:
     """Transizione in uscita: consuma la coda della clip e scopre quella sotto."""
@@ -206,6 +213,8 @@ class Clip:
     speed: float = 1.0
     reverse: bool = False
     fit: str = "contain"  # contain | cover | stretch | none
+    # come si fonde con le tracce sotto: normal | screen | multiply | ... (BLEND_MODES)
+    blend: str = "normal"
     enabled: bool = True
     name: str = ""
 

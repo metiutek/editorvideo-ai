@@ -35,6 +35,23 @@ DEFAULT_FONTS = (
 
 MAX_PREPAD = 4.0
 
+# Modalita' di fusione della clip con le tracce sotto -> nome in ffmpeg blend.
+BLEND_FFMPEG = {
+    "normal": "",
+    "add": "addition",
+    "multiply": "multiply",
+    "screen": "screen",
+    "overlay": "overlay",
+    "softlight": "softlight",
+    "hardlight": "hardlight",
+    "darken": "darken",
+    "lighten": "lighten",
+    "difference": "difference",
+    "exclusion": "exclusion",
+    "dodge": "dodge",
+    "burn": "burn",
+}
+
 # Clip generate che stanno sopra ai media della stessa traccia.
 GRAFICA = ("text", "color", "html")  # limite al pre-ingrandimento usato per lo zoom animato
 
@@ -248,6 +265,7 @@ class _Builder:
         media = self.p.media_by_id(clip.media) if clip.media else None
         ctx = fx.Ctx(width=self.w, height=self.h, fps=self.fps, sample_rate=self.sr,
                      tvar="t", duration=clip.duration, scale=self.scale,
+                     offset=clip_offset(clip),
                      extra={"clip": clip.id, "trf": self.o.stab_files.get(clip.id)})
 
         f: list[str] = []
@@ -308,6 +326,8 @@ class _Builder:
         f.append("setsar=1")
 
         # effetti video della clip
+        if clip.type == "media":
+            ctx.extra["matte"] = self._matte(clip, media)
         f.extend(fx.build_chain(clip.effects, ctx, "video"))
 
         # trasformazioni
@@ -337,6 +357,50 @@ class _Builder:
         else:
             self.chain(src, f, out)
         return out
+
+    def _matte(self, clip: Clip, media: Media) -> str | None:
+        """Maschera dello scontorno IA, allineata fotogramma per fotogramma alla clip.
+
+        Il file copre la sorgente a partire da ``t0``: si apre con lo stesso
+        attacco e passa per le stesse operazioni della clip (reverse, velocita',
+        cadenza, inquadratura), cosi' a ogni fotogramma corrisponde la sua
+        maschera. Ritorna l'etichetta che l'effetto ``matte`` fonde come alpha.
+        """
+        e = next((e for e in clip.effects if e.type == "matte" and e.enabled), None)
+        if e is None:
+            return None
+        path = str((e.params or {}).get("file") or "")
+        if not path or not Path(path).exists():
+            self.warnings.append(f"clip {clip.id}: maschera di scontorno mancante, ignorata")
+            return None
+        p = e.params or {}
+        args: list[str] = []
+        salto = clip.in_ - float(p.get("t0") or 0.0)
+        if salto > 1e-6:
+            args += ["-ss", n(salto)]
+        args += ["-t", n(clip_visible(clip) * abs(clip.speed or 1.0) + 0.05), "-i", path]
+        idx = self.add_input(args)
+        f: list[str] = []
+        if clip.reverse:
+            f.append("reverse")
+        f.append("setpts=PTS-STARTPTS")
+        if abs(clip.speed - 1.0) > 1e-6:
+            f.append(f"setpts=PTS/{n(clip.speed)}")
+        f.append(f"fps={n(self.fps)}")
+        off = clip_offset(clip)
+        if off > 0:
+            f.append(f"setpts=PTS-STARTPTS+{n(off)}/TB")
+        if media.width and media.height:
+            f.append(f"scale={media.width}:{media.height}:flags=bilinear")
+        f.extend(self._fit(clip, media))
+        f.append("setsar=1")
+        f.append("format=gray")
+        sfuma = float(p.get("feather") or 0.0) * self.scale
+        if sfuma > 0.05:
+            f.append(f"gblur=sigma={n(sfuma)}")
+        if fx.flag(p, "invert"):
+            f.append("negate")
+        return self.chain(f"{idx}:v", f, self.label("mt"))
 
     def _fit(self, clip: Clip, media: Media) -> list[str]:
         w, h = self.w, self.h
@@ -566,15 +630,16 @@ class _Builder:
                 y = kf.expr(clip.transform.y, tvar, 0.0)
                 k = n(self.scale)  # offset in pixel del progetto -> pixel di render
                 sx, sy = self._slide_offset(clip)
-                self.chains.append(
-                    f"[{base}][{lab}]overlay="
-                    f"x={fx.quoted(f'(W-w)/2+({x})*{k}+({sx})')}"
-                    f":y={fx.quoted(f'(H-h)/2+({y})*{k}+({sy})')}"
-                    f":eof_action=pass:repeatlast=0"
-                    f":enable={fx.quoted(f'between(t,{n(clip.start)},{n(clip.start + clip_visible(clip))})')}"
-                    f"[{out}]"
-                )
-                base = out
+                pos = (f"x={fx.quoted(f'(W-w)/2+({x})*{k}+({sx})')}"
+                       f":y={fx.quoted(f'(H-h)/2+({y})*{k}+({sy})')}"
+                       f":eof_action=pass:repeatlast=0"
+                       f":enable={fx.quoted(f'between(t,{n(clip.start)},{n(clip.start + clip_visible(clip))})')}")
+                modo = BLEND_FFMPEG.get(getattr(clip, "blend", "normal") or "normal")
+                if modo:
+                    base = self._blend(base, lab, pos, modo, duration, out)
+                else:
+                    self.chains.append(f"[{base}][{lab}]overlay={pos}[{out}]")
+                    base = out
                 drawn += 1
 
         tail = fx.build_chain(self.p.master.effects, fx.Ctx(
@@ -583,6 +648,32 @@ class _Builder:
         tail.append("format=yuv420p")
         out = self.label("vout")
         self.chain(base, tail, out)
+        return out
+
+    def _blend(self, base: str, lab: str, pos: str, modo: str, duration: float, out: str) -> str:
+        """Fusione della clip con quello che sta sotto (screen, multiply...).
+
+        ``blend`` di ffmpeg vuole due immagini intere della stessa misura e non
+        conosce l'alpha: la clip si posa prima su un canvas trasparente, si
+        fonde l'immagine intera con la base, e il risultato torna sopra la base
+        usando come maschera l'alpha della clip. Cosi' posizione, opacita',
+        dissolvenze e transizioni restano quelle dell'overlay normale.
+        """
+        tela, posata, p1, p2, b1, b2 = (self.label(x) for x in ("bt", "bp", "bq", "br", "bb", "bc"))
+        pc, bc, fuso, alfa, mascherato = (self.label(x) for x in ("bx", "by", "bz", "ba", "bm"))
+        self.chains += [
+            f"color=c=black@0:s={self.w}x{self.h}:r={n(self.fps)}:d={n(duration)},format=yuva420p[{tela}]",
+            f"[{tela}][{lab}]overlay={pos}:format=yuv420[{posata}]",
+            f"[{posata}]split[{p1}][{p2}]",
+            f"[{base}]split[{b1}][{b2}]",
+            f"[{p1}]format=gbrp[{pc}]",
+            f"[{b1}]format=gbrp[{bc}]",
+            f"[{bc}][{pc}]blend=all_mode={modo}[{fuso}]",
+            f"[{p2}]alphaextract[{alfa}]",
+            f"[{fuso}]format=gbrap[{mascherato}x]",
+            f"[{mascherato}x][{alfa}]alphamerge[{mascherato}]",
+            f"[{b2}][{mascherato}]overlay=eof_action=pass:repeatlast=0[{out}]",
+        ]
         return out
 
     # -- catena audio di una clip ---------------------------------------

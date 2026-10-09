@@ -215,8 +215,8 @@ pip install -e ".[chat]"                     # aggiunge il pacchetto anthropic
 Senza modello configurato tutto il resto funziona identico: la scheda *assistente* mostra
 cosa manca invece di fingere di andare.
 
-**Riconoscimento del soggetto (facoltativo).** `detect_subjects`, `track_mask` e
-`auto_reframe` usano YOLO, che si tira dietro torch — sono giga, quindi non arrivano
+**Riconoscimento del soggetto (facoltativo).** `detect_subjects`, `track_mask`,
+`auto_reframe`, `remove_background` e `pin_to_subject` usano YOLO, che si tira dietro torch — sono giga, quindi non arrivano
 con l'installazione normale:
 
 ```bash
@@ -477,7 +477,7 @@ claude mcp add vedit -- vedit-mcp
 Per gli altri client (Cursor, Codex, VS Code) la configurazione equivalente e il flusso
 consigliato degli strumenti stanno in [`AGENTS.md`](AGENTS.md).
 
-83 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
+86 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
 riordinare, solo, blocco), velocità e reverse, transform con keyframe, effetti video e audio,
 dissolvenze incrociate, normalizzazione EBU R128, render, e `preview_frame` che **restituisce
 l'immagine vera** del fotogramma — così l'agente vede quello che ha montato invece di
@@ -511,7 +511,21 @@ spostano i pixel.
 
 **Composizione** — posizione, scala, rotazione, opacità per clip, tutte animabili con keyframe
 ed easing; PiP, overlay grafici, testi con box/bordo/ombra, chroma key, ritaglio, specchio,
-pixelate, vignettatura, grana, glow, stabilizzazione.
+pixelate, vignettatura, grana, glow, stabilizzazione, e **modalità di fusione** per clip
+(screen, add, multiply, overlay, soft/hard light, darken, lighten, difference, exclusion,
+dodge, burn).
+
+**Effetti speciali** — glitch a raffiche (ripetibile: stesso seed, stessi fotogrammi colpiti),
+aberrazione cromatica, distorsioni (onda, increspatura, vortice, rigonfiamento), obiettivo
+fisheye o a cuscino, tremolio di camera che non scopre mai i bordi, **rotazione 3D** della clip
+con prospettiva vera (yaw e pitch animabili), sostituzione del cielo togliendolo sopra una linea
+d'orizzonte, rimozione di oggetti e loghi (rettangolo animabile). **Particelle** —
+`add_particles`: neve, pioggia, scintille, coriandoli, pulviscolo, bokeh, stelle, lucciole,
+come clip HTML trasparente calcolata in forma chiusa, quindi anteprima e render coincidono
+fotogramma per fotogramma. *(extra `vision`)* **Scontorno con l'IA senza green screen** —
+`remove_background` segmenta il soggetto fotogramma per fotogramma (qualunque classe COCO, o
+al contrario per tenere solo lo sfondo); **motion tracking** — `pin_to_subject` aggancia un
+titolo o una grafica a un soggetto che si muove.
 
 **Grafica animata in HTML** — `add_html` mette in traccia un documento HTML/CSS/JS come una
 clip: sottopancia, titoli animati, contatori, infografiche, schermate intere. Lo sfondo e'
@@ -622,6 +636,11 @@ strumenti MCP, API della UI, riga di comando.
 
 - L'opacità animata e le tendine usano `geq` (valutazione per pixel): funzionano ma rallentano
   il render. Dissolvenze e scorrimenti non hanno questo costo.
+- Anche `glitch`, `warp` e `sky_key` usano `geq`; le modalità di fusione aggiungono qualche
+  passaggio a fotogramma intero per ogni clip fusa. `remove_background` è un rotoscopio
+  veloce, non un compositing da cinema: capelli e bordi sottili restano approssimati.
+  `remove_object` ricostruisce il rettangolo dai pixel del bordo — pulito su sfondi uniformi,
+  una macchia morbida su quelli ricchi.
 - La scala animata passa da `zoompan`: sotto 0.25x il valore viene limitato.
 - La riproduzione in anteprima è a segmenti: il primo è da attendere, i successivi vengono
   preparati mentre guardi.

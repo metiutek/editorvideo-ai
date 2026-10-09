@@ -11,7 +11,7 @@
   <a href="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml"><img src="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/v/vedit-mcp.svg?style=flat-square" alt="PyPI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/pyversions/vedit-mcp.svg?style=flat-square" alt="Python versions"/></a>
-  <img src="https://img.shields.io/badge/AI%20tools-83-blueviolet?style=flat-square" alt="83 AI tools"/>
+  <img src="https://img.shields.io/badge/AI%20tools-86-blueviolet?style=flat-square" alt="86 AI tools"/>
   <img src="https://img.shields.io/badge/runs-100%25%20local-brightgreen?style=flat-square" alt="Runs locally"/>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"/>
 </p>
@@ -61,7 +61,7 @@ vedit is a video editor. The ordinary kind: a timeline, video and audio tracks, 
 drag, cut, speed up, colour-grade and fade into each other.
 
 The difference is that **everything you can do with the mouse, an AI can also do on command** —
-because the buttons and the AI call the exact same 83 operations. Nothing is AI-only, nothing
+because the buttons and the AI call the exact same 86 operations. Nothing is AI-only, nothing
 is mouse-only.
 
 So instead of half an hour of trimming, you type:
@@ -103,7 +103,7 @@ difference between a demo and something you would actually cut a video with:
 
 | | |
 |---|---|
-| **An agent can actually edit** | 83 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
+| **An agent can actually edit** | 86 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
 | **The agent can see what it did** | `preview_frame` returns the **real rendered frame**, `preview_grid` the whole edit as a contact sheet. An agent that guesses produces garbage; this one looks. |
 | **It cuts on the beat, for real** | `music_beats` returns BPM, beat and bar length, first-beat offset and an energy profile, so cuts land on the music instead of near it. |
 | **It picks the takes** | `plan_edit` splits shots longer than 12s into their own segments and scores them individually — three minutes of continuous footage becomes dozens of candidates with a real in-point. |
@@ -196,7 +196,7 @@ tools that need them say what to install.
 
 ```bash
 pip install -e ".[chat]"        # anthropic — Claude with an API key in the assistant (other models need nothing)
-pip install -e ".[vision]"      # ultralytics — detect_subjects, track_mask, auto_reframe (pulls torch)
+pip install -e ".[vision]"      # ultralytics — detect_subjects, track_mask, auto_reframe, remove_background, pin_to_subject (pulls torch)
 pip install -e ".[transcribe]"  # faster-whisper — transcribe, make_captions, tighten_speech, censor_speech
 pip install -e ".[html]"        # playwright — renders HTML clips (uses the Chrome or Edge you already have)
 pip install -e ".[plugin]"      # pedalboard — VST3 / AU audio plugins (VST2 .dll are not supported)
@@ -457,7 +457,19 @@ renders it and looks at which way the pixels moved.
 
 **Composition** — position, scale, rotation and opacity per clip, all animatable with keyframes
 and easing; PiP, graphic overlays, text with box/outline/shadow, chroma key, crop, mirror,
-pixelate, vignette, grain, glow, stabilisation.
+pixelate, vignette, grain, glow, stabilisation, and **blend modes** per clip (screen, add,
+multiply, overlay, soft/hard light, darken, lighten, difference, exclusion, dodge, burn).
+
+**Special effects** — glitch bursts (repeatable: same seed, same frames hit), chromatic
+aberration, warps (wave, ripple, swirl, bulge), fisheye/pincushion lens, camera shake that
+never reveals the edges, **3D card rotation** with real perspective (animatable yaw and
+pitch), sky replacement by keying the sky above a horizon line, object/logo removal
+(animatable rectangle). **Particles** — `add_particles`: snow, rain, sparks, confetti, dust,
+bokeh, stars, fireflies, as a transparent HTML clip computed in closed form, so preview and
+render match frame for frame. *(extra `vision`)* **AI background removal without a green
+screen** — `remove_background` segments the subject frame by frame (any COCO class, or
+inverted to keep only the background); **motion tracking** — `pin_to_subject` pins a title
+or graphic to a moving subject.
 
 **HTML motion graphics** — `add_html` puts an HTML/CSS/JS document on a track as a clip:
 lower thirds, animated titles, counters, infographics, whole screens. The background is
@@ -481,7 +493,8 @@ plugin, tweak its parameters in the panel); `duck_music`, `jl_cut`, `detach_audi
 `preview_grid`, `verify_edit`.
 
 **Speech and subject** *(extras)* — `transcribe`, `make_captions`, `tighten_speech`,
-`censor_speech`; `detect_subjects`, `track_mask`, `auto_reframe`.
+`censor_speech`; `detect_subjects`, `track_mask`, `auto_reframe`, `remove_background`,
+`pin_to_subject`.
 
 ---
 
@@ -579,6 +592,10 @@ cannot silently go missing from the wheel.
 
 - Animated opacity and wipes use `geq` (per-pixel evaluation): they work, but they slow the
   render down. Dissolves and slides do not carry that cost.
+- `glitch`, `warp` and `sky_key` also use `geq`; blend modes add a few full-frame passes per
+  blended clip. `remove_background` is fast rotoscoping, not compositing-grade: hair and thin
+  edges are approximate. `remove_object` rebuilds the rectangle from its border pixels — clean
+  on flat backgrounds, a soft smudge on busy ones.
 - Animated scale goes through `zoompan`: below 0.25x the value is clamped.
 - Preview playback is segmented: the first segment has to be waited for, the following ones are
   prepared while you watch.

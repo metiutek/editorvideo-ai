@@ -3,6 +3,10 @@ import Icon from './Icons.jsx'
 import { Anim, Check, EffectParams, Num, Row, Select, Text } from './Params.jsx'
 import { natura } from './util.js'
 
+// come la clip si fonde con le tracce sotto (model.BLEND_MODES)
+const BLEND = ['normal', 'screen', 'add', 'multiply', 'overlay', 'softlight', 'hardlight',
+  'darken', 'lighten', 'difference', 'exclusion', 'dodge', 'burn']
+
 /** Pannello proprieta': clip selezionata, oppure progetto e master. */
 export default function Inspector({
   project, effects, transitions, clip, playhead, run, setError, setBusy, onProva, onRif,
@@ -56,6 +60,10 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
         {clip.type === 'media' && ha.video && (
           <Row label="inquadra"><Select value={clip.fit || 'contain'} onChange={(v) => set({ fit: v })}
             options={['contain', 'cover', 'stretch', 'none']} /></Row>
+        )}
+        {(ha.video || clip.type !== 'media') && (
+          <Row label="fusione"><Select value={clip.blend || 'normal'} onChange={(v) => set({ blend: v })}
+            options={BLEND} /></Row>
         )}
         {clip.type === 'color' && (
           <Row label="colore"><Text value={clip.color} onChange={(v) => set({ color: v })} /></Row>

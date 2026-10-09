@@ -19,9 +19,11 @@ from typing import Any
 
 from . import effects as fx
 from . import htmlclip
+from . import particelle
 from . import keyframes as kf
 from . import probe as probe_mod
 from .model import (
+    BLEND_MODES,
     TRANSITIONS,
     Clip,
     ClipAudio,
@@ -543,6 +545,20 @@ class Store:
         self._done()
         return c
 
+    def add_particles(self, kind: str = "snow", track_id: str | None = None, start: float = 0.0,
+                      duration: float = 5.0, color: str | None = None, density: float = 1.0,
+                      speed: float = 1.0, size: float = 1.0, seed: int = 1) -> Clip:
+        """Particelle (neve, scintille, coriandoli...) come clip html trasparente."""
+        if kind not in particelle.KINDS:
+            raise EditError(f"particelle sconosciute {kind!r}; scegli tra {', '.join(particelle.KINDS)}")
+        for nome, v in (("density", density), ("speed", speed), ("size", size)):
+            if not 0 < float(v) <= 20:
+                raise EditError(f"{nome} deve stare tra 0 e 20")
+        st = self.project.settings
+        doc = particelle.html(kind, st.width, st.height, color, density, speed, size, seed)
+        return self.add_html(html=doc, track_id=track_id, start=start, duration=duration,
+                             name=f"particelle {kind}")
+
     def set_html(self, clip_id: str, html: str | None = None, path: str | None = None,
                  base: str | None = None) -> Clip:
         """Sostituisce il documento di una clip html (o solo la cartella base)."""
@@ -822,14 +838,16 @@ class Store:
         return clip
 
     def set_clip(self, clip_id: str, **values: Any) -> Clip:
-        """Campi semplici: enabled, fit, name, color, start, duration, in_."""
+        """Campi semplici: enabled, fit, blend, name, color, start, duration, in_."""
         track, clip = self.clip_for_edit(clip_id)
-        allowed = {"enabled", "fit", "name", "color", "start", "duration", "in_"}
+        allowed = {"enabled", "fit", "blend", "name", "color", "start", "duration", "in_"}
         bad = set(values) - allowed
         if bad:
             raise EditError(f"campi sconosciuti {sorted(bad)}; ammessi: {sorted(allowed)}")
-        if "fit" in values and values["fit"] not in ("contain", "cover", "stretch", "none"):
+        if values.get("fit") is not None and values["fit"] not in ("contain", "cover", "stretch", "none"):
             raise EditError("fit deve essere contain | cover | stretch | none")
+        if values.get("blend") is not None and values["blend"] not in BLEND_MODES:
+            raise EditError(f"blend deve essere uno di {' | '.join(BLEND_MODES)}")
         for k in ("start", "duration", "in_"):
             if values.get(k) is not None and float(values[k]) < 0:
                 raise EditError(f"{k} non puo' essere negativo")
@@ -970,6 +988,80 @@ class Store:
         lst.insert(to, lst.pop(index))
         self._done()
         return lst
+
+    def set_matte(self, clip_id: str, file: str, t0: float = 0.0, feather: float = 2.0,
+                  invert: bool = False) -> Effect:
+        """Mette lo scontorno IA in testa alla catena della clip, o lo sostituisce.
+
+        In testa perche' la maschera e' allineata all'immagine *prima* degli
+        effetti: dopo un warp o un tilt3d il soggetto non sarebbe piu' dove la
+        maschera lo aspetta.
+        """
+        track, clip = self.clip_for_edit(clip_id)
+        if clip.type != "media":
+            raise EditError("lo scontorno si applica solo alle clip con un media")
+        if not Path(file).exists():
+            raise EditError(f"maschera inesistente: {file}")
+        params = fx.validate_effect("matte", {"file": str(file), "t0": float(t0),
+                                              "feather": float(feather), "invert": bool(invert)})
+        self._touch()
+        clip.effects = [e for e in clip.effects if e.type != "matte"]
+        e = Effect(type="matte", params=params)
+        clip.effects.insert(0, e)
+        self._done()
+        return e
+
+    def pin_to_subject(self, clip_id: str, target_id: str, track: list[dict],
+                       src_w: int, src_h: int, offset_x: float = 0.0,
+                       offset_y: float = 0.0) -> Clip:
+        """Aggancia una clip (titolo, grafica, html) a un soggetto che si muove.
+
+        ``track`` e' la traccia del soggetto nella sorgente di ``target_id``
+        (``vision.follow``: tempi della sorgente, centri in pixel della
+        sorgente). Ogni punto viene portato sul canvas passando per tutto quello
+        che la clip bersaglio fa alla sua sorgente - attacco, velocita',
+        adattamento al canvas, scala e posizione statiche - e diventa un
+        keyframe di x/y della clip agganciata, nel suo tempo locale.
+        """
+        _, clip = self.clip_for_edit(clip_id)
+        _, tgt = self.clip_or_die(target_id)
+        st = self.project.settings
+        W, H = float(st.width), float(st.height)
+        if tgt.fit == "cover":
+            k = max(W / src_w, H / src_h)
+        elif tgt.fit == "stretch":
+            k = None
+        elif tgt.fit == "none":
+            k = 1.0
+        else:
+            k = min(W / src_w, H / src_h)
+        sc = float(kf.sample(tgt.transform.scale, 0, 1.0))
+        tx = float(kf.sample(tgt.transform.x, 0, 0.0))
+        ty = float(kf.sample(tgt.transform.y, 0, 0.0))
+        speed = tgt.speed or 1.0
+        kx, ky = [], []
+        for p in track:
+            if p.get("cx") is None:
+                continue
+            # tempo della sorgente -> tempo in timeline -> tempo locale della clip agganciata
+            if tgt.reverse:
+                t_tl = tgt.start + (tgt.in_ + tgt.source_duration() - p["t"]) / abs(speed)
+            else:
+                t_tl = tgt.start + (p["t"] - tgt.in_) / abs(speed)
+            t_loc = t_tl - clip.start
+            if t_loc < -1e-6 or t_loc > clip.duration + 1e-6:
+                continue
+            if k is None:
+                dx, dy = (p["cx"] - src_w / 2) * W / src_w, (p["cy"] - src_h / 2) * H / src_h
+            else:
+                dx, dy = (p["cx"] - src_w / 2) * k, (p["cy"] - src_h / 2) * k
+            kx.append({"t": round(t_loc, 3), "v": round(dx * sc + tx + offset_x, 1)})
+            ky.append({"t": round(t_loc, 3), "v": round(dy * sc + ty + offset_y, 1)})
+        if not kx:
+            raise EditError("il soggetto non e' mai visibile mentre la clip agganciata e' in scena")
+        kx.sort(key=lambda q: q["t"])
+        ky.sort(key=lambda q: q["t"])
+        return self.set_transform(clip_id, x={"kf": kx}, y={"kf": ky})
 
     # ---- montaggio -----------------------------------------------------
     def append_sequence(self, media_ids: list[str], track_id: str | None = None,
@@ -1175,6 +1267,8 @@ class Store:
                     item["reverse"] = True
                 if not c.enabled:
                     item["enabled"] = False
+                if c.blend and c.blend != "normal":
+                    item["blend"] = c.blend
                 if c.fade_in or c.fade_out:
                     item["fades"] = [c.fade_in, c.fade_out]
                 if c.transition_out and c.transition_out.duration > 0:
@@ -1188,7 +1282,7 @@ class Store:
                 if detail == "full":
                     # la UI ha bisogno di tutti i campi, anche quelli ai valori
                     # di default, per poterli mostrare nei controlli
-                    item.update(fit=c.fit, speed=c.speed, reverse=c.reverse,
+                    item.update(fit=c.fit, blend=c.blend, speed=c.speed, reverse=c.reverse,
                                 enabled=c.enabled, color=c.color,
                                 fade_in=c.fade_in, fade_out=c.fade_out,
                                 transition_out=vars(c.transition_out))

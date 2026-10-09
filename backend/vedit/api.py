@@ -62,7 +62,7 @@ FRONTEND = _frontend_dir()
 OPS = {
     "import_media", "set_media", "remove_media", "rename_folder",
     "add_track", "set_track", "set_sidechain", "remove_track", "move_track",
-    "add_clip", "add_text", "add_color", "add_html", "set_html", "remove_clip", "move_clip", "move_layer", "trim_clip",
+    "add_clip", "add_text", "add_color", "add_html", "add_particles", "set_html", "remove_clip", "move_clip", "move_layer", "trim_clip",
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",

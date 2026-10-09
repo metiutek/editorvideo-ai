@@ -205,6 +205,19 @@ Per guardare il girato prima di montarlo: `inspect_footage` vuole il **file sorg
 tutto il montaggio insieme ed è il modo più rapido per accorgersi che un punto d'attacco è
 caduto sull'inquadratura sbagliata.
 
+### Effetti speciali
+
+Fusione per clip con `set_clip(blend=...)` (screen/add per luci, fumo e particelle su fondo
+nero; multiply per texture). Distorsioni, glitch, tremolio, `tilt3d`, `sky_key`,
+`remove_object` sono effetti normali (`add_effect`). `remove_background` (scontorno IA) mette
+`matte` in **testa** alla catena: la maschera e' allineata all'immagine prima degli effetti, e
+`graph._matte` la fa passare per le stesse operazioni della clip (attacco, velocita', reverse,
+inquadratura). `pin_to_subject` porta la traccia del soggetto dal tempo della sorgente al
+tempo locale della clip agganciata (`Store.pin_to_subject`). `add_particles` genera una clip
+html da `particelle.py`, con le posizioni in forma chiusa del tempo: niente simulazione a
+passi, quindi anteprima e render coincidono. Il glitch usa un hash di `sin`, mai `random()`:
+il render deve restare una funzione pura del progetto.
+
 ### Grafica in HTML
 
 `add_html` mette un documento HTML/CSS/JS in traccia come clip, con sfondo trasparente: va su

@@ -63,6 +63,12 @@ intere): add_html con un documento HTML/CSS/JS su una traccia sopra la ripresa.
 Lo sfondo e' trasparente, il tempo della pagina e' quello della clip, e
 nell'interfaccia (open_ui) si vede animata dal vivo prima di renderizzare.
 
+Effetti speciali: add_particles (neve, scintille, coriandoli...), fusioni con
+set_clip blend (screen per luci e particelle), add_effect con glitch, warp, shake,
+tilt3d, cielo e rimozione oggetti (list_effects), remove_background per scontornare senza green
+screen, pin_to_subject per agganciare una grafica a chi si muove. Ognuno deve
+avere un motivo nel racconto, come le transizioni.
+
 Se chi ti guida vuole vedere o correggere a mano, apri l'editor con open_ui:
 interfaccia e agente lavorano sullo stesso progetto, le modifiche si vedono da
 tutte e due le parti senza salvare niente. Se uno strumento dice che ffmpeg non
@@ -577,14 +583,20 @@ def set_speed(clip: str, speed: float, keep_duration: bool = False,
 
 @_strumento()
 def set_clip(clip: str, enabled: bool | None = None, fit: str | None = None,
-             name: str | None = None, color: str | None = None,
+             name: str | None = None, color: str | None = None, blend: str | None = None,
              project: str | None = None) -> dict:
-    """Proprieta' semplici: attiva/disattiva, adattamento al canvas, nome, colore.
+    """Proprieta' semplici: attiva/disattiva, adattamento, fusione, nome, colore.
 
     fit: contain (tutto visibile, bande), cover (riempie tagliando), stretch, none.
+    blend: come la clip si fonde con le tracce sotto - normal, add, multiply,
+    screen, overlay, softlight, hardlight, darken, lighten, difference,
+    exclusion, dodge, burn. screen/add per luci, fumo, flare e particelle su
+    fondo nero; multiply per texture e sporco; overlay/softlight per grane e
+    gradienti di colore.
     """
-    c = _store(project).set_clip(clip, enabled=enabled, fit=fit, name=name, color=color)
-    return _clip_view(c)
+    c = _store(project).set_clip(clip, enabled=enabled, fit=fit, name=name, color=color,
+                                 blend=blend)
+    return {**_clip_view(c), "blend": c.blend}
 
 
 @_strumento()
@@ -1138,10 +1150,99 @@ async def track_mask(clip: str, kind: str = "mask_blur", padding: float = 1.25,
     s = _store(project)
     src = _source(None, clip, project)
     res = await _off(vision.follow, src, tuple(classes or ("person",)), fps)
-    m = vision.mask_keyframes(res["traccia"], padding)
+    m = vision.mask_keyframes(_tempi_della_clip(s, clip, res["traccia"]), padding)
     s.add_effect(clip, kind, {"x": m["x"], "y": m["y"], "w": m["w"], "h": m["h"]})
     return {"effetto": kind, "w": m["w"], "h": m["h"],
             "punti": len(m["x"]["kf"]), "copertura": res["copertura"]}
+
+
+def _tempi_della_clip(s: Store, clip: str, traccia: list[dict]) -> list[dict]:
+    """Traccia del soggetto dal tempo della sorgente al tempo locale della clip.
+
+    vision.follow analizza il file dall'inizio: i keyframe degli effetti invece
+    partono dall'inizio della clip, che nella sorgente sta a ``in``.
+    """
+    _, c = s.clip_or_die(clip)
+    v = abs(c.speed or 1.0)
+    out = []
+    for p in traccia:
+        t = ((c.in_ + c.source_duration() - p["t"]) if c.reverse else (p["t"] - c.in_)) / v
+        if -0.5 <= t <= c.duration + 0.5:
+            out.append({**p, "t": round(max(0.0, t), 3)})
+    return out or traccia
+
+
+@_strumento()
+async def remove_background(clip: str, classes: list[str] | None = None, feather: float = 2.0,
+                            invert: bool = False, conf: float = 0.25,
+                            project: str | None = None) -> dict:
+    """Scontorna il soggetto senza green screen: lo sfondo diventa trasparente.
+
+    Segmenta con l'IA (YOLO-seg) ogni fotogramma del tratto usato dalla clip e
+    mette in testa alla sua catena l'effetto ``matte``. Sotto, su una traccia
+    piu' bassa, va il fondo nuovo (un'immagine, un'altra ripresa, add_color,
+    add_html). classes: cosa tenere, default ["person"]; vale qualunque classe
+    COCO (car, dog, cat, horse, bicycle...). invert=True toglie il soggetto e
+    tiene lo sfondo (per mettere un titolo *dietro* una persona: la stessa
+    clip duplicata sopra il titolo con lo scontorno normale).
+
+    Qualita' da rotoscopio veloce, non da compositing: capelli e bordi fini
+    restano approssimati. Guarda sempre il risultato con preview_frame.
+    Serve l'extra vision (ultralytics); la maschera resta in cache.
+    """
+    s = _store(project)
+    _, c = s.clip_or_die(clip)
+    if c.type != "media" or not c.media:
+        raise EditError("lo scontorno si applica a una clip con un video")
+    src = s.media_or_die(c.media).path
+    t0 = max(0.0, c.in_ - 0.1)
+    t1 = c.in_ + c.source_duration() + 0.1
+    res = await _off(vision.segment_matte, src, t0, t1, tuple(classes or ("person",)), conf)
+    s.set_matte(clip, res["file"], res["t0"], feather, invert)
+    cop = res.get("copertura")
+    return {"clip": clip, "maschera": res["file"], "da_cache": res["cache"],
+            "fotogrammi": res.get("fotogrammi"), "copertura": cop,
+            "nota": ("il soggetto manca in molti fotogrammi: controlla con preview_frame"
+                     if cop is not None and cop < 0.7 else None)}
+
+
+@_strumento()
+async def pin_to_subject(clip: str, target: str, classes: list[str] | None = None,
+                         offset_x: float = 0.0, offset_y: float = 0.0, fps: float = 5.0,
+                         project: str | None = None) -> dict:
+    """Motion tracking: aggancia una clip (titolo, grafica, html) a un soggetto.
+
+    ``target`` e' la clip ripresa dove si muove il soggetto, ``clip`` quella da
+    agganciare. Il soggetto (classes, default ["person"]) viene seguito e la
+    posizione diventa keyframe di x/y della clip agganciata, tenendo conto di
+    attacco, velocita', adattamento e scala della ripresa. offset_x/offset_y
+    spostano l'aggancio in pixel (es. offset_y=-300 = etichetta sopra la testa).
+    """
+    s = _store(project)
+    src = _source(None, target, project)
+    res = await _off(vision.follow, src, tuple(classes or ("person",)), fps)
+    c = s.pin_to_subject(clip, target, res["traccia"], res["larghezza"], res["altezza"],
+                         offset_x, offset_y)
+    return {"clip": c.id, "punti": len(c.transform.x["kf"]), "copertura": res["copertura"],
+            "nota": "copertura bassa: il soggetto e' stato perso spesso, controlla con "
+                    "preview_grid" if res["copertura"] < 0.5 else None}
+
+
+@_strumento()
+def add_particles(kind: str = "snow", start: float = 0.0, duration: float = 5.0,
+                  track: str | None = None, color: str | None = None, density: float = 1.0,
+                  speed: float = 1.0, size: float = 1.0, seed: int = 1,
+                  project: str | None = None) -> dict:
+    """Particelle sopra la ripresa: snow, rain, sparks, confetti, dust, bokeh, stars, fireflies.
+
+    Diventano una clip html trasparente (serve l'extra html, come add_html),
+    deterministica: stesso seed, stesse particelle in anteprima e nel render.
+    density/speed/size moltiplicano i valori tarati per il tipo (1 = normale).
+    Per luci e scintille su una ripresa scura prova set_clip(blend="screen").
+    """
+    c = _store(project).add_particles(kind, track, start, duration, color, density, speed,
+                                      size, seed)
+    return {**_clip_view(c), "kind": kind}
 
 
 @_strumento()

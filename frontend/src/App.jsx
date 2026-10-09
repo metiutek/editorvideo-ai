@@ -17,6 +17,10 @@ const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|
 // Le misure dei pannelli restano tra una sessione e l'altra. Vengono rilette
 // entro i limiti di adesso: una misura salvata da una versione precedente puo'
 // essere fuori scala e mandare i comandi fuori dalla loro riga.
+// particelle.KINDS, con il nome che si legge nel menu
+const PARTICELLE = [['snow', 'neve'], ['rain', 'pioggia'], ['sparks', 'scintille'],
+  ['confetti', 'coriandoli'], ['dust', 'pulviscolo'], ['bokeh', 'bokeh'], ['stars', 'stelle'],
+  ['fireflies', 'lucciole']]
 const LIMITS = { bin: [170, 520], inspector: [240, 600], timeline: [120, 1400], trackH: [44, 140] }
 
 const loadSizes = () => {
@@ -345,6 +349,17 @@ export default function App() {
           onClick={() => run('add_html', { start: playhead, duration: 4 })
             .then((c) => setSelected(c.id)).catch((e) => setError(e.message))}>
           <Icon name="codice" />grafica html</button>
+        <select className="ghost act" disabled={!project} value=""
+          title="Particelle alla testina: neve, scintille, coriandoli... (clip html trasparente)"
+          onChange={(e) => {
+            const kind = e.target.value
+            if (!kind) return
+            run('add_particles', { kind, start: playhead, duration: 5 })
+              .then((c) => setSelected(c.id)).catch((err) => setError(err.message))
+          }}>
+          <option value="">✦ particelle</option>
+          {PARTICELLE.map(([k, nome]) => <option key={k} value={k}>{nome}</option>)}
+        </select>
 
         <span className="spacer" />
         <span className="path" title={path || ''}>{path || 'nessun progetto'}</span>

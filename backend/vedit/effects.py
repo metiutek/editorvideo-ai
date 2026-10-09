@@ -11,6 +11,7 @@ si auto-descrivono da questo registro, non serve toccare altro.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -30,6 +31,9 @@ class Ctx:
     # rapporto tra risoluzione di render e risoluzione del progetto: in preview
     # vale <1 e i parametri espressi in pixel vanno riscalati di conseguenza
     scale: float = 1.0
+    # tempo della clip al primo fotogramma (>0 nei segmenti di anteprima): serve
+    # ai filtri che contano i fotogrammi invece di leggere t
+    offset: float = 0.0
     extra: dict = field(default_factory=dict)  # es. file .trf per la stabilizzazione
     _counter: list = field(default_factory=lambda: [0])
 
@@ -477,6 +481,230 @@ def _f_levels(p: dict, c: Ctx) -> list[str]:
 
 
 # --------------------------------------------------------------------------
+# effetti speciali: distorsioni, glitch, 3D, scontorni
+# --------------------------------------------------------------------------
+
+
+def _hash(x: str) -> str:
+    """Pseudo-casuale in 0..1 da un'espressione: frac(sin(x)*43758.5453).
+
+    Non si usa random() di ffmpeg: il render e' una funzione pura del progetto,
+    e lo stesso glitch deve cadere sugli stessi fotogrammi a ogni render e
+    nell'anteprima.
+    """
+    v = f"sin({x})*43758.5453"
+    return f"(({v})-floor({v}))"
+
+
+def _geq_rgba(sx: str, sy: str) -> list[str]:
+    """Rimappa ogni pixel prendendolo da (sx, sy): la base di ogni distorsione.
+
+    In RGB con alpha, cosi' una clip gia' scontornata resta scontornata; le
+    coordinate fuori dall'immagine vengono limitate al bordo da geq stesso.
+    """
+    return [
+        "format=gbrap",
+        f"geq=r='r({sx},{sy})':g='g({sx},{sy})':b='b({sx},{sy})':a='alpha({sx},{sy})'",
+    ]
+
+
+def _f_rgb_split(p: dict, c: Ctx) -> list[str]:
+    """Aberrazione cromatica: rosso e blu scivolano in direzioni opposte."""
+    a = int(round(num(p, "amount", 6) * c.scale))
+    if a == 0:
+        return []
+    ang = math.radians(num(p, "angle", 0.0))
+    dx, dy = int(round(a * math.cos(ang))), int(round(a * math.sin(ang)))
+    dx, dy = max(-255, min(255, dx)), max(-255, min(255, dy))
+    return [f"rgbashift=rh={-dx}:rv={-dy}:bh={dx}:bv={dy}:edge=smear"]
+
+
+def _f_glitch(p: dict, c: Ctx) -> list[str]:
+    """Disturbo digitale a raffiche: fasce che scivolano e canali che si separano.
+
+    Il tempo e' diviso in passi (``rate`` al secondo); per ogni passo un hash
+    decide se c'e' una raffica (probabilita' ``intensity``) e, dentro la
+    raffica, quali fasce orizzontali spostare e di quanto. Fuori dalle raffiche
+    l'immagine passa intatta: ``enable`` spegne i filtri e geq non costa nulla.
+    """
+    inten = max(0.0, min(1.0, num(p, "intensity", 0.3)))
+    if inten <= 0:
+        return []
+    amount = num(p, "amount", 40) * c.scale
+    rate = max(1.0, num(p, "rate", 12))
+    band = max(2.0, num(p, "band", 24) * c.scale)
+    seed = num(p, "seed", 1)
+
+    def raffica(tv: str) -> str:
+        return f"lt({_hash(f'floor({tv}*{fnum(rate)})*91.345+{fnum(seed)}*7.13')},{fnum(inten)})"
+
+    fascia = f"floor(Y/{fnum(band)})"
+    passo = f"floor(T*{fnum(rate)})"
+    h1 = _hash(f"{fascia}*12.9898+{passo}*78.233+{fnum(seed)}")
+    h2 = _hash(f"{fascia}*4.1414+{passo}*3.7719+{fnum(seed)}")
+    dx = f"gt({h1},0.72)*({h2}*2-1)*{fnum(amount)}"
+    en = f":enable='{raffica('t')}'"
+    split = max(1, int(round(amount * 0.25)))
+    return [
+        "format=gbrap",
+        f"geq=r='r(X+{dx},Y)':g='g(X+{dx},Y)':b='b(X+{dx},Y)':a='alpha(X+{dx},Y)'{en}",
+        f"rgbashift=rh={-min(255, split)}:bh={min(255, split)}{en}",
+    ]
+
+
+def _f_warp(p: dict, c: Ctx) -> list[str]:
+    """Distorsioni geometriche: onda, increspatura, vortice, rigonfiamento.
+
+    Tutte rimappano i pixel con geq (piu' lento dei filtri dedicati, ma ffmpeg
+    non ha un warp generico). ``amount`` e' animabile: con i keyframe l'onda
+    arriva e se ne va invece di restare accesa per tutta la clip.
+    """
+    mode = str(val(p, "mode", "wave"))
+    amt = f"({kf.expr(p.get('amount', 20), 'T', 20)})"
+    k = fnum(c.scale)
+    lam = fnum(max(2.0, num(p, "wavelength", 120) * c.scale))
+    spd = fnum(num(p, "speed", 1.0))
+    cx = f"(W*{fnum(num(p, 'cx', 0.5))})"
+    cy = f"(H*{fnum(num(p, 'cy', 0.5))})"
+    r = f"hypot(X-{cx},Y-{cy})"
+    rad = f"(hypot(W,H)*{fnum(max(0.01, num(p, 'radius', 0.5)))})"
+    if mode == "wave":
+        d = f"{amt}*{k}*sin(2*PI*(Y/{lam}+T*{spd}))"
+        return _geq_rgba(f"X+{d}", "Y")
+    if mode == "ripple":
+        d = f"{amt}*{k}*sin(2*PI*({r}/{lam}-T*{spd}))/max({r},1)"
+        return _geq_rgba(f"X+(X-{cx})*{d}", f"Y+(Y-{cy})*{d}")
+    if mode == "swirl":
+        # angolo in gradi al centro, che si spegne al bordo del raggio
+        a = f"({amt}*PI/180*pow(max(0,1-{r}/{rad}),2))"
+        return _geq_rgba(f"{cx}+(X-{cx})*cos({a})-(Y-{cy})*sin({a})",
+                         f"{cy}+(X-{cx})*sin({a})+(Y-{cy})*cos({a})")
+    # bulge: amount positivo gonfia il centro, negativo lo risucchia
+    f = f"if(lt({r},{rad}),pow({r}/{rad},{amt}/100),1)"
+    return _geq_rgba(f"{cx}+(X-{cx})*{f}", f"{cy}+(Y-{cy})*{f}")
+
+
+def _f_lens(p: dict, c: Ctx) -> list[str]:
+    """Distorsione dell'obiettivo: barile (k1 > 0, fisheye) o cuscino (k1 < 0)."""
+    k1, k2 = num(p, "k1", 0.3), num(p, "k2", 0.0)
+    if abs(k1) < 1e-6 and abs(k2) < 1e-6:
+        return []
+    # lenscorrection corregge: per *ottenere* il barile il segno va invertito
+    return ["format=yuva420p",
+            f"lenscorrection=k1={fnum(-k1)}:k2={fnum(-k2)}:i=bilinear:fc=black@0"]
+
+
+def _f_shake(p: dict, c: Ctx) -> list[str]:
+    """Camera a mano o colpo: l'inquadratura trema senza mai mostrare i bordi.
+
+    Si ritaglia un margine pari all'ampiezza massima e si sposta il ritaglio
+    con una somma di sinusoidi a frequenze non multiple (rumore liscio e
+    ripetibile); poi si riporta alla dimensione del canvas.
+    """
+    a_max = max(1, int(num(p, "amount", 12) * c.scale))
+    if 2 * a_max >= min(c.width, c.height) // 2:
+        a_max = min(c.width, c.height) // 4
+    amt = kf.expr(p.get("amount", 12), c.tvar, 12)
+    a = f"(min({amt},{a_max / max(c.scale, 1e-6):.6f})*{fnum(c.scale)})"
+    f = fnum(max(0.1, num(p, "frequency", 6)))
+    tv = c.tvar
+
+    def rumore(fase: float) -> str:
+        return (f"(0.6*sin(2*PI*{f}*{tv}+{fase})+0.3*sin(2*PI*{f}*2.31*{tv}+{fase * 1.7 + 1.3})"
+                f"+0.1*sin(2*PI*{f}*5.13*{tv}+{fase * 2.9 + 2.1}))")
+
+    w, h = c.width - 2 * a_max, c.height - 2 * a_max
+    w -= w % 2
+    h -= h % 2
+    return [
+        f"crop=w={w}:h={h}:x='{a_max}+{a}*{rumore(0.0)}':y='{a_max}+{a}*{rumore(4.7)}'",
+        f"scale={c.width}:{c.height}:flags=bicubic",
+    ]
+
+
+def _f_tilt3d(p: dict, c: Ctx) -> list[str]:
+    """La clip come una carta nello spazio: rotazione attorno agli assi X e Y.
+
+    I quattro angoli vengono proiettati con una prospettiva vera (distanza
+    focale ``depth`` volte la larghezza) e passati a ``perspective``; fuori
+    dalla carta resta trasparente, quindi sotto si vede la traccia inferiore.
+    yaw e pitch sono animabili: un giro su se stessa e' un keyframe da 0 a 360.
+    """
+    # perspective non conosce t: il tempo si ricava dal numero di fotogramma
+    tv = f"(in/{fnum(c.fps)}+{fnum(c.offset)})"
+    yaw = f"(({kf.expr(p.get('yaw', 25), tv, 25)})*PI/180)"
+    pitch = f"(({kf.expr(p.get('pitch', 0), tv, 0)})*PI/180)"
+    W, H = c.width + 4, c.height + 4
+    foc = fnum(max(0.3, num(p, "depth", 2.0)) * W)
+    angoli = []
+    for (u, v) in ((-W / 2, -H / 2), (W / 2, -H / 2), (-W / 2, H / 2), (W / 2, H / 2)):
+        x1 = f"({fnum(u)}*cos({yaw}))"
+        z1 = f"({fnum(u)}*sin({yaw}))"
+        y2 = f"({fnum(v)}*cos({pitch})-{z1}*sin({pitch}))"
+        z2 = f"({fnum(v)}*sin({pitch})+{z1}*cos({pitch}))"
+        s = f"({foc}/max({foc}+{z2},1))"
+        angoli.append((f"{fnum(W / 2)}+{x1}*{s}", f"{fnum(H / 2)}+{y2}*{s}"))
+    args = ":".join(f"x{i}='{x}':y{i}='{y}'" for i, (x, y) in enumerate(angoli))
+    # il bordo trasparente evita che perspective stiri i pixel del contorno
+    return [
+        "format=yuva420p",
+        f"pad={W}:{H}:2:2:color=black@0",
+        f"perspective={args}:sense=destination:eval=frame:interpolation=linear",
+        f"crop={c.width}:{c.height}:2:2",
+    ]
+
+
+def _f_sky_key(p: dict, c: Ctx) -> list[str]:
+    """Rende trasparente il cielo: sotto, su un'altra traccia, va il cielo nuovo.
+
+    Chiave di colore limitata alla parte alta del fotogramma: sotto
+    ``horizon`` (frazione dell'altezza) niente diventa trasparente, cosi'
+    un'auto blu o un lago non spariscono insieme al cielo. ``feather`` sfuma
+    il confine per non vedere la linea.
+    """
+    color = esc_str(str(val(p, "color", "#7fb0e0")))
+    oriz = max(0.05, min(1.0, num(p, "horizon", 0.6)))
+    sfuma = max(1.0, num(p, "feather", 0.08) * c.height)
+    a = f"max(alpha(X,Y),255*clip((Y-H*{fnum(oriz)})/{fnum(sfuma)}+1,0,1))"
+    return [
+        "format=yuva420p",
+        f"colorkey=color={color}:similarity={fnum(num(p, 'similarity', 0.3))}"
+        f":blend={fnum(num(p, 'blend', 0.15))}",
+        f"geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='{a}'",
+    ]
+
+
+def _f_remove_object(p: dict, c: Ctx) -> list[str]:
+    """Cancella un oggetto ricostruendo il rettangolo dai pixel attorno.
+
+    Funziona bene su loghi, scritte, cavi, piccoli oggetti su sfondi
+    uniformi; su sfondi ricchi si vede una macchia morbida. x/y animabili per
+    seguire un oggetto che si muove (track_mask calcola i keyframe).
+    """
+    w, h, x, y = _box(p, c)
+    # delogo vuole il rettangolo strettamente dentro il fotogramma
+    w = min(w, c.width - 4)
+    h = min(h, c.height - 4)
+    x = f"min(max({_px(anim(p, 'x', 0, c), c)},1),{c.width - w - 2})"
+    y = f"min(max({_px(anim(p, 'y', 0, c), c)},1),{c.height - h - 2})"
+    return [f"delogo=x='{x}':y='{y}':w={w}:h={h}{enable_expr(p, c)}"]
+
+
+def _f_matte(p: dict, c: Ctx) -> list[str]:
+    """Scontorno con l'IA: la maschera la calcola remove_background.
+
+    Il file della maschera e' un video in scala di grigi che il grafo prepara
+    allineato fotogramma per fotogramma alla clip (stesso attacco, velocita' e
+    inquadratura) e passa qui come etichetta in ``ctx.extra["matte"]``.
+    """
+    lab = c.extra.get("matte")
+    if not lab:
+        return []
+    m = c.uid("mtm")
+    return [f"format=yuva420p[{m}];[{m}][{lab}]alphamerge"]
+
+
+# --------------------------------------------------------------------------
 # effetti audio
 # --------------------------------------------------------------------------
 
@@ -839,6 +1067,90 @@ _DEFS: tuple[EffectDef, ...] = (
         (Param("black_in", 0.0, min=0, max=0.5), Param("white_in", 1.0, min=0.5, max=1),
          Param("black_out", 0.0, min=0, max=0.5), Param("white_out", 1.0, min=0.5, max=1)),
         _f_levels, "Punti del nero e del bianco: recupera un'immagine slavata o schiaccia i neri.",
+    ),
+    # ---- effetti speciali ----
+    EffectDef(
+        "rgb_split", "video", "Aberrazione cromatica",
+        (Param("amount", 6, min=0, max=200, desc="px di separazione tra rosso e blu"),
+         Param("angle", 0, min=-180, max=180, desc="direzione, 0 = orizzontale")),
+        _f_rgb_split, "Rosso e blu separati ai lati: look da obiettivo economico o da glitch.",
+    ),
+    EffectDef(
+        "glitch", "video", "Glitch",
+        (Param("intensity", 0.3, min=0, max=1, desc="quanta parte del tempo e' disturbata"),
+         Param("amount", 40, min=0, max=400, desc="px di scivolamento delle fasce"),
+         Param("rate", 12, min=1, max=60, desc="cambi al secondo"),
+         Param("band", 24, min=2, max=400, desc="altezza delle fasce in px"),
+         Param("seed", 1, min=0, max=1000, desc="altro numero = altre raffiche")),
+        _f_glitch,
+        "Raffiche di disturbo digitale: fasce che scivolano e canali separati. "
+        "Ripetibile: stesso seed, stessi fotogrammi colpiti.",
+    ),
+    EffectDef(
+        "warp", "video", "Distorsione",
+        (Param("mode", "wave", kind="enum", choices=("wave", "ripple", "swirl", "bulge")),
+         Param("amount", 20, min=-720, max=720, anim=True,
+               desc="wave/ripple: px; swirl: gradi; bulge: -100..100"),
+         Param("wavelength", 120, min=2, max=4000, desc="px tra due creste (wave, ripple)"),
+         Param("speed", 1.0, min=-20, max=20, desc="cicli al secondo (wave, ripple)"),
+         Param("cx", 0.5, min=0, max=1), Param("cy", 0.5, min=0, max=1),
+         Param("radius", 0.5, min=0.01, max=2, desc="frazione della diagonale (swirl, bulge)")),
+        _f_warp,
+        "Onda, increspatura dal centro, vortice, lente che gonfia. amount animabile. "
+        "Pesante: geq ricalcola ogni pixel.",
+    ),
+    EffectDef(
+        "lens", "video", "Obiettivo",
+        (Param("k1", 0.3, min=-1, max=1, desc=">0 barile (fisheye), <0 cuscino"),
+         Param("k2", 0.0, min=-1, max=1)),
+        _f_lens, "Distorsione dell'obiettivo: fisheye o cuscino; gli angoli scoperti restano trasparenti.",
+    ),
+    EffectDef(
+        "shake", "video", "Tremolio camera",
+        (Param("amount", 12, min=0, max=200, anim=True, desc="px di ampiezza"),
+         Param("frequency", 6, min=0.1, max=40, desc="oscillazioni al secondo")),
+        _f_shake,
+        "Camera a mano, impatto, terremoto. Mai bordi scoperti: ingrandisce quanto basta. "
+        "amount a keyframe per un colpo che si smorza.",
+    ),
+    EffectDef(
+        "tilt3d", "video", "Rotazione 3D",
+        (Param("yaw", 25, min=-360, max=360, anim=True, desc="gradi attorno all'asse verticale"),
+         Param("pitch", 0, min=-360, max=360, anim=True, desc="gradi attorno all'asse orizzontale"),
+         Param("depth", 2.0, min=0.3, max=20, desc="distanza della camera: piccola = prospettiva forte")),
+        _f_tilt3d,
+        "La clip come una carta nello spazio, con prospettiva vera. Animabile: un giro "
+        "completo e' yaw da 0 a 360. Fuori dalla carta si vede la traccia sotto.",
+    ),
+    EffectDef(
+        "sky_key", "video", "Sostituzione cielo",
+        (Param("color", "#7fb0e0", kind="color", desc="colore del cielo da togliere"),
+         Param("similarity", 0.3, min=0.01, max=1),
+         Param("blend", 0.15, min=0, max=1),
+         Param("horizon", 0.6, min=0.05, max=1, desc="sotto questa altezza (frazione) niente si toglie"),
+         Param("feather", 0.08, min=0, max=0.5, desc="sfumatura del confine")),
+        _f_sky_key,
+        "Rende trasparente il cielo sopra l'orizzonte; il cielo nuovo va su una traccia "
+        "sotto. Campiona il colore con preview_frame o color_scopes.",
+    ),
+    EffectDef(
+        "remove_object", "video", "Rimuovi oggetto",
+        (Param("x", 0, anim=True, desc="px, angolo in alto a sinistra"), Param("y", 0, anim=True),
+         Param("w", 120, min=4), Param("h", 80, min=4),
+         Param("ranges", "", kind="string", desc="'1.2-1.8;4-4.5' = solo in quegli istanti")),
+        _f_remove_object,
+        "Cancella logo, scritta, cavo o piccolo oggetto ricostruendolo dai bordi. "
+        "Ottimo su sfondi uniformi, su sfondi ricchi lascia una macchia morbida.",
+    ),
+    EffectDef(
+        "matte", "video", "Scontorno IA",
+        (Param("file", "", kind="file", desc="video maschera (bianco = tieni)"),
+         Param("t0", 0.0, min=0, desc="secondo della sorgente su cui parte la maschera"),
+         Param("feather", 2, min=0, max=40, desc="sfumatura del bordo in px"),
+         Param("invert", False, kind="bool", desc="togli il soggetto invece dello sfondo")),
+        _f_matte,
+        "Toglie lo sfondo senza green screen. Non si imposta a mano: lo crea "
+        "remove_background segmentando il soggetto fotogramma per fotogramma.",
     ),
     # ---- audio ----
     EffectDef(

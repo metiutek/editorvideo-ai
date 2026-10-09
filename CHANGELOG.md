@@ -2,6 +2,39 @@
 
 Le voci più recenti stanno in cima.
 
+## Non rilasciato · Effetti speciali
+
+### Nuovo
+- **Modalità di fusione per clip** (`Clip.blend`, `set_clip(blend=...)`, menu *fusione* nelle
+  proprietà): normal, screen, add, multiply, overlay, softlight, hardlight, darken, lighten,
+  difference, exclusion, dodge, burn. `graph._blend` posa la clip su un canvas trasparente,
+  fonde l'immagine intera con la base e la rimette sopra con l'alpha della clip: posizione,
+  opacità, dissolvenze e transizioni restano quelle di sempre. Nell'anteprima diretta diventa
+  `mix-blend-mode`.
+- **Nuovi effetti video**: `glitch` (raffiche ripetibili con `seed`), `rgb_split`
+  (aberrazione cromatica), `warp` (wave, ripple, swirl, bulge; `amount` animabile), `lens`
+  (fisheye/cuscino), `shake` (tremolio che non scopre i bordi), `tilt3d` (rotazione 3D con
+  prospettiva vera, yaw e pitch animabili), `sky_key` (toglie il cielo sopra l'orizzonte),
+  `remove_object` (cancella un rettangolo animabile ricostruendolo dai bordi), `matte`.
+- **`remove_background`** (MCP, extra `vision`): scontorno senza green screen. YOLO-seg
+  segmenta ogni fotogramma del tratto usato, la maschera finisce in cache
+  (`~/.vedit/mattes`) e l'effetto `matte` la fonde come alpha, allineata dal grafo a
+  attacco, velocità, reverse e inquadratura della clip. `invert` tiene lo sfondo e toglie
+  il soggetto.
+- **`pin_to_subject`** (MCP, extra `vision`): motion tracking, aggancia una clip a un
+  soggetto che si muove (`Store.pin_to_subject`).
+- **`add_particles`** (MCP, menu *particelle* nella barra): neve, pioggia, scintille,
+  coriandoli, pulviscolo, bokeh, stelle, lucciole come clip html deterministica
+  (`particelle.py`).
+- `Ctx.offset`: il tempo della clip al primo fotogramma, per i filtri che contano i
+  fotogrammi invece di leggere `t` (`perspective`).
+
+### Correzioni
+- `set_clip` da MCP falliva sempre se non si passava `fit`: il `None` veniva validato come
+  un adattamento sconosciuto.
+- `track_mask` metteva i keyframe nel tempo della *sorgente*: su una clip con attacco
+  diverso da zero la maschera arrivava in ritardo. Ora sono nel tempo della clip.
+
 ## v0.1.2 — 2026-10-09 · UX: effetti, titoli, davanti/dietro, stili personali
 
 ### Correzioni

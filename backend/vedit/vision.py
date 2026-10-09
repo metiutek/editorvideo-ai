@@ -213,3 +213,99 @@ def follow(path: str, classes: tuple[str, ...] = ("person",), fps: float = SAMPL
             "fps": fps, "traccia": track,
             "copertura": round(visti / max(1, len(det["fotogrammi"])), 3),
             "classi": det["classi"]}
+
+
+# --------------------------------------------------------------------------
+# scontorno: maschera del soggetto fotogramma per fotogramma
+# --------------------------------------------------------------------------
+
+SEG_MODEL = "yolo11n-seg.pt"
+
+
+def segment_matte(path: str, t0: float = 0.0, t1: float | None = None,
+                  classes: tuple[str, ...] = ("person",), conf: float = 0.25,
+                  width: int = 640, model: str = SEG_MODEL) -> dict:
+    """Video maschera (bianco = soggetto) del tratto ``t0..t1`` della sorgente.
+
+    A differenza del tracking qui serve *ogni* fotogramma, alla cadenza della
+    sorgente: una maschera campionata a 2 fps farebbe saltare il bordo. I
+    fotogrammi passano in streaming da ffmpeg al modello e di nuovo a ffmpeg,
+    quindi la memoria non cresce con la durata. Il risultato sta in cache:
+    stessa sorgente, tratto e classi -> stesso file, calcolato una volta.
+    """
+    import hashlib
+    from pathlib import Path
+
+    import numpy as np
+
+    try:
+        from ultralytics import YOLO
+    except ImportError as e:
+        raise VisionError("ultralytics non installato: pip install 'vedit-mcp[vision]'") from e
+
+    m = probe.probe(path)
+    if not m.has_video:
+        raise VisionError(f"{path} non ha video")
+    fps = m.fps or 25.0
+    fine = t1 if t1 is not None else (m.duration or 0.0)
+    if fine <= t0:
+        raise VisionError("tratto vuoto: niente da scontornare")
+    st = Path(path).stat()
+    chiave = hashlib.sha1(
+        f"{Path(path).resolve()}|{st.st_mtime_ns}|{st.st_size}|{t0:.3f}|{fine:.3f}|"
+        f"{sorted(classes)}|{conf}|{width}|{model}".encode()).hexdigest()[:16]
+    dst = proxy.cache_dir("mattes") / f"{chiave}.mkv"
+    if dst.exists() and dst.stat().st_size > 0:
+        return {"file": str(dst), "t0": t0, "t1": fine, "fps": fps, "cache": True}
+
+    h = max(2, int(width * (m.height or 9) / (m.width or 16)) // 2 * 2)
+    ff = ffmpeg.binary("ffmpeg")
+    lettore = subprocess.Popen([
+        ff, "-hide_banner", "-nostdin", "-loglevel", "error",
+        "-ss", f"{t0:.3f}", "-t", f"{fine - t0:.3f}", "-i", str(path), "-an", "-sn",
+        "-vf", f"scale={width}:{h},format=bgr24", "-f", "rawvideo", "-",
+    ], stdout=subprocess.PIPE)
+    tmp = dst.with_name("~" + dst.name)
+    scrittore = subprocess.Popen([
+        ff, "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+        "-f", "rawvideo", "-pix_fmt", "gray", "-s", f"{width}x{h}", "-r", f"{fps:.6f}",
+        "-i", "-", "-c:v", "ffv1", "-f", "matroska", str(tmp),
+    ], stdin=subprocess.PIPE)
+
+    net = YOLO(model_path(model))
+    voluti = {c.lower() for c in classes} if classes else None
+    ids = [i for i, nome in net.names.items() if voluti is None or str(nome).lower() in voluti]
+    if not ids:
+        raise VisionError(f"classi sconosciute al modello: {sorted(voluti or [])}")
+    size = width * h * 3
+    n = visti = 0
+    try:
+        while True:
+            raw = lettore.stdout.read(size)
+            if len(raw) < size:
+                break
+            frame = np.frombuffer(raw, dtype=np.uint8).reshape(h, width, 3)
+            res = net.predict(frame, conf=conf, classes=ids, retina_masks=True, verbose=False)[0]
+            mask = np.zeros((h, width), dtype=np.uint8)
+            if res.masks is not None and len(res.masks.data):
+                dati = res.masks.data.cpu().numpy()
+                unione = dati.max(axis=0)
+                if unione.shape != mask.shape:  # per sicurezza: retina_masks dovrebbe evitarlo
+                    ys = (np.arange(h) * unione.shape[0] / h).astype(int)
+                    xs = (np.arange(width) * unione.shape[1] / width).astype(int)
+                    unione = unione[ys][:, xs]
+                mask = (unione > 0.5).astype(np.uint8) * 255
+                visti += 1
+            scrittore.stdin.write(mask.tobytes())
+            n += 1
+    finally:
+        lettore.stdout.close()
+        lettore.wait()
+        scrittore.stdin.close()
+        scrittore.wait()
+    if n == 0 or scrittore.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        raise VisionError(f"scontorno fallito: nessun fotogramma letto da {path}")
+    tmp.replace(dst)
+    return {"file": str(dst), "t0": t0, "t1": fine, "fps": fps, "cache": False,
+            "fotogrammi": n, "copertura": round(visti / n, 3)}

@@ -39,6 +39,13 @@ function opacitaClip(clip, tLocale) {
   return Math.max(0, Math.min(1, a))
 }
 
+/** Modalita' di fusione della clip -> mix-blend-mode, stessi nomi dove CSS li ha. */
+const BLEND_CSS = {
+  add: 'plus-lighter', multiply: 'multiply', screen: 'screen', overlay: 'overlay',
+  softlight: 'soft-light', hardlight: 'hard-light', darken: 'darken', lighten: 'lighten',
+  difference: 'difference', exclusion: 'exclusion', dodge: 'color-dodge', burn: 'color-burn',
+}
+
 /** Filtro CSS equivalente agli effetti della clip, per quelli che si possono. */
 function filtroCss(clip, k) {
   const parti = []
@@ -236,6 +243,8 @@ export default function LivePlayer({
           el.style.opacity = String(op)
           const f = filtroCss(clip, box.k)
           if (el.style.filter !== f) el.style.filter = f
+          const mb = BLEND_CSS[clip.blend] || 'normal'
+          if (el.style.mixBlendMode !== mb) el.style.mixBlendMode = mb
         }
       }
 

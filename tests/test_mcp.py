@@ -258,3 +258,22 @@ async def test_gli_strumenti_citati_esistono_davvero():
               if p.strip(".,:;()") in nomi or "_" in p}
     inventati = {c for c in citati if "_" in c and c.isidentifier() and c not in nomi}
     assert not inventati, f"strumenti citati ma inesistenti: {sorted(inventati)}"
+
+
+@pytest.mark.anyio
+async def test_effetti_speciali_da_mcp(tmp_path):
+    """Fusioni, particelle ed effetti speciali raggiungibili dall'agente."""
+    p = str(tmp_path / "fx.json")
+    await call("project_create", path=p, preset="720p")
+    c = await call("add_color", color="red", duration=2.0)
+    v = await call("set_clip", clip=c["id"], blend="screen")
+    assert v["blend"] == "screen"
+    with pytest.raises(Exception):
+        await call("set_clip", clip=c["id"], blend="fumo")
+    for tipo in ("glitch", "warp", "tilt3d", "shake", "rgb_split", "lens", "sky_key",
+                 "remove_object"):
+        await call("add_effect", clip=c["id"], type=tipo)
+    part = await call("add_particles", kind="sparks", duration=2.0)
+    assert part["type"] == "html" and part["kind"] == "sparks"
+    nomi = {t.name for t in await srv.mcp.list_tools()}
+    assert {"remove_background", "pin_to_subject", "add_particles"} <= nomi
