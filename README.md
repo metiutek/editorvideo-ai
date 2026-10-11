@@ -11,7 +11,7 @@
   <a href="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml"><img src="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/v/vedit-mcp.svg?style=flat-square" alt="PyPI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/pyversions/vedit-mcp.svg?style=flat-square" alt="Python versions"/></a>
-  <img src="https://img.shields.io/badge/AI%20tools-86-blueviolet?style=flat-square" alt="86 AI tools"/>
+  <img src="https://img.shields.io/badge/AI%20tools-92-blueviolet?style=flat-square" alt="92 AI tools"/>
   <img src="https://img.shields.io/badge/runs-100%25%20local-brightgreen?style=flat-square" alt="Runs locally"/>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"/>
 </p>
@@ -103,7 +103,7 @@ difference between a demo and something you would actually cut a video with:
 
 | | |
 |---|---|
-| **An agent can actually edit** | 86 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
+| **An agent can actually edit** | 92 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
 | **The agent can see what it did** | `preview_frame` returns the **real rendered frame**, `preview_grid` the whole edit as a contact sheet. An agent that guesses produces garbage; this one looks. |
 | **It cuts on the beat, for real** | `music_beats` returns BPM, beat and bar length, first-beat offset and an energy profile, so cuts land on the music instead of near it. |
 | **It picks the takes** | `plan_edit` splits shots longer than 12s into their own segments and scores them individually — three minutes of continuous footage becomes dozens of candidates with a real in-point. |
@@ -469,7 +469,20 @@ bokeh, stars, fireflies, as a transparent HTML clip computed in closed form, so 
 render match frame for frame. *(extra `vision`)* **AI background removal without a green
 screen** — `remove_background` segments the subject frame by frame (any COCO class, or
 inverted to keep only the background); **motion tracking** — `pin_to_subject` pins a title
-or graphic to a moving subject.
+or graphic to a moving subject. **Highlighting** — `track_mask` follows a subject with a blur,
+mosaic, coloured outline, spotlight (everything else dimmed) or colour box; pass a `box` and it
+follows *any* object you point at, not just the 80 COCO classes (template tracking in numpy,
+no extra needed). `highlight_subject` uses the real silhouette instead: glow, tint or
+spotlight.
+
+**Styles that actually edit** — `apply_style` turns a style (cinematic, dynamic, documentary,
+vlog, trailer, music video, minimal, retro, or your own) into a real base on the timeline:
+look on the master, push-ins or punch-ins on keyframes, transitions at section changes, opening
+and closing fades, accents, and music gain that moves. `review_edit` reads the timeline and
+says when an edit is just cuts — no movement, colour, graphics or music automation — and which
+tool fixes it. The agent can also **create styles** on its own with `create_style`: a written
+guide plus a recipe (look, movement, transitions, music curve, accents) that lands in your
+style menu and that `apply_style` actually executes.
 
 **HTML motion graphics** — `add_html` puts an HTML/CSS/JS document on a track as a clip:
 lower thirds, animated titles, counters, infographics, whole screens. The background is
@@ -489,12 +502,13 @@ EBU R128 normalisation of the mix, and **VST3/AU plugins** through pedalboard (p
 plugin, tweak its parameters in the panel); `duck_music`, `jl_cut`, `detach_audio`.
 
 **Footage and rhythm** — `plan_edit` (segment and score the takes), `inspect_footage`,
+`preview_media` (look at imported footage without putting it on the timeline),
 `music_beats` (BPM, bars, energy profile, cut grid), `check_cuts`, `smooth_cuts`,
 `preview_grid`, `verify_edit`.
 
 **Speech and subject** *(extras)* — `transcribe`, `make_captions`, `tighten_speech`,
 `censor_speech`; `detect_subjects`, `track_mask`, `auto_reframe`, `remove_background`,
-`pin_to_subject`.
+`pin_to_subject`, `highlight_subject`.
 
 ---
 
@@ -562,6 +576,14 @@ The less obvious choices, and why:
 - **Saving**: same idea, atomic `os.replace`. An interruption cannot leave a truncated project.
 - **Filtergraph from file** (`-filter_complex_script`): long timelines blow past Windows'
   32k command-line limit.
+- **Rendering in pieces**: a single graph keeps every clip open for the whole timeline, and the
+  `tpad` waiting frames make the cost grow with the square of the number of cuts (a 2-minute,
+  370-cut edit rendered at 1/69 of real time). Above 20 s the export is split into ~4 s pieces
+  on cut points, each compiled with only its own clips (`slice_project`), rendered in parallel
+  within a memory budget, and joined with no re-encode; audio is mixed in one pass.
+- **Distortions on a small map**: `warp` and `glitch` evaluate their expression on a map a few
+  times smaller and apply it with `displace` / `remap`, instead of `geq` on every pixel. Zooms
+  that go below 1 use a per-frame `scale` instead of a 4x canvas for `zoompan`.
 
 ---
 

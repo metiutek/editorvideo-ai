@@ -28,7 +28,7 @@ from . import analyze, captions, cleanup, colormatch, ops
 # domande_mod: in ask_user il parametro si chiama domande
 from . import domande as domande_mod
 from . import effects as fx
-from . import ffmpeg, hw, probe, proxy, render, review, story, versions, vision
+from . import ffmpeg, hw, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
 from .store import EditError, Store
 
@@ -42,9 +42,21 @@ from .store import EditError, Store
 ISTRUZIONI = """\
 Editor video non lineare.
 
-Flusso: project_create -> import_media -> plan_edit (per scegliere il materiale) ->
-add_clips -> rifiniture (set_transition, set_speed, set_transform, add_effect,
-set_audio) -> preview_grid per guardare -> render_video.
+Flusso: project_create -> import_media -> preview_media (guardare il girato
+senza metterlo in timeline) -> plan_edit (per scegliere il materiale) -> add_clips
+-> apply_style (la base dello stile: colore, movimento, transizioni, musica) ->
+rifiniture tue (testi, grafica, accenti, set_speed, add_effect) -> preview_grid
+per guardare -> review_edit -> render_video.
+
+Mettere le clip in fila NON e' montare. Un montaggio fatto solo di tagli secchi
+su musica a volume fisso esce piatto anche con materiale bellissimo: dopo
+add_clips o plan_edit il lavoro e' a meta'. review_edit dice cosa manca; finche'
+da' avvisi, non e' finito.
+
+Se nessuno stile integrato va bene (l'utente descrive un modo di montare suo,
+o lo chiede), crealo con create_style: guida a parole piu' una ricetta
+(look, movimento, transizioni, musica, accenti) che apply_style applica davvero.
+list_styles mostra stili, ricette e look ammessi.
 
 I tempi sono in secondi. Ogni parametro animabile accetta anche
 {'kf':[{'t':0,'v':0},{'t':2,'v':1,'ease':'ease_in_out'}]}, con t relativo
@@ -68,6 +80,14 @@ set_clip blend (screen per luci e particelle), add_effect con glitch, warp, shak
 tilt3d, cielo e rimozione oggetti (list_effects), remove_background per scontornare senza green
 screen, pin_to_subject per agganciare una grafica a chi si muove. Ognuno deve
 avere un motivo nel racconto, come le transizioni.
+
+Tracking ed evidenziare: track_mask segue un soggetto e ci mette sopra una
+maschera (sfocatura, mosaico, cornice colorata, spotlight che scurisce il
+resto, riquadro colorato). Senza box segue persone o una classe COCO
+(car, dog, sports ball...); con box=[x,y,w,h] in frazioni del fotogramma segue
+QUALUNQUE oggetto indicato: guarda prima il fotogramma con preview_media
+(guide attive), che disegna la griglia al 10% per leggere le coordinate.
+highlight_subject evidenzia con la sagoma vera (glow, tint, spotlight).
 
 Se chi ti guida vuole vedere o correggere a mano, apri l'editor con open_ui:
 interfaccia e agente lavorano sullo stesso progetto, le modifiche si vedono da
@@ -894,11 +914,20 @@ async def transcribe(path: str | None = None, clip: str | None = None,
 
 @_strumento()
 async def list_styles() -> dict:
-    """Gli stili di montaggio disponibili e i numeri che li definiscono."""
+    """Gli stili di montaggio disponibili e i numeri che li definiscono.
+
+    ``stili``: i ritmi di plan_edit. ``stili_montaggio``: gli stili per
+    apply_style (integrati e personali) con la loro ricetta; ``looks``: i look
+    che una ricetta di create_style puo' usare.
+    """
+    from . import presets
     return {"stili": [{"nome": s.name, "label": s.label, "desc": s.desc,
                        "taglio_s": [s.shot_min, s.shot_max],
                        "apre_col_meglio": s.hook_first,
-                       "transizione": s.transition} for s in story.STYLES.values()]}
+                       "transizione": s.transition} for s in story.STYLES.values()],
+            "stili_montaggio": [{**d, "ricetta": stili.ricetta(d["id"])}
+                                for d in stili.descrivi()],
+            "looks": [p["id"] for p in presets.LOOKS]}
 
 
 @_strumento()
@@ -932,6 +961,10 @@ async def plan_edit(folder: str | None = None, files: list[str] | None = None,
     p = await _off(story.plan, src, style, target_duration, deep, True, order, segment)
     if apply:
         p["applicato"] = story.apply_plan(_store(project), p)
+        p["prossimo_passo"] = (
+            "la timeline ha solo tagli: non e' ancora un montaggio. Chiama "
+            "apply_style con lo stile scelto, poi aggiungi testi e accenti e "
+            "controlla con review_edit")
     return p
 
 
@@ -1089,6 +1122,28 @@ async def preview_frame(t: float | None = None, width: int = 640, path: str | No
 
 
 @_strumento()
+async def preview_media(media: str | None = None, path: str | None = None,
+                        t: float | None = None, count: int = 8, width: int = 320,
+                        cols: int = 4, start: float | None = None, end: float | None = None,
+                        guide: bool = False, project: str | None = None) -> Image:
+    """Guarda un media importato (o un file) SENZA metterlo in timeline.
+
+    Per scegliere il materiale bisogna vederlo: senza ``t`` restituisce una
+    griglia di ``count`` fotogrammi della sorgente (fra start ed end, in secondi
+    della sorgente) con il tempo stampato su ognuno; con ``t`` un fotogramma
+    solo — alza ``width`` a 960-1280 per i dettagli. I tempi stampati sono
+    quelli da usare come ``in`` in add_clips.
+
+    guide=True disegna una griglia al 10% con le frazioni sui bordi: serve per
+    indicare un oggetto a track_mask / pin_to_subject con box=[x, y, w, h].
+    """
+    src = _source(path, None, project, media)
+    out = str(Path(tempfile.gettempdir()) / f"vedit_media_{os.getpid()}.jpg")
+    res = await _off(review.media_sheet, src, out, count, width, cols, start, end, t, guide)
+    return Image(path=res["file"])
+
+
+@_strumento()
 async def detect_subjects(clip: str | None = None, path: str | None = None,
                           classes: list[str] | None = None, fps: float = 2.0,
                           conf: float = 0.35, project: str | None = None) -> dict:
@@ -1135,25 +1190,97 @@ async def auto_reframe(clip: str, classes: list[str] | None = None, fps: float =
                     "controlla con preview_grid" if res["copertura"] < 0.5 else None}
 
 
+MASCHERE = ("mask_blur", "mask_pixelate", "mask_box", "mask_outline", "mask_spotlight")
+
+
+async def _segui(s: Store, clip: str, project: str | None, classes: list[str] | None,
+                 fps: float, box: list[float] | None, box_t: float) -> dict:
+    """Traccia del soggetto nel tratto di sorgente che la clip usa.
+
+    Senza ``box`` segue una classe con YOLO; con ``box`` segue l'oggetto
+    indicato a ``box_t`` secondi dall'inizio della clip (vision.track_box).
+    """
+    src = _source(None, clip, project)
+    if box is None:
+        return await _off(vision.follow, src, tuple(classes or ("person",)), fps)
+    _, c = s.clip_or_die(clip)
+    v = abs(c.speed or 1.0)
+    t_loc = max(0.0, min(float(box_t), c.duration))
+    t_src = (c.in_ + c.source_duration() - t_loc * v) if c.reverse else (c.in_ + t_loc * v)
+    return await _off(vision.track_box, src, box, t_src, max(0.0, c.in_ - 0.1),
+                      c.in_ + c.source_duration() + 0.1, max(fps, vision.BOX_FPS))
+
+
 @_strumento()
 async def track_mask(clip: str, kind: str = "mask_blur", padding: float = 1.25,
                      classes: list[str] | None = None, fps: float = 2.0,
-                     project: str | None = None) -> dict:
-    """Applica una maschera che segue il soggetto (volto, persona, targa).
+                     box: list[float] | None = None, box_t: float = 0.0,
+                     params: dict | None = None, project: str | None = None) -> dict:
+    """Mette su un soggetto che si muove una maschera che lo segue.
 
-    kind: mask_blur | mask_pixelate | mask_box. La maschera e' un riquadro con
-    x/y animati sui keyframe del tracking, quindi resta addosso al soggetto
-    invece di stare ferma.
+    kind: mask_blur (sfoca) | mask_pixelate (mosaico) | mask_box (riquadro pieno:
+    con params {"color": "#ffcc00", "opacity": 0.35} diventa un evidenziatore) |
+    mask_outline (cornice colorata: params color, thickness) | mask_spotlight
+    (scurisce e desatura tutto il resto: params amount, saturation).
+
+    Cosa seguire:
+    - senza ``box``: YOLO, ``classes`` COCO (default ["person"]; anche "car",
+      "dog", "sports ball", "cell phone"...);
+    - con ``box`` = [x, y, larghezza, altezza]: QUALUNQUE oggetto, indicato
+      sul fotogramma a ``box_t`` secondi dall'inizio della clip. In frazioni
+      del fotogramma (0..1, consigliato: leggile da preview_media con
+      guide=True) oppure in pixel della sorgente. Il riquadro tiene la sua
+      misura: per un oggetto che si avvicina molto, spezza la clip.
+
+    La maschera e' in coordinate del canvas, quindi resta giusta anche se la
+    sorgente ha un'altra risoluzione o un altro formato del progetto.
     """
-    if kind not in ("mask_blur", "mask_pixelate", "mask_box"):
-        raise EditError("kind deve essere mask_blur | mask_pixelate | mask_box")
+    if kind not in MASCHERE:
+        raise EditError(f"kind deve essere {' | '.join(MASCHERE)}")
     s = _store(project)
-    src = _source(None, clip, project)
-    res = await _off(vision.follow, src, tuple(classes or ("person",)), fps)
-    m = vision.mask_keyframes(_tempi_della_clip(s, clip, res["traccia"]), padding)
-    s.add_effect(clip, kind, {"x": m["x"], "y": m["y"], "w": m["w"], "h": m["h"]})
+    _, c = s.clip_or_die(clip)
+    res = await _segui(s, clip, project, classes, fps, box, box_t)
+    st = s.project.settings
+    traccia = vision.to_canvas(_tempi_della_clip(s, clip, res["traccia"]), c.fit,
+                               res["larghezza"], res["altezza"], st.width, st.height)
+    m = vision.mask_keyframes(traccia, padding)
+    s.add_effect(clip, kind, {**(params or {}),
+                              "x": m["x"], "y": m["y"], "w": m["w"], "h": m["h"]})
     return {"effetto": kind, "w": m["w"], "h": m["h"],
-            "punti": len(m["x"]["kf"]), "copertura": res["copertura"]}
+            "punti": len(m["x"]["kf"]), "copertura": res["copertura"],
+            "nota": "oggetto perso in molti fotogrammi: guarda con preview_grid e, se "
+                    "serve, spezza la clip e ripeti con un box nuovo"
+                    if res["copertura"] < 0.6 else None}
+
+
+@_strumento()
+async def highlight_subject(clip: str, mode: str = "glow", color: str = "#ffcc00",
+                            amount: float = 0.7, classes: list[str] | None = None,
+                            conf: float = 0.25, project: str | None = None) -> dict:
+    """Evidenzia un soggetto seguendone la sagoma vera, non un rettangolo.
+
+    mode: glow (alone colorato attorno al soggetto) | tint (il soggetto cambia
+    colore) | spotlight (tutto il resto si scurisce e si spegne, il soggetto
+    resta in luce). classes: cosa evidenziare, classi COCO (default ["person"]).
+
+    Scontorna il soggetto con l'IA (come remove_background) su una copia della
+    clip messa su una traccia appena sopra, muta. Per un oggetto che YOLO non
+    conosce usa track_mask con box (mask_outline / mask_spotlight / mask_box).
+    Serve l'extra vision. Guarda il risultato con preview_frame.
+    """
+    s = _store(project)
+    _, c = s.clip_or_die(clip)
+    if c.type != "media" or not c.media:
+        raise EditError("l'evidenziazione si applica a una clip con un video")
+    src = s.media_or_die(c.media).path
+    t0 = max(0.0, c.in_ - 0.1)
+    t1 = c.in_ + c.source_duration() + 0.1
+    res = await _off(vision.segment_matte, src, t0, t1, tuple(classes or ("person",)), conf)
+    out = s.highlight_subject(clip, res["file"], res["t0"], mode, color, amount)
+    cop = res.get("copertura")
+    return {**out, "copertura": cop,
+            "nota": ("il soggetto manca in molti fotogrammi: controlla con preview_frame"
+                     if cop is not None and cop < 0.7 else None)}
 
 
 def _tempi_della_clip(s: Store, clip: str, traccia: list[dict]) -> list[dict]:
@@ -1209,6 +1336,7 @@ async def remove_background(clip: str, classes: list[str] | None = None, feather
 @_strumento()
 async def pin_to_subject(clip: str, target: str, classes: list[str] | None = None,
                          offset_x: float = 0.0, offset_y: float = 0.0, fps: float = 5.0,
+                         box: list[float] | None = None, box_t: float = 0.0,
                          project: str | None = None) -> dict:
     """Motion tracking: aggancia una clip (titolo, grafica, html) a un soggetto.
 
@@ -1217,10 +1345,11 @@ async def pin_to_subject(clip: str, target: str, classes: list[str] | None = Non
     posizione diventa keyframe di x/y della clip agganciata, tenendo conto di
     attacco, velocita', adattamento e scala della ripresa. offset_x/offset_y
     spostano l'aggancio in pixel (es. offset_y=-300 = etichetta sopra la testa).
+    Con ``box`` = [x, y, w, h] (frazioni del fotogramma, a ``box_t`` secondi
+    dall'inizio di ``target``) segue un oggetto qualsiasi invece di una classe.
     """
     s = _store(project)
-    src = _source(None, target, project)
-    res = await _off(vision.follow, src, tuple(classes or ("person",)), fps)
+    res = await _segui(s, target, project, classes, fps, box, box_t)
     c = s.pin_to_subject(clip, target, res["traccia"], res["larghezza"], res["altezza"],
                          offset_x, offset_y)
     return {"clip": c.id, "punti": len(c.transform.x["kf"]), "copertura": res["copertura"],
@@ -1428,6 +1557,76 @@ def jl_cut(clip: str, seconds: float = 0.5, kind: str = "J",
 
 
 @_strumento()
+def apply_style(style: str, track: str | None = None, project: str | None = None) -> dict:
+    """Applica la base di uno stile di montaggio alla timeline, in un gesto solo.
+
+    Gli stili (list_styles per i ritmi di plan_edit; qui gli id della chat:
+    cinematico, dinamico, documentario, vlog, trailer, videoclip, minimal,
+    retro, o uno personale) non sono solo testo: ognuno ha una ricetta. Mette
+    il look sul master, movimento dentro l'inquadratura (spinte lente o
+    punch-in a keyframe), transizioni ai cambi di sezione, apertura e chiusura,
+    accenti (shake, glitch) e l'automazione del volume della musica.
+
+    Non tocca cio' che e' gia' deciso (una clip con un movimento suo, una
+    transizione esistente, una musica gia' automatizzata), quindi si puo'
+    rilanciare. Ritorna ``da_fare`` — testi, grafica, momenti forti: la parte
+    che dipende dal contenuto e tocca a te — e ``controllo`` (review_edit).
+    """
+    s = _store(project)
+    return stili.applica(s, style, track)
+
+
+@_strumento()
+def create_style(name: str, guide: str, short: str = "", base: str = "vlog",
+                 recipe: dict | None = None, style: str | None = None) -> dict:
+    """Crea (o con ``style`` aggiorna) uno stile di montaggio personale.
+
+    Lo stile resta su questo computer, compare nel menu stili della chat e si
+    applica con apply_style come quelli integrati. ``guide`` e' il testo che
+    arriva al modello a ogni messaggio (ritmo, colore, testi, musica, con
+    parole concrete). ``base``: cinematic | shortform | documentary | vlog,
+    da cui parte la ricetta. ``recipe`` corregge solo le voci che nomina:
+
+      look: id di un look (list_styles -> looks) o null
+      movimento: spinta | punch | null      zoom: 0-0.5
+      transizioni: {"tipo": "dissolve", "durata": 0.6, "ogni": 4} o null
+      apertura, chiusura: secondi di dissolvenza (0-5)
+      musica: arco | crescendo | sotto_voce | null
+      accenti: {"effetto": "shake"|"glitch", "ogni": 4} o null
+      atti: true per i tre atti del trailer
+      attese: cosa review_edit pretende (movimento, colore, transizioni,
+        grafica, musica_viva, ritmo_vario, effetti)
+      da_fare: cose che la ricetta non puo' fare e restano a te
+
+    Ritorna lo stile salvato e la ricetta completa che apply_style usera'.
+    """
+    nuovo = stili.salva(name, guide, short, base, style, recipe)
+    return {"stile": nuovo, "ricetta": stili.ricetta(nuovo["id"]),
+            "prossimo_passo": f"apply_style(style='{nuovo['id']}') dopo aver messo le clip"}
+
+
+@_strumento()
+def delete_style(style: str) -> dict:
+    """Elimina uno stile personale (quelli integrati non si toccano)."""
+    stili.elimina(style)
+    return {"eliminato": style, "stili": [s["id"] for s in stili.tutti()]}
+
+
+@_strumento()
+def review_edit(style: str | None = None, project: str | None = None) -> dict:
+    """Il montaggio e' fatto o solo tagliato? Controllo istantaneo, senza render.
+
+    Conta le scelte nella timeline: movimento dentro l'inquadratura, colore,
+    transizioni, testi e grafica, musica automatizzata, varieta' delle durate.
+    Con ``style`` giudica rispetto a quello che lo stile richiede. ``avvisi``
+    dice cosa manca e con quale strumento rimediare: finche' non e' vuoto, il
+    montaggio non e' finito.
+    """
+    attese = stili.ricetta(style)["attese"] if style else None
+    return review.ricchezza(_store(project).project, attese)
+
+
+@_strumento()
 async def verify_edit(start: float | None = None, end: float | None = None,
                       height: int = 270, project: str | None = None) -> dict:
     """Renderizza davvero un tratto e verifica che sia quello che la timeline dice.
@@ -1436,7 +1635,10 @@ async def verify_edit(start: float | None = None, end: float | None = None,
     durata, i tratti neri o muti. E' la differenza tra "credo di aver montato" e
     "ho verificato": usalo prima di consegnare un render lungo.
     """
-    return await _off(review.verify, _store(project).project, start, end, height)
+    s = _store(project)
+    esito = await _off(review.verify, s.project, start, end, height)
+    esito["montaggio"] = review.ricchezza(s.project)
+    return esito
 
 
 @_strumento()

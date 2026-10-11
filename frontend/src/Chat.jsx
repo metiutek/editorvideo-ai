@@ -7,7 +7,8 @@ import { dettaglioStrumento, fmt } from './util.js'
 
 const TOOL_LABEL = {
   project_info: 'guarda la timeline', import_media: 'importa file', add_clip: 'aggiunge una clip',
-  add_clips: 'monta i tagli', add_text: 'aggiunge un titolo', add_html: 'crea una grafica',
+  add_clips: 'monta i tagli', apply_style: 'applica lo stile', review_edit: 'controlla il montaggio',
+  create_style: 'crea uno stile', add_text: 'aggiunge un titolo', add_html: 'crea una grafica',
   set_html: 'ritocca la grafica', split_clip: 'taglia', split: 'taglia', remove_clip: 'elimina una clip',
   move_clip: 'sposta una clip', move: 'sposta una clip', trim_clip: 'ritaglia', trim: 'ritaglia',
   set_speed: 'cambia velocita\'', set_fades: 'dissolvenze', crossfade: 'transizione',
@@ -220,7 +221,11 @@ export default function Chat({
         </button>
         <span className="spacer" />
         <button className={`stilepill ${stile ? 'on' : ''}`} title="Stile di montaggio"
-          onClick={() => setMenuStili((v) => !v)}>
+          onClick={() => {
+            // l'agente puo' aver creato uno stile nel frattempo (create_style)
+            if (!menuStili) api.stili().then((r) => onStili?.(r.stili)).catch(() => {})
+            setMenuStili((v) => !v)
+          }}>
           <Icon name="libreria" size={13} />
           {stili.find((s) => s.id === stile)?.nome || 'stile'}
         </button>

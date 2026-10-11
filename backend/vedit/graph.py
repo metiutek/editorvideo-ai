@@ -196,6 +196,9 @@ def slice_project(project: Project, start: float, end: float) -> Project:
             c._slice_visible = visible
             kept.append(c)
         track.clips = kept
+    # gli effetti del master leggono il tempo della timeline: un segmento deve
+    # vedere quello vero, non ripartire da zero (keyframe, grana, onde)
+    out._slice_start = getattr(project, "_slice_start", 0.0) + start
     return out
 
 
@@ -221,6 +224,7 @@ class _Builder:
         self.warnings: list[str] = []
         self._n = 0
         self._text_files = 0
+        self._durata_audio = 0.0
 
     # -- infrastruttura -------------------------------------------------
     def label(self, prefix: str) -> str:
@@ -243,10 +247,10 @@ class _Builder:
         return media.path
 
     # -- ingressi -------------------------------------------------------
-    def input_for(self, clip: Clip, media: Media) -> int:
+    def input_for(self, clip: Clip, media: Media, kind: str = "video") -> int:
         path = self.src_path(media)
         args: list[str] = []
-        if self.o.hwaccel and media.kind == "video":
+        if self.o.hwaccel and media.kind == "video" and kind == "video":
             args += ["-hwaccel", self.o.hwaccel]
         visible = clip_visible(clip)
         if media.kind == "image":
@@ -256,7 +260,9 @@ class _Builder:
             if clip.in_ > 0:
                 args += ["-ss", n(clip.in_)]
             args += ["-t", n(src_dur + 0.05)]
-        args += ["-i", path]
+        # ogni ingresso serve a un ramo solo: l'altro flusso non va nemmeno
+        # letto dal demuxer (centinaia di clip = centinaia di flussi inutili)
+        args += ["-an" if kind == "video" else "-vn", "-i", path]
         return self.add_input(args)
 
     # -- catena video di una clip ---------------------------------------
@@ -431,9 +437,24 @@ class _Builder:
                 return []
             return [f"scale=iw*{n(v)}:ih*{n(v)}:flags=bicubic"]
 
+        smin, smax = kf.bounds(s, 1.0)
+        rot = clip.transform.rotation
+        if smin < 1.0 and not kf.is_kf(rot) and abs(float(kf.sample(rot, 0, 0.0))) < 1e-6:
+            # Zoom che scende sotto 1: scale rivalutato a ogni fotogramma, che
+            # produce immagini di misura variabile. overlay le centra da se'
+            # (x/y usano w e h del fotogramma), fade e tpad le accettano. La
+            # strada di zoompan voleva una tela K volte piu' grande (fino a
+            # 7680x4320 a 1080p): ogni fotogramma in coda costava 80 MB e un
+            # pezzo di render arrivava a due giga. Con una rotazione resta
+            # zoompan: rotate fissa la misura d'uscita una volta sola.
+            expr = kf.expr(s, "t", 1.0)
+            dim = "max(2,trunc({}*clip({},0.001,10)/2)*2)"
+            return [f"scale=w={fx.quoted(dim.format('iw', expr))}"
+                    f":h={fx.quoted(dim.format('ih', expr))}:eval=frame:flags=bicubic",
+                    "format=yuva420p"]
+
         # zoom animato: zoompan non scende sotto 1, quindi pre-ingrandiamo il
         # canvas di K e chiediamo zoom = K*s(t), che a video vale esattamente s(t).
-        smin, smax = kf.bounds(s, 1.0)
         k = 1.0 if smin >= 1.0 else min(MAX_PREPAD, 1.0 / max(smin, 1e-3))
         if smin < 1.0 / MAX_PREPAD:
             self.warnings.append(
@@ -642,9 +663,12 @@ class _Builder:
                     base = out
                 drawn += 1
 
+        inizio = getattr(self.p, "_slice_start", 0.0)
         tail = fx.build_chain(self.p.master.effects, fx.Ctx(
             width=self.w, height=self.h, fps=self.fps, sample_rate=self.sr,
-            duration=duration, scale=self.scale), "video")
+            duration=duration, scale=self.scale, offset=inizio), "video")
+        if tail and inizio > 1e-9:
+            tail = [f"setpts=PTS+{n(inizio)}/TB", *tail, "setpts=PTS-STARTPTS"]
         tail.append("format=yuv420p")
         out = self.label("vout")
         self.chain(base, tail, out)
@@ -696,7 +720,7 @@ class _Builder:
             args += ["-t", n(clip_visible(clip) * abs(clip.speed or 1.0) + 0.05), "-i", path]
             idx = self.add_input(args)
         else:
-            idx = self.input_for(clip, media)
+            idx = self.input_for(clip, media, "audio")
         off = clip_offset(clip)
         f = []
         if clip.reverse:
@@ -749,6 +773,12 @@ class _Builder:
         if clip.start > 1e-6:
             ms = int(round(clip.start * 1000))
             f.append(f"adelay={ms}|{ms}:all=1")
+        # Ogni ramo dura quanto il progetto, col silenzio in coda. amix di
+        # ffmpeg 8 si blocca a caso (un render su dieci, per sempre) quando
+        # molti ingressi brevi finiscono mentre uno lungo — la musica — e'
+        # ancora aperto: con tutti gli ingressi della stessa durata no.
+        if self._durata_audio:
+            f.append(f"apad=whole_dur={n(self._durata_audio)}")
 
         out = self.label("a")
         self.chain(f"{idx}:a", f, out)
@@ -801,6 +831,7 @@ class _Builder:
         return list(mix.values())
 
     def build_audio(self, duration: float) -> str | None:
+        self._durata_audio = duration
         labels: list[str] = []
         # Anche le clip su una traccia video portano il loro audio, quindi il mix
         # le comprende. Ma se una traccia audio e' in solo si ascolta solo quella:
@@ -833,9 +864,11 @@ class _Builder:
             )
 
         tail: list[str] = []
+        inizio = getattr(self.p, "_slice_start", 0.0)
         mv = self.p.master.volume
         if kf.is_kf(mv):
-            tail.append(f"volume=volume={fx.quoted(kf.expr(mv, 't', 1.0))}:eval=frame")
+            tv = f"(t+{n(inizio)})" if inizio > 1e-9 else "t"
+            tail.append(f"volume=volume={fx.quoted(kf.expr(mv, tv, 1.0))}:eval=frame")
         elif abs(float(kf.sample(mv, 0, 1.0)) - 1.0) > 1e-6:
             tail.append(f"volume={n(float(kf.sample(mv, 0, 1.0)))}")
 

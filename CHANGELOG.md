@@ -5,6 +5,56 @@ Le voci più recenti stanno in cima.
 ## Non rilasciato · Effetti speciali
 
 ### Nuovo
+- **Export molto più veloce sulle timeline lunghe.** Un progetto di 2 minuti con 370 tagli
+  si esportava a 1/69 del tempo reale (circa 1 ora e 45). Il grafo unico teneva aperte tutte
+  le clip per tutta la durata, con un costo che cresce col quadrato dei tagli. Ora sopra i
+  20 s il render va a pezzi di circa 4 s, tagliati sugli stacchi e mai dentro clip con effetti
+  temporali; i pezzi girano in parallelo (`jobs`, `VEDIT_RENDER_JOBS`), l'audio si fa in un
+  passaggio solo e tutto si incolla senza ricodificare. Gli effetti del master nei pezzi
+  vedono il tempo vero della timeline.
+- **Il render non si mangia più la RAM.** Un pezzo a 1080p con effetti pesanti arriva a 2 GB
+  (cresce con le clip che contiene): ora un pezzo parte solo se la sua stima ci sta nella
+  memoria libera, e con poca RAM i pezzi vanno in fila. Gli zoom animati che scendono sotto 1
+  usano `scale` per fotogramma invece di una tela 4x (fino a 7680x4320) per `zoompan`, e non
+  sono più limitati a 0,25.
+- **`warp` e `glitch` 4-11 volte più veloci**: l'espressione si calcola su una mappa ridotta
+  e si applica con `displace`/`remap` invece di `geq` su ogni pixel. L'immagine resta la
+  stessa a meno di mezzo pixel.
+- **L'agente crea gli stili da solo** (`create_style`, `delete_style`, anche nella chat).
+  Prima uno stile personale si poteva scrivere solo a mano dalla UI, e la sua ricetta era
+  per forza quella del ritmo di base. Ora l'agente salva guida e ricetta (look, movimento,
+  zoom, transizioni, dissolvenze, curva della musica, accenti, attese di `review_edit`):
+  le voci non nominate vengono dal ritmo di base, i valori sbagliati sono rifiutati con
+  l'elenco di quelli ammessi. Lo stile compare nel menu della chat (che ora si ricarica a
+  ogni apertura) e `apply_style` lo esegue. `list_styles` mostra anche gli stili di
+  montaggio con le loro ricette e i look ammessi. Salvare dalla UI non cancella la ricetta.
+- **Gli stili montano davvero** (`apply_style`, anche nella chat). Uno stile era solo testo
+  per il modello, che metteva le clip in fila e si fermava: montaggi di soli tagli secchi
+  anche con lo stile scelto. Ora ogni stile ha una ricetta (`stili.RICETTE`): look sul
+  master, spinte o punch-in a keyframe, transizioni ai cambi di sezione, dissolvenze
+  d'apertura e chiusura, accenti (shake, glitch) e curva del volume della musica (arco,
+  crescendo, sotto la voce). Un gesto solo, un undo solo, e non tocca quello che è già
+  deciso. Gli stili personali prendono la ricetta del ritmo scelto, senza look. Restituisce
+  anche `da_fare`: testi, grafica e momenti forti, la parte che dipende dal contenuto.
+- **`review_edit`**: dice se il montaggio è fatto o solo tagliato, senza render. Conta
+  movimento, colore, transizioni, grafica, musica automatizzata e varietà delle durate, e
+  per ogni mancanza dice con quale strumento rimediare; con `style` giudica rispetto allo
+  stile. `verify_edit` lo include in `montaggio`, `plan_edit apply=True` ricorda che la
+  timeline ha solo tagli.
+- **`preview_media`**: fotogrammi di un media importato (griglia o fotogramma singolo)
+  **senza metterlo in timeline**. Prima l'agente poteva guardare solo la timeline e doveva
+  montare il materiale per vederlo. `guide=True` disegna una griglia al 10% per leggere le
+  coordinate di un oggetto.
+- **Tracking di un oggetto qualsiasi**: `track_mask` e `pin_to_subject` accettano
+  `box=[x, y, w, h]` (frazioni del fotogramma o pixel) e seguono l'oggetto indicato invece
+  di una classe YOLO — un logo, un pallone, un attrezzo. `vision.track_box` è
+  correlazione normalizzata in numpy (FFT + immagini integrali), avanti e indietro dal
+  fotogramma indicato, senza extra.
+- **Evidenziare**: nuovi effetti `mask_outline` (cornice colorata), `mask_spotlight`
+  (scurisce e desatura tutto tranne il riquadro) e `tint` (porta l'immagine verso un colore
+  tenendo luci e ombre); `track_mask` li fa seguire al soggetto, con `params` per colore e
+  intensità. **`highlight_subject`** (extra `vision`) evidenzia con la sagoma vera: duplica
+  la clip su una traccia sopra, muta e scontornata, e la mette in glow, tint o spotlight.
 - **Modalità di fusione per clip** (`Clip.blend`, `set_clip(blend=...)`, menu *fusione* nelle
   proprietà): normal, screen, add, multiply, overlay, softlight, hardlight, darken, lighten,
   difference, exclusion, dodge, burn. `graph._blend` posa la clip su un canvas trasparente,
@@ -30,6 +80,30 @@ Le voci più recenti stanno in cima.
   fotogrammi invece di leggere `t` (`perspective`).
 
 ### Correzioni
+- **Render che si bloccava a caso per sempre.** Con una musica lunga sotto tante clip brevi,
+  `amix` di ffmpeg 8 restava fermo a consumare un core in circa un render su dieci (riprodotto
+  con ffmpeg da solo: 5 blocchi su 40). Ora ogni ramo audio dura quanto il progetto, col
+  silenzio in coda (`apad`): 0 blocchi su 90. Ogni ingresso apre solo il flusso che gli serve
+  (`-an` per il video, `-vn` per l'audio).
+- **Clip HTML fotografate in parallelo**, un browser per clip entro la memoria libera: 2,6
+  volte più in fretta sulle grafiche non ancora in cache.
+- **`track_mask` metteva la maschera nel posto sbagliato se la sorgente non aveva la
+  risoluzione del progetto**: le coordinate erano in pixel della sorgente, ma gli effetti
+  lavorano dopo l'adattamento al canvas. Un 4K in un progetto 1080p aveva la maschera al
+  doppio della distanza dall'angolo. Ora passano per `vision.to_canvas` (contain, cover,
+  stretch, none).
+- Il prompt della chat diceva "non aggiungere effetti o titoli non chiesti" anche quando si
+  chiedeva di montare un video: ora vale per le modifiche puntuali, e per "fammi il video"
+  chiede `apply_style` e `review_edit`. Stessa indicazione all'assistente Claude Code.
+- **Una trascrizione poteva chiudere l'intero editor.** Su GPU faster-whisper passa da
+  ctranslate2 e cuDNN, codice nativo: con librerie cuDNN non allineate (`Could not load
+  symbol cudnnGetLibConfig. Error code 127`) il processo muore senza eccezione Python, e
+  dentro `vedit ui` o il server MCP si portava via tutto. Ora la trascrizione gira in un
+  processo figlio (`analyze._asr_isolata`): se cade sulla GPU si rifà su CPU, il risultato
+  porta un `avviso`, e per il resto della sessione non si riprova la GPU.
+  `VEDIT_ASR_DEVICE=cpu` salta la GPU fin dall'inizio.
+- Niente più traceback `ConnectionResetError [WinError 10054]` nel terminale di `vedit ui`
+  quando il browser chiude una connessione: su Windows era rumore di asyncio, non un errore.
 - `set_clip` da MCP falliva sempre se non si passava `fit`: il `None` veniva validato come
   un adattamento sconosciuto.
 - `track_mask` metteva i keyframe nel tempo della *sorgente*: su una clip con attacco

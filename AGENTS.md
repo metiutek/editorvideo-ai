@@ -59,6 +59,7 @@ di inventarti una diagnosi.
 | `externally-managed-environment` | gestito da solo: lo script crea `.venv` e ci reinstalla dentro. |
 | `eseguibile in uso` (Windows) | l'interfaccia o il server MCP sono avviati e tengono `vedit-mcp.exe`. Chiudili e rilancia. |
 | `npm non trovato` | Node.js 18+ manca: CLI e MCP funzionano lo stesso, resta fuori solo l'interfaccia web. |
+| `Could not load symbol cudnnGetLibConfig` durante una trascrizione | cuDNN di torch e di ctranslate2 non allineate. La trascrizione gira in un processo a parte e si rifà da sola su CPU (il risultato porta `avviso`); per non provare nemmeno la GPU: `VEDIT_ASR_DEVICE=cpu`. |
 | extra `chat` non installabile | l'assistente in chat resta spento, tutto il resto è identico. |
 
 L'assistente in chat dentro la UI si configura dall'app (scheda *assistente*): Claude Code
@@ -136,7 +137,8 @@ Conseguenze pratiche quando modifichi qualcosa:
   regressioni di composizione.
 
 Le scelte tecniche meno ovvie (ordine di disegno, `tpad` invece dei PTS, transizioni fatte con
-maschere alpha, filtergraph su file per il limite di 32k di Windows) sono spiegate nel README,
+maschere alpha, filtergraph su file per il limite di 32k di Windows, render a pezzi paralleli
+con budget di memoria, distorsioni su mappa ridotta) sono spiegate nel README,
 sezione *Come è fatto*: leggila prima di toccare `graph.py`.
 
 ---
@@ -200,16 +202,37 @@ deriva, e gli stacchi finiscono progressivamente fuori tempo.
 a file: da tre minuti di ripresa continua escono decine di candidati con un punto d'attacco
 vero. Leggi il piano prima di applicarlo (`apply=True` costruisce davvero la timeline).
 
-Per guardare il girato prima di montarlo: `inspect_footage` vuole il **file sorgente** in
-`path`, oppure `media=` / `clip=`; il progetto va sempre in `project=`. `preview_grid` mostra
+Per guardare il girato prima di montarlo: `preview_media` restituisce i fotogrammi di un
+media importato (o di un file) **senza metterlo in timeline**; `inspect_footage` vuole il
+**file sorgente** in `path`, oppure `media=` / `clip=`; il progetto va sempre in `project=`. `preview_grid` mostra
 tutto il montaggio insieme ed è il modo più rapido per accorgersi che un punto d'attacco è
 caduto sull'inquadratura sbagliata.
+
+### Stili: ricetta, non solo testo
+
+La guida di uno stile (`stili.STILI`) e' testo per il modello, e un testo si legge e si
+ignora: l'agente metteva le clip in fila e si fermava. `stili.RICETTE` e' la parte dello stile
+che si applica senza capire il girato — look, movimento a keyframe, transizioni ai cambi di
+sezione, dissolvenze, accenti, curva del volume della musica — ed `apply_style`
+(`stili.applica`) la mette in timeline in un blocco solo, senza toccare cio' che e' gia'
+deciso. `review_edit` (`review.ricchezza`) conta le scelte nella timeline e segnala il
+montaggio di soli tagli. Uno stile nuovo vuole la sua ricetta, e `tests/test_ricette.py` la
+renderizza. Gli stili personali li crea anche l'agente (`create_style`, `delete_style`; nella
+chat `create_style`): guida a parole piu' una ricetta parziale che `stili.valida_ricetta`
+controlla e che corregge quella del ritmo di base. `list_styles` mostra stili, ricette e look
+ammessi; il menu stili della UI si ricarica a ogni apertura, quindi lo stile creato compare
+senza ricaricare la pagina.
 
 ### Effetti speciali
 
 Fusione per clip con `set_clip(blend=...)` (screen/add per luci, fumo e particelle su fondo
 nero; multiply per texture). Distorsioni, glitch, tremolio, `tilt3d`, `sky_key`,
-`remove_object` sono effetti normali (`add_effect`). `remove_background` (scontorno IA) mette
+`remove_object` sono effetti normali (`add_effect`). Per evidenziare: `track_mask` con
+`mask_outline`, `mask_spotlight` o `mask_box` semitrasparente; con `box=[x,y,w,h]` segue un
+oggetto qualsiasi (`vision.track_box`, correlazione normalizzata in numpy, niente YOLO), e le
+coordinate della maschera passano per `vision.to_canvas` perche' gli effetti lavorano dopo
+l'adattamento al canvas. `highlight_subject` (`Store.highlight_subject`) duplica la clip su
+una traccia sopra, muta, con lo scontorno: glow, tint o spotlight sulla sagoma vera. `remove_background` (scontorno IA) mette
 `matte` in **testa** alla catena: la maschera e' allineata all'immagine prima degli effetti, e
 `graph._matte` la fa passare per le stesse operazioni della clip (attacco, velocita', reverse,
 inquadratura). `pin_to_subject` porta la traccia del soggetto dal tempo della sorgente al

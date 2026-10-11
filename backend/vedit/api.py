@@ -204,10 +204,24 @@ _mcp = _PonteMcp()
 MCP_ATTIVO = False
 
 
+def _zitto_su_reset(loop: asyncio.AbstractEventLoop, ctx: dict) -> None:
+    """Il browser che chiude una connessione non e' un errore.
+
+    Su Windows il loop proactor di asyncio, chiudendo un socket che il browser
+    ha gia' abbandonato (scheda chiusa, ricarica, anteprima interrotta), stampa
+    un traceback ``ConnectionResetError [WinError 10054]`` che sembra un crash e
+    non lo e'. Quelli si tacciono; tutto il resto passa al gestore normale.
+    """
+    if isinstance(ctx.get("exception"), (ConnectionResetError, ConnectionAbortedError)):
+        return
+    loop.default_exception_handler(ctx)
+
+
 @asynccontextmanager
 async def _vita(_app):
     """Avvia e ferma il server MCP insieme all'interfaccia."""
     global MCP_ATTIVO
+    asyncio.get_running_loop().set_exception_handler(_zitto_su_reset)
     try:
         from mcp.server.transport_security import TransportSecuritySettings
 
@@ -1001,6 +1015,7 @@ class StileBody(BaseModel):
     breve: str = ""
     piano: str = "vlog"
     id: str | None = None
+    ricetta: dict | None = None
 
 
 @app.get("/api/stili")
@@ -1012,7 +1027,8 @@ def stili_elenco() -> dict:
 def stili_salva(body: StileBody) -> dict:
     """Stile di montaggio scritto dall'utente: resta su questo computer (~/.vedit)."""
     try:
-        nuovo = stili.salva(body.nome, body.guida, body.breve, body.piano, body.id)
+        nuovo = stili.salva(body.nome, body.guida, body.breve, body.piano, body.id,
+                            body.ricetta)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"stile": nuovo["id"], "stili": stili.descrivi()}

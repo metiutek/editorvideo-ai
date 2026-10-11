@@ -117,8 +117,8 @@ def test_ripiego_toglie_prima_la_decodifica_poi_tutto(assets, tmp_path, monkeypa
     tentativi = []
     reale = render.build_command
 
-    def spia(project, opts, workdir):
-        args, dur, warn, enc = reale(project, opts, workdir)
+    def spia(project, opts, workdir, pre=None):
+        args, dur, warn, enc = reale(project, opts, workdir, pre)
         tentativi.append({"hwaccel": "-hwaccel" in args, "enc": enc})
         return args, dur, warn, enc
 

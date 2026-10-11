@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from vedit import api as api_mod
-from vedit import chat, llm
+from vedit import chat, llm, stili
 from vedit.store import Store
 
 
@@ -499,3 +499,28 @@ def test_l_assistente_non_ha_l_export_e_puo_chiedere():
     assert not any("render" in n or "export" in n for n in nomi)
     assert "Non esportare mai di tua iniziativa" in chat.SYSTEM
     assert "AskUserQuestion qui non funziona" in llm.SISTEMA_CLAUDE_CODE
+
+
+def test_l_assistente_applica_lo_stile_e_controlla(assets):
+    """Montare non e' solo mettere in fila: la chat ha la ricetta e il controllo."""
+    nomi = {t["name"] for t in chat.build_tools()}
+    assert {"apply_style", "review_edit"} <= nomi
+    assert "apply_style" in chat.SYSTEM and "review_edit" in chat.SYSTEM
+    s = Store.create("a", "720p")
+    m = s.import_media([assets["red"]])[0]
+    s.add_clips([{"media": m.id, "start": i * 1.0, "in": 0.0, "duration": 1.0}
+                 for i in range(4)])
+    assert json.loads(chat.execute(s, "review_edit", {}))["solo_tagli"]
+    esito = json.loads(chat.execute(s, "apply_style", {"style": "dinamico"}))
+    assert esito["applicato"]
+    assert not json.loads(chat.execute(s, "review_edit", {"style": "dinamico"}))["solo_tagli"]
+
+
+def test_l_assistente_crea_uno_stile(monkeypatch, tmp_path):
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path))
+    assert "create_style" in {t["name"] for t in chat.build_tools()}
+    esito = json.loads(chat.execute(Store.create("a", "720p"), "create_style", {
+        "name": "Mio", "guide": "tagli secchi", "base": "shortform",
+        "recipe": {"accenti": {"effetto": "glitch", "ogni": 3}}}))
+    assert esito["ricetta"]["accenti"] == ["glitch", 3]
+    assert stili.trova(esito["stile"])["personale"]

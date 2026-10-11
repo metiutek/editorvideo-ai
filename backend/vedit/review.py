@@ -64,8 +64,6 @@ def contact_sheet(project, output: str, count: int = 12, width: int = 320,
                   cols: int = 4, start: float | None = None,
                   end: float | None = None, use_proxy: bool = True) -> dict:
     """Griglia di fotogrammi della timeline, con il tempo stampato su ognuno."""
-    from PIL import Image, ImageDraw
-
     tempi = sample_times(project, count, start, end)
     tmp = Path(tempfile.mkdtemp(prefix="vedit_sheet_"))
     frames = []
@@ -74,6 +72,22 @@ def contact_sheet(project, output: str, count: int = 12, width: int = 320,
         render.render_frame(project, t, str(f), width, use_proxy)
         frames.append((t, str(f)))
 
+    res = griglia([(f"{i}  {_timecode(t)}", f) for i, (t, f) in enumerate(frames)],
+                  output, cols)
+    return {"file": res["file"], "fotogrammi": len(frames),
+            "tempi": tempi, "griglia": res["griglia"]}
+
+
+def griglia(frames: list[tuple[str, str]], output: str, cols: int = 4,
+            guide: bool = False) -> dict:
+    """Affianca i fotogrammi in una griglia, con l'etichetta stampata su ognuno.
+
+    ``guide`` disegna una rete al 10% con le frazioni sui bordi: serve a chi
+    guarda l'immagine per dire *dove* sta un oggetto (il ``box`` di track_mask
+    in frazioni del fotogramma) invece di tirare a indovinare i pixel.
+    """
+    from PIL import Image, ImageDraw
+
     prima = Image.open(frames[0][1])
     fw, fh = prima.size
     cols = max(1, min(cols, len(frames)))
@@ -81,13 +95,20 @@ def contact_sheet(project, output: str, count: int = 12, width: int = 320,
     sheet = Image.new("RGB", (cols * fw, righe * fh), (12, 12, 14))
     disegna = ImageDraw.Draw(sheet)
 
-    for i, (t, f) in enumerate(frames):
-        img = Image.open(f)
+    for i, (etichetta, f) in enumerate(frames):
+        img = Image.open(f).convert("RGB")
         if img.size != (fw, fh):
             img = img.resize((fw, fh))
         x, y = (i % cols) * fw, (i // cols) * fh
         sheet.paste(img, (x, y))
-        etichetta = f"{i}  {_timecode(t)}"
+        if guide:
+            for k in range(1, 10):
+                gx, gy = x + fw * k // 10, y + fh * k // 10
+                colore = (255, 80, 80) if k == 5 else (0, 230, 255)
+                disegna.line([gx, y, gx, y + fh], fill=colore, width=1)
+                disegna.line([x, gy, x + fw, gy], fill=colore, width=1)
+                disegna.text((gx + 2, y + fh - 12), f".{k}", fill=colore)
+                disegna.text((x + 2, gy + 1), f".{k}", fill=colore)
         # riquadro scuro dietro al testo: sul chiaro sarebbe illeggibile
         disegna.rectangle([x + 4, y + 4, x + 4 + 8 * len(etichetta), y + 22],
                           fill=(0, 0, 0))
@@ -96,8 +117,51 @@ def contact_sheet(project, output: str, count: int = 12, width: int = 320,
     out = Path(output)
     out.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(str(out), quality=88)
-    return {"file": str(out.resolve()), "fotogrammi": len(frames),
-            "tempi": tempi, "griglia": [cols, righe]}
+    return {"file": str(out.resolve()), "griglia": [cols, righe]}
+
+
+def media_sheet(path: str, output: str, count: int = 8, width: int = 320,
+                cols: int = 4, start: float | None = None, end: float | None = None,
+                t: float | None = None, guide: bool = False) -> dict:
+    """Fotogrammi di un file sorgente, senza passare dalla timeline.
+
+    Per scegliere il materiale bisogna vederlo prima di montarlo: mettere ogni
+    ripresa in timeline solo per guardarla sporca il progetto e la cronologia.
+    Con ``t`` restituisce un solo fotogramma (largo ``width``); altrimenti una
+    griglia di ``count`` istanti presi a meta' di tratti uguali fra ``start``
+    ed ``end`` della sorgente.
+    """
+    from . import probe
+
+    m = probe.probe(path)
+    if not m.has_video:
+        raise ValueError(f"{Path(path).name} non ha video: niente da guardare")
+    dur = m.duration or 0.0
+    if t is not None:
+        tempi = [max(0.0, min(float(t), max(0.0, dur - 0.05)))]
+    else:
+        a = max(0.0, start or 0.0)
+        b = min(dur, end) if end is not None else dur
+        if b <= a:
+            raise ValueError(f"intervallo vuoto: {a}-{b} (il file dura {dur:.2f}s)")
+        n = max(1, int(count))
+        tempi = [round(a + (b - a) / n * (i + 0.5), 3) for i in range(n)]
+    tmp = Path(tempfile.mkdtemp(prefix="vedit_media_"))
+    frames = []
+    for i, tt in enumerate(tempi):
+        f = tmp / f"{i:03d}.jpg"
+        subprocess.run([
+            ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error",
+            "-y", "-ss", f"{tt:.3f}", "-i", str(path), "-frames:v", "1",
+            "-vf", f"scale={int(width)}:-2", "-q:v", "3", str(f),
+        ], capture_output=True, timeout=120)
+        if f.exists() and f.stat().st_size > 0:
+            frames.append((f"{i}  {_timecode(tt)}", str(f), tt))
+    if not frames:
+        raise ValueError(f"nessun fotogramma leggibile da {Path(path).name}")
+    res = griglia([(e, f) for e, f, _ in frames], output, cols, guide)
+    return {"file": res["file"], "tempi": [tt for _, _, tt in frames],
+            "durata_sorgente": round(dur, 3), "risoluzione": [m.width, m.height]}
 
 
 # --------------------------------------------------------------------------
@@ -391,3 +455,100 @@ def verify(project, start: float | None = None, end: float | None = None,
         except OSError:
             pass
     return esito
+
+
+# --------------------------------------------------------------------------
+# montaggio piatto: quello che manca, letto dalla timeline
+# --------------------------------------------------------------------------
+
+# cosa ci si aspetta da un montaggio quando lo stile non dice altro
+ATTESE_DEFAULT = ("movimento", "colore", "musica_viva", "ritmo_vario")
+
+_RIMEDI = {
+    "movimento": "nessun movimento dentro l'inquadratura: spinte lente o punch-in con "
+                 "set_transform(scale={'kf':...}), oppure apply_style",
+    "colore": "nessun look: un preset di colore sul master (apply_preset / add_effect) "
+              "da' unita' a riprese diverse",
+    "transizioni": "solo stacchi secchi: almeno i cambi di sezione vogliono una "
+                   "transizione o una dissolvenza motivata",
+    "grafica": "nessun testo o grafica: titolo d'apertura, sottopancia o cartelli "
+               "(add_text, add_html)",
+    "musica_viva": "musica a volume fisso: automatizza gain_db con i keyframe sulle "
+                   "sezioni di music_beats (o apply_style)",
+    "ritmo_vario": "tagli tutti della stessa durata: il ritmo e' un metronomo, alterna "
+                   "inquadrature tenute e raffiche",
+    "effetti": "nessun effetto sulle clip: per questo stile servono accenti (glow, "
+               "rgb_split, shake, velocita') sui momenti forti",
+}
+
+
+def ricchezza(project, attese: tuple[str, ...] | list[str] | None = None) -> dict:
+    """Quanto il montaggio e' *fatto* e non solo tagliato.
+
+    Non guarda le immagini: conta le scelte che stanno nella timeline —
+    movimento, colore, transizioni, grafica, musica automatizzata, durate dei
+    tagli. Un montaggio con solo tagli secchi su volume fisso esce piatto anche
+    con materiale buono, ed e' esattamente l'errore che un agente fa quando si
+    ferma dopo aver messo le clip in fila. ``attese`` sono le voci che lo stile
+    richiede: le altre mancanze non sono un difetto.
+    """
+    from . import keyframes as kf
+
+    attese = tuple(attese) if attese else ATTESE_DEFAULT
+    video = [c for t in project.tracks if t.kind == "video" for c in t.clips
+             if c.type == "media" and c.enabled]
+    audio_tr = [t for t in project.tracks if t.kind == "audio"]
+    musica = [c for t in audio_tr for c in t.clips if c.type == "media" and c.duration >= 8]
+
+    def mosso(c) -> bool:
+        tf = c.transform
+        if any(kf.is_kf(v) for v in (tf.x, tf.y, tf.scale, tf.rotation)):
+            return True
+        return abs(float(kf.sample(tf.scale, 0, 1.0)) - 1.0) > 0.02
+
+    colore_fx = {"color", "colorbalance", "temperature", "curves", "lut", "colormatch",
+                 "exposure", "vibrance", "hsl", "levels", "tint", "hue", "whitebalance"}
+    tutti_fx = [e.type for c in video for e in c.effects if e.type != "matte"]
+    master_fx = [e.type for e in project.master.effects]
+    durate = [c.duration for c in video]
+    media_d = sum(durate) / len(durate) if durate else 0.0
+    cv = (math.sqrt(sum((d - media_d) ** 2 for d in durate) / len(durate)) / media_d
+          if len(durate) > 1 and media_d > 0 else 1.0)
+
+    conti = {
+        "clip_video": len(video),
+        "con_movimento": sum(1 for c in video if mosso(c)),
+        "effetti_clip": len(tutti_fx),
+        "effetti_master": len(master_fx),
+        "transizioni": sum(1 for c in video if c.transition_out.duration > 0
+                           or c.fade_in > 0 or c.fade_out > 0),
+        "grafica": sum(1 for t in project.tracks for c in t.clips
+                       if c.type in ("text", "html")),
+        "cambi_velocita": sum(1 for c in video if abs(c.speed - 1.0) > 1e-3 or c.reverse),
+        "musica_automatizzata": sum(1 for c in musica if kf.is_kf(c.audio.gain_db))
+                                + sum(1 for t in audio_tr if t.sidechain),
+        "tracce_musica": len(musica),
+        "variazione_durate": round(cv, 3),
+    }
+    presenti = {
+        "movimento": conti["con_movimento"] >= max(1, len(video) // 4),
+        "colore": bool(colore_fx & set(tutti_fx + master_fx)),
+        "transizioni": conti["transizioni"] > 0,
+        "grafica": conti["grafica"] > 0,
+        "musica_viva": not musica or conti["musica_automatizzata"] > 0,
+        "ritmo_vario": len(video) < 6 or cv >= 0.15,
+        "effetti": bool(set(tutti_fx) - colore_fx) or conti["cambi_velocita"] > 0,
+    }
+    mancano = [k for k in attese if not presenti.get(k, True)]
+    avvisi = [_RIMEDI[k] for k in mancano]
+    solo_tagli = (len(video) > 1 and not any(presenti[k] for k in
+                  ("movimento", "colore", "transizioni", "grafica", "effetti"))
+                  and conti["musica_automatizzata"] == 0)
+    if solo_tagli:
+        avvisi.insert(0, "il montaggio e' solo tagli: nessun movimento, colore, transizione, "
+                         "grafica o automazione. Non e' finito: applica lo stile "
+                         "(apply_style) e poi rifinisci i momenti forti")
+    voto = sum(1 for k in attese if presenti.get(k, True))
+    return {"voto": f"{voto}/{len(attese)}", "solo_tagli": solo_tagli, "mancano": mancano,
+            "presenti": [k for k, v in presenti.items() if v], "conti": conti,
+            "avvisi": avvisi, "ok": not avvisi}

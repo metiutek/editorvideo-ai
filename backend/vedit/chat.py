@@ -27,9 +27,19 @@ Come lavorare:
 - Lo stato del progetto (media, tracce, clip con i loro id e tempi) ti viene
   passato a ogni turno. Usa quegli id, non inventarli. Se ti serve lo stato
   aggiornato dopo una modifica, chiama project_info.
-- Fai il lavoro richiesto e basta: non aggiungere effetti, titoli o tagli che
-  non sono stati chiesti. Se una richiesta e' ambigua in modo che cambierebbe
-  il risultato, chiedi; per le scelte di poco conto decidi tu e dillo.
+- Per una modifica puntuale ("taglia qui", "togli questa clip") fai quella e
+  basta, senza aggiungere effetti o titoli. Se una richiesta e' ambigua in modo
+  che cambierebbe il risultato, chiedi; per le scelte di poco conto decidi tu e
+  dillo.
+- Quando ti chiedono di *montare* ("fammi il video", "monta queste clip"),
+  mettere le clip in fila e' solo meta' del lavoro: un montaggio di soli tagli
+  secchi su musica a volume fisso esce piatto. Dopo le clip chiama apply_style
+  (lo stile scelto, o quello che si adatta alla richiesta), poi aggiungi tu
+  testi e grafica dove servono e chiudi con review_edit: finche' da' avvisi,
+  non hai finito.
+- Se l'utente descrive un modo di montare che nessuno stile copre, o ti chiede
+  di creare uno stile, usa create_style: resta nel suo menu stili e si applica
+  con apply_style.
 - I tempi sono in secondi dall'inizio della timeline. La durata delle clip e'
   in timeline, non nella sorgente.
 - Per un "look" o una catena audio preferisci apply_preset: sono combinazioni
@@ -60,6 +70,7 @@ _STR = {"type": "string"}
 
 def build_tools() -> list[dict]:
     look_ids = [p["id"] for p in presets.LOOKS + presets.AUDIO]
+    look_only = [p["id"] for p in presets.LOOKS]
     tr_ids = [t["id"] for t in presets.transitions()]
     return [
         _tool("project_info",
@@ -134,6 +145,31 @@ def build_tools() -> list[dict]:
               "clip_id assente = applica al master, cioe' a tutto il video.",
               {"preset_id": {"type": "string", "enum": look_ids}, "clip_id": _STR},
               ["preset_id"]),
+        _tool("apply_style",
+              "Applica la base di uno stile di montaggio a tutta la timeline in un gesto: "
+              "look sul master, movimento dentro l'inquadratura, transizioni ai cambi di "
+              "sezione, apertura e chiusura, accenti e volume della musica che si muove. "
+              "Usalo SEMPRE dopo aver messo le clip in fila: le clip in fila non sono "
+              "ancora un montaggio. Non tocca quello che e' gia' stato deciso.",
+              {"style": {"type": "string",
+                         "description": "id: " + ", ".join(x["id"] for x in stili.tutti())},
+               "track": _STR}, ["style"]),
+        _tool("create_style",
+              "Crea (o con style aggiorna) uno stile di montaggio personale dell'utente: "
+              "compare nel suo menu stili e si applica con apply_style. guide = come "
+              "montare a parole; base = ritmo di partenza; recipe corregge la ricetta: "
+              "look (" + ", ".join(look_only) + " o null), movimento (spinta|punch|null), "
+              "zoom 0-0.5, transizioni {tipo,durata,ogni} o null, apertura/chiusura in s, "
+              "musica (arco|crescendo|sotto_voce|null), accenti {effetto: shake|glitch, "
+              "ogni} o null, attese, da_fare.",
+              {"name": _STR, "guide": _STR, "short": _STR,
+               "base": {"type": "string", "enum": list(stili.PIANI)},
+               "recipe": {"type": "object"}, "style": _STR}, ["name", "guide"]),
+        _tool("review_edit",
+              "Il montaggio e' fatto o solo tagliato? Dice cosa manca (movimento, colore, "
+              "transizioni, grafica, musica viva, ritmo) e con quale strumento rimediare. "
+              "Finche' da' avvisi il lavoro non e' finito.",
+              {"style": _STR}, []),
         _tool("add_effect",
               "Applica un singolo effetto con parametri espliciti. clip_id assente = master.",
               {"effect": _STR, "params": {"type": "object"}, "clip_id": _STR}, ["effect"]),
@@ -185,7 +221,7 @@ def build_tools() -> list[dict]:
 # --------------------------------------------------------------------------
 
 # strumenti che non sono metodi di Store
-_SPECIAL = {"project_info", "apply_preset"}
+_SPECIAL = {"project_info", "apply_preset", "apply_style", "review_edit", "create_style"}
 
 
 def execute(store: Any, name: str, args: dict) -> str:
@@ -203,6 +239,21 @@ def execute(store: Any, name: str, args: dict) -> str:
         store.add_effects(clip_id, p["effects"])
         dove = f"clip {clip_id}" if clip_id else "master"
         return f"preset '{p['name']}' applicato a {dove} ({len(p['effects'])} effetti)"
+
+    if name == "apply_style":
+        return json.dumps(stili.applica(store, args["style"], args.get("track")),
+                          ensure_ascii=False, default=str)
+
+    if name == "create_style":
+        nuovo = stili.salva(args["name"], args["guide"], args.get("short", ""),
+                            args.get("base", "vlog"), args.get("style"), args.get("recipe"))
+        return json.dumps({"stile": nuovo["id"], "ricetta": stili.ricetta(nuovo["id"])},
+                          ensure_ascii=False, default=str)
+
+    if name == "review_edit":
+        from . import review
+        attese = stili.ricetta(args["style"])["attese"] if args.get("style") else None
+        return json.dumps(review.ricchezza(store.project, attese), ensure_ascii=False)
 
     result = getattr(store, name)(**args)
     if result is None:

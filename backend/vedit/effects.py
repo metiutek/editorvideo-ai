@@ -368,6 +368,75 @@ def _f_mask_box(p: dict, c: Ctx) -> list[str]:
     ]
 
 
+def _f_mask_outline(p: dict, c: Ctx) -> list[str]:
+    """Cornice colorata attorno a un oggetto: lo indica senza coprirlo."""
+    w, h, x, y = _box(p, c)
+    color = esc_str(str(val(p, "color", "yellow")))
+    alpha = fnum(max(0.0, min(1.0, num(p, "opacity", 1.0))))
+    spessore = max(1, int(num(p, "thickness", 6) * c.scale))
+    return [
+        f"drawbox=x='{x}':y='{y}':w={w}:h={h}:color={color}@{alpha}:t={spessore}"
+        + enable_expr(p, c)
+    ]
+
+
+def _f_mask_spotlight(p: dict, c: Ctx) -> list[str]:
+    """Abbassa e spegne tutto tranne il rettangolo: l'occhio va dove resta luce.
+
+    Il rettangolo viene ritagliato dal fotogramma *prima* di scurirlo e
+    rimesso sopra, quindi dentro resta identico all'originale.
+    """
+    w, h, x, y = _box(p, c)
+    luce = fnum(-0.6 * max(0.0, min(1.0, num(p, "amount", 0.6))))
+    sat = fnum(max(0.0, min(3.0, num(p, "saturation", 0.4))))
+    a, b, d, m = c.uid("spa"), c.uid("spb"), c.uid("spd"), c.uid("spm")
+    en = enable_expr(p, c)
+    return [
+        f"split[{a}][{b}];"
+        f"[{a}]eq=brightness={luce}:saturation={sat}{en}[{d}];"
+        f"[{b}]crop=w={w}:h={h}:x='{x}':y='{y}'[{m}];"
+        f"[{d}][{m}]overlay=x='{x}':y='{y}'{en}"
+    ]
+
+
+def tint_matrix(color: str, amount: float) -> list[float]:
+    """Matrice 3x3 di colorchannelmixer che porta l'immagine verso ``color``.
+
+    Ogni pixel diventa la sua luminanza moltiplicata per il colore, mescolata
+    all'originale secondo ``amount``: le luci restano luci e le ombre ombre,
+    cambia solo la tinta. ``amount`` = 0 lascia tutto com'era.
+    """
+    r, g, b = _rgb(color)
+    m = max(0.0, min(1.0, amount))
+    luma = (0.299, 0.587, 0.114)
+    out = []
+    for i, ch in enumerate((r, g, b)):
+        for j in range(3):
+            out.append(round((1 - m) * (1.0 if i == j else 0.0) + m * ch * luma[j], 4))
+    return out
+
+
+def _rgb(color: str) -> tuple[float, float, float]:
+    nomi = {"red": "ff0000", "green": "00ff00", "blue": "0000ff", "yellow": "ffff00",
+            "cyan": "00ffff", "magenta": "ff00ff", "white": "ffffff", "black": "000000",
+            "orange": "ff8000", "purple": "8000ff", "pink": "ff60c0"}
+    s = str(color).strip().lower().split("@")[0]
+    s = nomi.get(s, s).lstrip("#").removeprefix("0x")
+    if len(s) == 3:
+        s = "".join(ch * 2 for ch in s)
+    try:
+        return tuple(int(s[i:i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
+    except ValueError:
+        raise ValueError(f"colore non riconosciuto: {color!r} (usa un nome o #rrggbb)") from None
+
+
+def _f_tint(p: dict, c: Ctx) -> list[str]:
+    """Colora l'immagine verso una tinta tenendo luci e ombre (evidenziare, duotono)."""
+    m = tint_matrix(str(val(p, "color", "#ffcc00")), num(p, "amount", 0.6))
+    nomi = ("rr", "rg", "rb", "gr", "gg", "gb", "br", "bg", "bb")
+    return ["colorchannelmixer=" + ":".join(f"{k}={fnum(v)}" for k, v in zip(nomi, m))]
+
+
 def _f_subtitles(p: dict, c: Ctx) -> list[str]:
     """Imprime un file di sottotitoli (.ass, .srt, .vtt) nell'immagine.
 
@@ -508,6 +577,91 @@ def _geq_rgba(sx: str, sy: str) -> list[str]:
     ]
 
 
+# Spostamento massimo che displace sa rappresentare: la mappa e' un byte con
+# 128 al centro. Oltre si torna a geq, che e' lento ma non ha limiti.
+DISPLACE_MAX = 127
+
+
+def _ha_filtri(*nomi: str) -> bool:
+    try:
+        from . import ffmpeg
+        f = ffmpeg.filters()
+    except Exception:  # noqa: BLE001 — senza ffmpeg la catena resta comunque scrivibile
+        return False
+    return all(n in f for n in nomi)
+
+
+def _ha_displace() -> bool:
+    return _ha_filtri("displace", "scale2ref")
+
+
+def _ha_remap() -> bool:
+    return _ha_filtri("remap", "scale2ref")
+
+
+def _piccola(k: int):
+    """Coordinate dell'immagine intera viste da una mappa ``k`` volte piu' piccola."""
+    return (f"crop=w=iw/{k}:h=ih/{k}:x=0:y=0", f"((X+0.5)*{k}-0.5)", f"((Y+0.5)*{k}-0.5)",
+            f"(W*{k})", f"(H*{k})")
+
+
+def _remap(c: Ctx, sx, sy, k: int = 4) -> list[str]:
+    """Rimappatura senza limite di spostamento: vortici e lenti forti.
+
+    Come ``_displace`` l'espressione gira su una mappa piccola, ma la mappa
+    porta le coordinate *assolute* della sorgente a 16 bit, quindi nessun tetto
+    di 127 px: e' ``remap`` di ffmpeg. Non conosce ``enable``, per questo il
+    glitch (acceso solo a raffiche) resta su displace.
+    """
+    crop, X, Y, W, H = _piccola(k)
+    a, b, d = c.uid("rma"), c.uid("rmb"), c.uid("rmc")
+    mx, my, bx, by, r1, r2 = (c.uid(x) for x in ("rmx", "rmy", "rmbx", "rmby", "rmr", "rms"))
+    return ["".join([
+        f"format=gbrap,split=3[{a}][{b}][{d}];",
+        f"[{b}]{crop},format=gray16,geq=lum='clip({sx(X, Y, W, H)},0,{W}-1)'[{mx}];",
+        f"[{d}]{crop},format=gray16,geq=lum='clip({sy(X, Y, W, H)},0,{H}-1)'[{my}];",
+        f"[{mx}][{a}]scale2ref=w=rw:h=rh:flags=bilinear[{bx}][{r1}];",
+        f"[{my}][{r1}]scale2ref=w=rw:h=rh:flags=bilinear[{by}][{r2}];",
+        f"[{r2}][{bx}][{by}]remap",
+    ])]
+
+
+def _displace(c: Ctx, dx, dy, k: int = 4, righe: bool = False, en: str = "") -> list[str]:
+    """Rimappa i pixel come ``_geq_rgba``, ma una ventina di volte piu' in fretta.
+
+    geq valuta l'espressione per ogni pixel e per ogni piano: su un 1080p sono
+    otto milioni di valutazioni a fotogramma, e un warp andava a 3 fotogrammi
+    al secondo. Qui l'espressione si calcola su una mappa piccola (``k`` volte
+    piu' piccola per lato, o una colonna sola con ``righe=True`` quando lo
+    spostamento dipende solo dalla riga, come onda e glitch), la mappa si
+    ingrandisce bilineare alla misura vera e ``displace`` sposta i pixel.
+
+    ``dx``/``dy`` sono funzioni ``(X, Y, W, H) -> espressione`` dello
+    spostamento in pixel dell'immagine intera; ``None`` = nessuno spostamento.
+    La mappa e' arrotondata: rispetto a geq resta al piu' mezzo pixel, che
+    l'interpolazione di geq leviga e qui no.
+    """
+    if righe:
+        crop = "crop=w=8:h=ih:x=0:y=0"
+        X, Y, W, H = "X", "Y", "W", "H"   # in modalita' righe X e W non vanno usati
+    else:
+        crop, X, Y, W, H = _piccola(k)
+
+    a, b, d = c.uid("dsa"), c.uid("dsb"), c.uid("dsc")
+    parti = [f"format=gbrap,split=3[{a}][{b}][{d}];"]
+    mappe = []
+    for nome, f, src in (("x", dx, b), ("y", dy, d)):
+        m = c.uid(f"ds{nome}")
+        v = f"128+clip({f(X, Y, W, H)},-{DISPLACE_MAX},{DISPLACE_MAX})+0.5" if f else "128"
+        parti.append(f"[{src}]{crop},geq=r='{v}':g='{v}':b='{v}':a='{v}'[{m}];")
+        mappe.append(m)
+    mx, my, r1, r2 = (c.uid(x) for x in ("dsmx", "dsmy", "dsr", "dss"))
+    parti.append(f"[{mappe[0]}][{a}]scale2ref=w=rw:h=rh:flags=bilinear[{mx}][{r1}];")
+    parti.append(f"[{mappe[1]}][{r1}]scale2ref=w=rw:h=rh:flags=bilinear[{my}][{r2}];")
+    parti.append(f"[{r2}][{mx}][{my}]displace=edge=smear{en}")
+    return ["".join(parti)]
+
+
 def _f_rgb_split(p: dict, c: Ctx) -> list[str]:
     """Aberrazione cromatica: rosso e blu scivolano in direzioni opposte."""
     a = int(round(num(p, "amount", 6) * c.scale))
@@ -545,43 +699,94 @@ def _f_glitch(p: dict, c: Ctx) -> list[str]:
     dx = f"gt({h1},0.72)*({h2}*2-1)*{fnum(amount)}"
     en = f":enable='{raffica('t')}'"
     split = max(1, int(round(amount * 0.25)))
-    return [
-        "format=gbrap",
-        f"geq=r='r(X+{dx},Y)':g='g(X+{dx},Y)':b='b(X+{dx},Y)':a='alpha(X+{dx},Y)'{en}",
-        f"rgbashift=rh={-min(255, split)}:bh={min(255, split)}{en}",
-    ]
+    if amount <= DISPLACE_MAX and _ha_displace():
+        # lo spostamento dipende solo dalla fascia, cioe' dalla riga
+        sposta = _displace(c, lambda X, Y, W, H: dx, None, righe=True, en=en)
+    else:
+        sposta = ["format=gbrap",
+                  f"geq=r='r(X+{dx},Y)':g='g(X+{dx},Y)':b='b(X+{dx},Y)':a='alpha(X+{dx},Y)'{en}"]
+    return [*sposta, f"rgbashift=rh={-min(255, split)}:bh={min(255, split)}{en}"]
 
 
 def _f_warp(p: dict, c: Ctx) -> list[str]:
     """Distorsioni geometriche: onda, increspatura, vortice, rigonfiamento.
 
-    Tutte rimappano i pixel con geq (piu' lento dei filtri dedicati, ma ffmpeg
-    non ha un warp generico). ``amount`` e' animabile: con i keyframe l'onda
-    arriva e se ne va invece di restare accesa per tutta la clip.
+    Ogni modo e' una rimappatura (da dove prendere il pixel in X, Y): l'onda,
+    che dipende solo dalla riga e sposta poco, va con ``_displace``; il resto
+    con ``_remap``; geq solo se ffmpeg non ha quei filtri. ``amount`` e' animabile: con i keyframe l'onda arriva e se ne va
+    invece di restare accesa per tutta la clip.
     """
     mode = str(val(p, "mode", "wave"))
     amt = f"({kf.expr(p.get('amount', 20), 'T', 20)})"
     k = fnum(c.scale)
     lam = fnum(max(2.0, num(p, "wavelength", 120) * c.scale))
     spd = fnum(num(p, "speed", 1.0))
-    cx = f"(W*{fnum(num(p, 'cx', 0.5))})"
-    cy = f"(H*{fnum(num(p, 'cy', 0.5))})"
-    r = f"hypot(X-{cx},Y-{cy})"
-    rad = f"(hypot(W,H)*{fnum(max(0.01, num(p, 'radius', 0.5)))})"
+    fcx, fcy = num(p, "cx", 0.5), num(p, "cy", 0.5)
+    radius = max(0.01, num(p, "radius", 0.5))
+
+    def geom(W, H):
+        cx, cy = f"({W}*{fnum(fcx)})", f"({H}*{fnum(fcy)})"
+        return cx, cy, f"(hypot({W},{H})*{fnum(radius)})"
+
     if mode == "wave":
-        d = f"{amt}*{k}*sin(2*PI*(Y/{lam}+T*{spd}))"
-        return _geq_rgba(f"X+{d}", "Y")
-    if mode == "ripple":
-        d = f"{amt}*{k}*sin(2*PI*({r}/{lam}-T*{spd}))/max({r},1)"
-        return _geq_rgba(f"X+(X-{cx})*{d}", f"Y+(Y-{cy})*{d}")
-    if mode == "swirl":
+        def sx(X, Y, W, H):
+            return f"{X}+{amt}*{k}*sin(2*PI*({Y}/{lam}+T*{spd}))"
+
+        def sy(X, Y, W, H):
+            return Y
+    elif mode == "ripple":
+        def _d(X, Y, W, H):
+            cx, cy, _ = geom(W, H)
+            r = f"hypot({X}-{cx},{Y}-{cy})"
+            return cx, cy, f"{amt}*{k}*sin(2*PI*({r}/{lam}-T*{spd}))/max({r},1)"
+
+        def sx(X, Y, W, H):
+            cx, _, d = _d(X, Y, W, H)
+            return f"{X}+({X}-{cx})*{d}"
+
+        def sy(X, Y, W, H):
+            _, cy, d = _d(X, Y, W, H)
+            return f"{Y}+({Y}-{cy})*{d}"
+    elif mode == "swirl":
         # angolo in gradi al centro, che si spegne al bordo del raggio
-        a = f"({amt}*PI/180*pow(max(0,1-{r}/{rad}),2))"
-        return _geq_rgba(f"{cx}+(X-{cx})*cos({a})-(Y-{cy})*sin({a})",
-                         f"{cy}+(X-{cx})*sin({a})+(Y-{cy})*cos({a})")
-    # bulge: amount positivo gonfia il centro, negativo lo risucchia
-    f = f"if(lt({r},{rad}),pow({r}/{rad},{amt}/100),1)"
-    return _geq_rgba(f"{cx}+(X-{cx})*{f}", f"{cy}+(Y-{cy})*{f}")
+        def _a(X, Y, W, H):
+            cx, cy, rad = geom(W, H)
+            r = f"hypot({X}-{cx},{Y}-{cy})"
+            return cx, cy, f"({amt}*PI/180*pow(max(0,1-{r}/{rad}),2))"
+
+        def sx(X, Y, W, H):
+            cx, cy, a = _a(X, Y, W, H)
+            return f"{cx}+({X}-{cx})*cos({a})-({Y}-{cy})*sin({a})"
+
+        def sy(X, Y, W, H):
+            cx, cy, a = _a(X, Y, W, H)
+            return f"{cy}+({X}-{cx})*sin({a})+({Y}-{cy})*cos({a})"
+    else:
+        # bulge: amount positivo gonfia il centro, negativo lo risucchia
+        def _f(X, Y, W, H):
+            cx, cy, rad = geom(W, H)
+            r = f"hypot({X}-{cx},{Y}-{cy})"
+            return cx, cy, f"if(lt({r},{rad}),pow({r}/{rad},{amt}/100),1)"
+
+        def sx(X, Y, W, H):
+            cx, _, f = _f(X, Y, W, H)
+            return f"{cx}+({X}-{cx})*{f}"
+
+        def sy(X, Y, W, H):
+            _, cy, f = _f(X, Y, W, H)
+            return f"{cy}+({Y}-{cy})*{f}"
+
+    if mode == "wave" and _spostamento_warp(mode, p, c) <= DISPLACE_MAX and _ha_displace():
+        return _displace(c, lambda X, Y, W, H: f"({sx(X, Y, W, H)})-{X}", None, righe=True)
+    if _ha_remap():
+        return _remap(c, sx, sy)
+    return _geq_rgba(sx("X", "Y", "W", "H"), sy("X", "Y", "W", "H"))
+
+
+def _spostamento_warp(mode: str, p: dict, c: Ctx) -> float:
+    """Spostamento massimo in pixel di onda e increspatura: ``amount`` scalato."""
+    lo, hi = kf.bounds(p.get("amount", 20), 20)
+    return max(abs(lo), abs(hi)) * c.scale
 
 
 def _f_lens(p: dict, c: Ctx) -> list[str]:
@@ -1002,6 +1207,38 @@ _DEFS: tuple[EffectDef, ...] = (
         _f_mask_box, "Rettangolo pieno: censura netta o barra grafica.",
     ),
     EffectDef(
+        "mask_outline", "video", "Cornice su oggetto",
+        (
+            Param("x", 0, anim=True), Param("y", 0, anim=True),
+            Param("w", 300, min=2), Param("h", 300, min=2),
+            Param("color", "yellow", kind="color"),
+            Param("thickness", 6, min=1, max=60),
+            Param("opacity", 1.0, min=0, max=1),
+            Param("ranges", "", kind="string"),
+        ),
+        _f_mask_outline,
+        "Cornice colorata che indica un oggetto. Con track_mask segue l'oggetto.",
+    ),
+    EffectDef(
+        "mask_spotlight", "video", "Spotlight su oggetto",
+        (
+            Param("x", 0, anim=True), Param("y", 0, anim=True),
+            Param("w", 300, min=2), Param("h", 300, min=2),
+            Param("amount", 0.6, min=0, max=1, desc="quanto scurire il resto"),
+            Param("saturation", 0.4, min=0, max=3, desc="saturazione del resto"),
+            Param("ranges", "", kind="string"),
+        ),
+        _f_mask_spotlight,
+        "Scurisce e desatura tutto tranne il rettangolo: l'oggetto resta in luce.",
+    ),
+    EffectDef(
+        "tint", "video", "Tinta",
+        (Param("color", "#ffcc00", kind="color"), Param("amount", 0.6, min=0, max=1)),
+        _f_tint,
+        "Porta l'immagine verso un colore tenendo luci e ombre. Su una clip "
+        "scontornata colora solo il soggetto (highlight_subject).",
+    ),
+    EffectDef(
         "subtitles", "video", "Sottotitoli",
         (Param("file", "", kind="file", desc="file .ass (karaoke) o .srt"),
          Param("force_style", "", kind="string",
@@ -1097,7 +1334,7 @@ _DEFS: tuple[EffectDef, ...] = (
          Param("radius", 0.5, min=0.01, max=2, desc="frazione della diagonale (swirl, bulge)")),
         _f_warp,
         "Onda, increspatura dal centro, vortice, lente che gonfia. amount animabile. "
-        "Pesante: geq ricalcola ogni pixel.",
+        "Calcolato su una mappa ridotta (displace/remap), non pixel per pixel.",
     ),
     EffectDef(
         "lens", "video", "Obiettivo",

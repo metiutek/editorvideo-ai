@@ -3,6 +3,14 @@
 Il filtergraph viene scritto su file e passato con ``-filter_complex_script``:
 su timeline lunghe supera facilmente il limite di 32k caratteri della riga di
 comando di Windows.
+
+Le timeline lunghe si rendono **a pezzi** (``render_a_pezzi``): un grafo unico
+per tutto il progetto tiene aperte tutte le clip per tutta la durata, e ogni
+clip non ancora iniziata produce fotogrammi trasparenti di attesa a ogni
+istante. Il costo cresce col quadrato delle clip: su 370 tagli in due minuti
+il render andava a 1/69 del tempo reale. Ogni pezzo compila solo le clip che
+lo toccano (``graph.slice_project``), i pezzi girano in parallelo, l'audio
+si fa in un passaggio solo e alla fine si incolla tutto senza ricodificare.
 """
 
 from __future__ import annotations
@@ -12,7 +20,9 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
@@ -59,6 +69,9 @@ class RenderOptions:
     audio: bool = True
     threads: int | None = None
     keep_workdir: bool = False
+    # render a pezzi paralleli: None = deciso da ``_pezzi_paralleli`` (o da
+    # VEDIT_RENDER_JOBS), 1 = un grafo solo come prima
+    jobs: int | None = None
 
 
 @dataclass
@@ -174,7 +187,18 @@ def _plugin_files(project: Project, start: float | None, end: float | None) -> d
     return plugins.prepare(project, start, end)
 
 
-def build_command(project: Project, opts: RenderOptions, workdir: Path) -> tuple[list[str], float, list[str], str]:
+def _preparativi(project: Project, opts: RenderOptions, want_video: bool, want_audio: bool) -> dict:
+    """Lavoro fuori da ffmpeg (stabilizzazione, html, plugin): una volta sola per render."""
+    return {
+        "stab": analyze_stabilization(project),
+        "html": _html_files(project, opts.width, opts.height, opts.fps, opts.start, opts.end)
+        if want_video else {},
+        "suoni": _plugin_files(project, opts.start, opts.end) if want_audio else {},
+    }
+
+
+def build_command(project: Project, opts: RenderOptions, workdir: Path,
+                  pre: dict | None = None) -> tuple[list[str], float, list[str], str]:
     out_path = Path(opts.output)
     ext = out_path.suffix.lower()
     def_v, def_a = CONTAINER_DEFAULTS.get(ext, ("h264", "aac"))
@@ -189,9 +213,8 @@ def build_command(project: Project, opts: RenderOptions, workdir: Path) -> tuple
         else:
             enc = info.encoder_for(opts.codec, opts.prefer_hw)
 
-    stab = analyze_stabilization(project)
-    html = _html_files(project, opts.width, opts.height, opts.fps, opts.start, opts.end) if want_video else {}
-    suoni = _plugin_files(project, opts.start, opts.end) if want_audio else {}
+    pre = pre if pre is not None else _preparativi(project, opts, want_video, want_audio)
+    stab, html, suoni = pre["stab"], pre["html"], pre["suoni"]
     copts = CompileOptions(
         width=opts.width, height=opts.height, fps=opts.fps,
         use_proxy=opts.use_proxy, audio=want_audio, video=want_video,
@@ -201,7 +224,8 @@ def build_command(project: Project, opts: RenderOptions, workdir: Path) -> tuple
     )
     c = compile_project(project, copts)
 
-    script = workdir / "filtergraph.txt"
+    # nome legato all'uscita: i pezzi di un render parallelo condividono workdir
+    script = workdir / f"filtergraph_{out_path.stem}.txt"
     script.write_text(c.filtergraph, encoding="utf-8")
 
     args = [ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error", "-y"]
@@ -285,6 +309,47 @@ def _perche(log_lines: list[str]) -> str:
     return f" ({riga[:160]})"
 
 
+def _passaggio(project: Project, opts: RenderOptions, workdir: Path, on_progress: Progress | None,
+               t0: float, pre: dict | None = None) -> tuple[list[str], float, list[str], str]:
+    """Un render ffmpeg con i ripieghi dell'accelerazione. Ritorna (comando, durata, avvisi, encoder)."""
+    args, duration, warnings, enc = build_command(project, opts, workdir, pre)
+    code, log_lines = _run_pass(args, duration, on_progress, t0)
+    warnings = list(warnings)
+
+    # L'accelerazione hardware e' un'ottimizzazione: non vale un render
+    # perso. La GPU puo' mancare al momento giusto — device che non nasce,
+    # sessioni dell'encoder gia' tutte occupate da altri processi, driver
+    # che cede sotto carico — e ffmpeg non se ne accorge con grazia: esce
+    # di schianto.
+    #
+    # Si ripiega pero' a gradini, non tutto in una volta: le due meta'
+    # dell'accelerazione non valgono lo stesso e non falliscono insieme. Il
+    # caso tipico e' la coppia che non regge — decodifica accelerata che
+    # crea il device sull'adattatore sbagliato e ne fa morire l'encoder —
+    # dove basta togliere la decodifica per riavere il render su GPU.
+    # Buttare subito anche l'encoder e' quello che trasformava trenta
+    # secondi di render in tre minuti, senza dirlo.
+    if code != 0 and opts.prefer_hw and "-hwaccel" in args:
+        warnings.append(
+            "decodifica accelerata fallita: rifatto senza, encoder GPU mantenuto"
+            + _perche(log_lines))
+        args, duration, _, enc = build_command(
+            project, replace(opts, hwaccel_decode=False), workdir, pre)
+        code, log_lines = _run_pass(args, duration, on_progress, t0)
+
+    if code != 0 and opts.prefer_hw and hw.detect().is_hw(enc):
+        warnings.append(
+            "accelerazione hardware fallita: rifatto in software (piu' lento)"
+            + _perche(log_lines))
+        args, duration, _, enc = build_command(
+            project, replace(opts, prefer_hw=False, hwaccel_decode=False), workdir, pre)
+        code, log_lines = _run_pass(args, duration, on_progress, t0)
+
+    if code != 0:
+        raise ffmpeg.FFmpegError(args, code, "\n".join(log_lines[-40:]))
+    return args, duration, warnings, enc
+
+
 def render(project: Project, opts: RenderOptions, on_progress: Progress | None = None) -> RenderResult:
     if not opts.output:
         raise ValueError("percorso di output mancante")
@@ -294,41 +359,12 @@ def render(project: Project, opts: RenderOptions, on_progress: Progress | None =
     workdir = Path(tempfile.mkdtemp(prefix="vedit_"))
     t0 = time.time()
     try:
-        args, duration, warnings, enc = build_command(project, opts, workdir)
-        code, log_lines = _run_pass(args, duration, on_progress, t0)
-        warnings = list(warnings)
-
-        # L'accelerazione hardware e' un'ottimizzazione: non vale un render
-        # perso. La GPU puo' mancare al momento giusto — device che non nasce,
-        # sessioni dell'encoder gia' tutte occupate da altri processi, driver
-        # che cede sotto carico — e ffmpeg non se ne accorge con grazia: esce
-        # di schianto.
-        #
-        # Si ripiega pero' a gradini, non tutto in una volta: le due meta'
-        # dell'accelerazione non valgono lo stesso e non falliscono insieme. Il
-        # caso tipico e' la coppia che non regge — decodifica accelerata che
-        # crea il device sull'adattatore sbagliato e ne fa morire l'encoder —
-        # dove basta togliere la decodifica per riavere il render su GPU.
-        # Buttare subito anche l'encoder e' quello che trasformava trenta
-        # secondi di render in tre minuti, senza dirlo.
-        if code != 0 and opts.prefer_hw and "-hwaccel" in args:
-            warnings.append(
-                "decodifica accelerata fallita: rifatto senza, encoder GPU mantenuto"
-                + _perche(log_lines))
-            args, duration, _, enc = build_command(
-                project, replace(opts, hwaccel_decode=False), workdir)
-            code, log_lines = _run_pass(args, duration, on_progress, t0)
-
-        if code != 0 and opts.prefer_hw and hw.detect().is_hw(enc):
-            warnings.append(
-                "accelerazione hardware fallita: rifatto in software (piu' lento)"
-                + _perche(log_lines))
-            args, duration, _, enc = build_command(
-                project, replace(opts, prefer_hw=False, hwaccel_decode=False), workdir)
-            code, log_lines = _run_pass(args, duration, on_progress, t0)
-
-        if code != 0:
-            raise ffmpeg.FFmpegError(args, code, "\n".join(log_lines[-40:]))
+        confini = _confini_se_conviene(project, opts)
+        if confini:
+            args, duration, warnings, enc = render_a_pezzi(project, opts, confini, workdir,
+                                                           on_progress, t0)
+        else:
+            args, duration, warnings, enc = _passaggio(project, opts, workdir, on_progress, t0)
 
         size = out_path.stat().st_size if out_path.exists() else 0
         if size == 0:
@@ -342,6 +378,281 @@ def render(project: Project, opts: RenderOptions, on_progress: Progress | None =
             print(f"workdir conservata: {workdir}")
         else:
             shutil.rmtree(workdir, ignore_errors=True)
+
+
+# --------------------------------------------------------------------------
+# render a pezzi
+# --------------------------------------------------------------------------
+
+# Pezzi corti: la memoria di un pezzo cresce con le clip che contiene (ogni
+# clip e' una catena di filtri a piena risoluzione con i suoi buffer), e
+# avviare un ffmpeg costa pochi decimi di secondo.
+PEZZO_S = 4.0      # durata cercata di un pezzo
+PEZZO_MIN = 1.5
+PEZZO_MAX = 8.0
+# sotto questa durata un grafo solo costa meno dell'avvio di piu' ffmpeg
+SOGLIA_PEZZI_S = 20.0
+# effetti che ricordano i fotogrammi precedenti (o li contano dall'inizio
+# della clip): un confine dentro la clip cambierebbe il risultato
+_CON_MEMORIA = {"stabilize", "motionblur", "denoise"}
+# contenitore dei pezzi per codec: TS ha il tempo a 90 kHz e si incolla senza
+# edit list; vp9 e av1 non ci stanno e vanno in matroska
+_PEZZO_EXT = {"h264": ".ts", "hevc": ".ts"}
+
+
+def _pezzi_paralleli(opts: RenderOptions) -> int:
+    """Quanti pezzi alla volta.
+
+    Ogni ffmpeg usa gia' piu' thread: oltre tre pezzi si guadagna poco, si
+    moltiplica la memoria e si rischia di finire le sessioni NVENC dei driver
+    vecchi, che farebbero ripiegare un pezzo su un altro encoder.
+    """
+    if opts.jobs:
+        return max(1, int(opts.jobs))
+    env = os.environ.get("VEDIT_RENDER_JOBS", "").strip()
+    if env.isdigit():
+        return max(1, int(env))
+    return max(1, min(3, (os.cpu_count() or 2) // 4))
+
+
+# Misurato su un progetto vero a 1080p (pezzi da 6 s, effetti pesanti): circa
+# 300 MB fissi piu' 130 MB per clip. E' una stima prudente, non un tetto.
+MEMORIA_BASE = 300 * 2**20
+MEMORIA_CLIP = 130 * 2**20
+MEMORIA_RISERVA = 1024 * 2**20
+
+
+def stima_memoria(project: Project, a: float, b: float, w: int, h: int) -> int:
+    """Byte che un pezzo [a, b) occupera' durante il render."""
+    n = sum(1 for t in project.live_tracks("video") for c in t.clips
+            if c.enabled and c.duration > 0 and c.end > a and c.start < b)
+    k = max(0.1, (w * h) / (1920 * 1080))
+    return int(MEMORIA_BASE + MEMORIA_CLIP * n * k)
+
+
+def memoria_libera() -> int | None:
+    """Byte di RAM disponibili adesso, o None se il sistema non lo dice."""
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class _Stato(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong),
+                            ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong),
+                            ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+            st = _Stato()
+            st.dwLength = ctypes.sizeof(_Stato)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+                return int(st.ullAvailPhys)
+            return None
+        with open("/proc/meminfo", encoding="ascii") as f:
+            for riga in f:
+                if riga.startswith("MemAvailable:"):
+                    return int(riga.split()[1]) * 1024
+    except (OSError, ValueError, AttributeError):
+        return None
+    return None
+
+
+def confini_pezzi(project: Project, a: float, b: float, fps: float) -> list[float]:
+    """Dove tagliare [a, b) in pezzi: sui fotogrammi, possibilmente sugli stacchi.
+
+    Un confine non cade mai dentro una clip con un effetto che ha memoria dei
+    fotogrammi passati (stabilizzazione, mosso, denoise temporale): li' il
+    pezzo si allunga fino alla fine della clip.
+    """
+    def frame(x: float) -> float:
+        return round(x * fps) / fps
+
+    a, b = frame(a), frame(b)
+    clip = [c for t in project.live_tracks("video") for c in t.clips
+            if c.enabled and c.duration > 0]
+    vietati = [(c.start, c.end) for c in clip
+               if any(e.enabled and e.type in _CON_MEMORIA for e in c.effects)]
+
+    def dentro(x: float) -> list[float]:
+        return [e for s, e in vietati if s + 1e-6 < x < e - 1e-6]
+
+    stacchi = sorted({frame(x) for c in clip for x in (c.start, c.end) if a < x < b})
+    stacchi = [x for x in stacchi if not dentro(x)]
+    out, cur = [a], a
+    while b - cur > PEZZO_MAX:
+        voluti = [x for x in stacchi
+                  if cur + PEZZO_MIN <= x <= cur + PEZZO_MAX and x < b - 1 / fps]
+        if voluti:
+            nxt = min(voluti, key=lambda x: abs(x - (cur + PEZZO_S)))
+        else:
+            nxt = frame(cur + PEZZO_S)
+            while dentro(nxt):
+                nxt = frame(max(dentro(nxt)))
+            if nxt >= b - 1 / fps:
+                break
+        out.append(nxt)
+        cur = nxt
+    out.append(b)
+    return out
+
+
+def _confini_se_conviene(project: Project, opts: RenderOptions) -> list[float] | None:
+    ext = Path(opts.output).suffix.lower()
+    def_v, _ = CONTAINER_DEFAULTS.get(ext, ("h264", "aac"))
+    if not opts.video or def_v is None or def_v == "gif" or opts.codec == "gif":
+        return None
+    if opts.jobs == 1:
+        return None
+    a = opts.start or 0.0
+    b = opts.end if opts.end is not None else project.duration()
+    if b - a < SOGLIA_PEZZI_S:
+        return None
+    confini = confini_pezzi(project, a, b, float(opts.fps or project.settings.fps))
+    return confini if len(confini) > 2 else None
+
+
+def render_a_pezzi(project: Project, opts: RenderOptions, confini: list[float], workdir: Path,
+                   on_progress: Progress | None, t0: float) -> tuple[list[str], float, list[str], str]:
+    """Video a pezzi in parallelo, audio in un passaggio, poi un incollaggio senza ricodifica."""
+    out_path = Path(opts.output)
+    ext = out_path.suffix.lower()
+    def_v, def_a = CONTAINER_DEFAULTS.get(ext, ("h264", "aac"))
+    want_audio = opts.audio and def_a is not None
+    durata = confini[-1] - confini[0]
+    pre = _preparativi(project, opts, True, want_audio)
+
+    fatto: dict[str, float] = {}
+    lock = threading.Lock()
+
+    def avanzamento(chiave: str):
+        def cb(info: dict) -> None:
+            if on_progress is None:
+                return
+            with lock:
+                fatto[chiave] = info["seconds"]
+                done = min(durata, sum(fatto.values()))
+                on_progress({"seconds": round(done, 3), "duration": round(durata, 3),
+                             "percent": round(done / durata * 100, 2) if durata else 0.0,
+                             "elapsed": round(time.time() - t0, 2)})
+        return cb
+
+    codec = opts.codec if opts.codec in ("h264", "hevc", "av1", "vp9") else def_v
+    pext = _PEZZO_EXT.get(codec, ".mkv") if def_v != "vp9" else ".mkv"
+    pezzi = [(i, a, b, workdir / f"pezzo_{i:04d}{pext}")
+             for i, (a, b) in enumerate(zip(confini, confini[1:]))]
+
+    def uno(pezzo, o: RenderOptions):
+        i, a, b, path = pezzo
+        po = replace(o, output=str(path), start=a, end=b, audio=False, jobs=1)
+        return _passaggio(project, po, workdir, avanzamento(f"v{i}"), t0, pre)
+
+    # Quanti pezzi alla volta lo decide anche la memoria: un pezzo parte solo
+    # se la sua stima ci sta in quella libera all'inizio del render. Il primo
+    # parte comunque, da solo: meglio lento che fermo. Senza questo, tre pezzi
+    # da due giga su un PC con poca RAM libera facevano chiudere i programmi.
+    s = project.settings
+    w, h = int(opts.width or s.width), int(opts.height or s.height)
+    libera = memoria_libera()
+    budget = float("inf") if libera is None else libera - MEMORIA_RISERVA
+    massimo = _pezzi_paralleli(opts)
+    cond = threading.Condition()
+    stato = {"uso": 0, "attivi": 0, "picco": 0}
+
+    def con_budget(pezzo, o: RenderOptions):
+        serve = stima_memoria(project, pezzo[1], pezzo[2], w, h)
+        with cond:
+            while stato["attivi"]:
+                # la memoria la usano anche gli altri programmi: si riguarda
+                # quella vera a ogni pezzo, non solo la stima di partenza
+                adesso = memoria_libera()
+                if (stato["attivi"] < massimo and stato["uso"] + serve <= budget
+                        and (adesso is None or adesso - MEMORIA_RISERVA >= serve)):
+                    break
+                cond.wait(timeout=1.0)
+            stato["uso"] += serve
+            stato["attivi"] += 1
+            stato["picco"] = max(stato["picco"], stato["attivi"])
+        try:
+            return uno(pezzo, o)
+        finally:
+            with cond:
+                stato["uso"] -= serve
+                stato["attivi"] -= 1
+                cond.notify_all()
+
+    def tutti(lista, o: RenderOptions):
+        with ThreadPoolExecutor(max_workers=massimo) as ex:
+            futuri = [ex.submit(con_budget, p, o) for p in lista]
+            try:
+                return [f.result() for f in futuri]
+            except BaseException:
+                for f in futuri:
+                    f.cancel()
+                raise
+
+    # l'audio non aspetta il video: e' un passaggio leggero, gira accanto ai pezzi
+    audio = None
+    lavoro_audio = None
+    sfondo = ThreadPoolExecutor(max_workers=1)
+    if want_audio and compile_project(project, CompileOptions(
+            video=False, audio=True, start=confini[0], end=confini[-1],
+            audio_files=pre["suoni"], workdir=str(workdir))).audio_label:
+        audio = workdir / f"audio{ext}"
+        lavoro_audio = sfondo.submit(
+            _passaggio, project, replace(opts, output=str(audio), video=False, jobs=1),
+            workdir, None, t0, pre)
+    try:
+        esiti = tutti(pezzi, opts)
+    except BaseException:
+        sfondo.shutdown(wait=True, cancel_futures=True)
+        raise
+    avvisi: list[str] = []
+    for _, _, w, _ in esiti:
+        avvisi += [x for x in w if x not in avvisi]
+
+    # pezzi con encoder diversi (un ripiego della GPU) non si incollano senza
+    # ricodifica: si rifanno quelli rimasti sull'encoder GPU come gli altri
+    encoder = [e for _, _, _, e in esiti]
+    if len(set(encoder)) > 1:
+        sw = next(e for e in encoder if not hw.detect().is_hw(e))
+        rifare = [p for p, e in zip(pezzi, encoder) if e != sw]
+        avvisi.append(f"encoder GPU caduto su una parte dei pezzi: {len(rifare)} rifatti con {sw}")
+        tutti(rifare, replace(opts, prefer_hw=False, hwaccel_decode=False))
+        encoder = [sw]
+
+    try:
+        if lavoro_audio is not None:
+            _, _, w, _ = lavoro_audio.result()
+            avvisi += [x for x in w if x not in avvisi]
+    finally:
+        sfondo.shutdown(wait=True)
+
+    elenco = workdir / "pezzi.txt"
+    righe = []
+    for _, _, _, path in pezzi:
+        righe.append("file '{}'\n".format(str(path).replace("\\", "/").replace("'", "'\\''")))
+    elenco.write_text("".join(righe), encoding="utf-8")
+    args = [ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+            "-f", "concat", "-safe", "0", "-i", str(elenco)]
+    if audio is not None and audio.exists():
+        args += ["-i", str(audio), "-map", "0:v", "-map", "1:a"]
+    else:
+        args += ["-map", "0:v"]
+    args += ["-c", "copy"]
+    if codec == "hevc" and ext in (".mp4", ".mov"):
+        args += ["-tag:v", "hvc1"]
+    args += ["-t", f"{durata:.6f}"]
+    if ext in (".mp4", ".mov"):
+        args += ["-movflags", "+faststart"]
+    args.append(str(out_path))
+    proc = ffmpeg.run(args, check=False, timeout=3600)
+    if proc.returncode != 0:
+        raise ffmpeg.FFmpegError(args, proc.returncode, (proc.stderr or "")[-2000:])
+    avvisi.append(f"render a {len(pezzi)} pezzi, fino a {stato['picco']} alla volta")
+    return args, durata, avvisi, encoder[0]
 
 
 def render_frame(project: Project, t: float, output: str, width: int | None = None,

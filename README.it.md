@@ -477,7 +477,7 @@ claude mcp add vedit -- vedit-mcp
 Per gli altri client (Cursor, Codex, VS Code) la configurazione equivalente e il flusso
 consigliato degli strumenti stanno in [`AGENTS.md`](AGENTS.md).
 
-86 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
+92 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
 riordinare, solo, blocco), velocità e reverse, transform con keyframe, effetti video e audio,
 dissolvenze incrociate, normalizzazione EBU R128, render, e `preview_frame` che **restituisce
 l'immagine vera** del fotogramma — così l'agente vede quello che ha montato invece di
@@ -525,7 +525,22 @@ come clip HTML trasparente calcolata in forma chiusa, quindi anteprima e render 
 fotogramma per fotogramma. *(extra `vision`)* **Scontorno con l'IA senza green screen** —
 `remove_background` segmenta il soggetto fotogramma per fotogramma (qualunque classe COCO, o
 al contrario per tenere solo lo sfondo); **motion tracking** — `pin_to_subject` aggancia un
-titolo o una grafica a un soggetto che si muove.
+titolo o una grafica a un soggetto che si muove. **Evidenziare** — `track_mask` segue un
+soggetto con sfocatura, mosaico, cornice colorata, spotlight (tutto il resto scurito) o
+riquadro colorato; con `box` segue *qualunque* oggetto indicato, non solo le 80 classi COCO
+(tracking a modello in numpy, nessun extra). `highlight_subject` usa invece la sagoma vera:
+alone, tinta o spotlight.
+
+**Stili che montano davvero** — `apply_style` trasforma uno stile (cinematografico, dinamico,
+documentario, vlog, trailer, videoclip, minimal, retro o uno tuo) in una base concreta sulla
+timeline: look sul master, spinte o punch-in a keyframe, transizioni ai cambi di sezione,
+dissolvenze d'apertura e chiusura, accenti e volume della musica che si muove. `review_edit`
+legge la timeline e dice quando un montaggio è solo tagli — niente movimento, colore, grafica
+o automazione della musica — e con quale strumento rimediare. L'agente può anche **creare
+stili** da solo con `create_style`: una guida scritta più una ricetta (look, movimento,
+transizioni, curva della musica, accenti) che finisce nel tuo menu stili e che `apply_style`
+esegue davvero. `preview_media` fa guardare il
+girato importato senza metterlo in timeline.
 
 **Grafica animata in HTML** — `add_html` mette in traccia un documento HTML/CSS/JS come una
 clip: sottopancia, titoli animati, contatori, infografiche, schermate intere. Lo sfondo e'
@@ -612,6 +627,16 @@ Note tecniche che spiegano le scelte meno ovvie:
   un progetto troncato.
 - **Filtergraph su file** (`-filter_complex_script`): le timeline lunghe superano il limite di
   32k caratteri della riga di comando di Windows.
+- **Render a pezzi**: un grafo unico tiene aperte tutte le clip per tutta la timeline, e i
+  fotogrammi d'attesa di `tpad` fanno crescere il costo col quadrato dei tagli (un montaggio di
+  2 minuti e 370 tagli andava a 1/69 del tempo reale). Sopra i 20 s l'export si divide in pezzi
+  di circa 4 s sugli stacchi, ognuno compilato con le sole clip che lo toccano
+  (`slice_project`), resi in parallelo entro un budget di memoria e incollati senza
+  ricodifica; l'audio si mixa in un passaggio solo.
+- **Distorsioni su mappa ridotta**: `warp` e `glitch` calcolano l'espressione su una mappa
+  qualche volta più piccola e la applicano con `displace` / `remap`, invece di `geq` su ogni
+  pixel. Gli zoom che scendono sotto 1 usano `scale` per fotogramma invece di una tela 4x per
+  `zoompan`.
 
 ---
 

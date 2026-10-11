@@ -299,3 +299,20 @@ def test_set_clip_resta_dentro_la_sorgente(client, tmp_path, assets):
     assert r["result"]["in"] == pytest.approx(4.0) and r["result"]["duration"] == pytest.approx(1.0, abs=0.05)
     assert client.post("/api/op/set_clip", json={"clip_id": cid, "duration": -1}).status_code == 400
     assert client.post("/api/op/set_clip", json={"clip_id": cid, "start": -3}).status_code == 400
+
+
+def test_reset_del_browser_non_stampa_traceback():
+    """WinError 10054 a connessione chiusa e' rumore; gli altri errori no."""
+    from vedit import api
+
+    visti = []
+
+    class Loop:
+        def default_exception_handler(self, ctx):
+            visti.append(ctx["exception"])
+
+    api._zitto_su_reset(Loop(), {"exception": ConnectionResetError(10054, "reset")})
+    assert visti == []
+    vero = ValueError("vero")
+    api._zitto_su_reset(Loop(), {"exception": vero})
+    assert visti == [vero]

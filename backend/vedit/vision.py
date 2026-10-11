@@ -203,6 +203,196 @@ def mask_keyframes(track: list[dict], padding: float = 1.25) -> dict:
     return {"w": int(w), "h": int(h), "x": {"kf": kx}, "y": {"kf": ky}}
 
 
+def to_canvas(track: list[dict], fit: str, src_w: int, src_h: int,
+              out_w: int, out_h: int) -> list[dict]:
+    """Traccia dai pixel della sorgente ai pixel del canvas.
+
+    Gli effetti di una clip lavorano *dopo* l'adattamento al canvas (graph:
+    ``_fit`` poi la catena), quindi una maschera in pixel della sorgente su un
+    4K in un progetto 1080p finiva al doppio della distanza dall'angolo.
+    """
+    if fit == "none":
+        kx = ky = 1.0
+        ox = oy = 0.0
+    elif fit == "stretch":
+        kx, ky = out_w / src_w, out_h / src_h
+        ox = oy = 0.0
+    else:
+        k = (max if fit == "cover" else min)(out_w / src_w, out_h / src_h)
+        kx = ky = k
+        ox, oy = out_w / 2 - src_w * k / 2, out_h / 2 - src_h * k / 2
+    out = []
+    for p in track:
+        q = dict(p)
+        if p.get("cx") is not None:
+            q["cx"], q["cy"] = round(p["cx"] * kx + ox, 2), round(p["cy"] * ky + oy, 2)
+        if p.get("box"):
+            b = p["box"]
+            q["box"] = {**b, "x": round(b["x"] * kx + ox, 1), "y": round(b["y"] * ky + oy, 1),
+                        "w": round(b["w"] * kx, 1), "h": round(b["h"] * ky, 1)}
+        out.append(q)
+    return out
+
+
+# --------------------------------------------------------------------------
+# tracking di un oggetto qualsiasi: si indica il riquadro, lo si segue
+# --------------------------------------------------------------------------
+
+BOX_FPS = 8.0
+BOX_MIN_SCORE = 0.45       # sotto, il riquadro trovato non somiglia all'oggetto
+
+
+def box_in_pixel(box: list[float], src_w: int, src_h: int) -> tuple[float, float, float, float]:
+    """``[x, y, w, h]`` in frazioni del fotogramma (0..1) oppure in pixel della sorgente."""
+    if len(box) != 4:
+        raise VisionError("box vuole quattro numeri: [x, y, larghezza, altezza]")
+    x, y, w, h = (float(v) for v in box)
+    if max(x, y, w, h) <= 1.0:
+        x, y, w, h = x * src_w, y * src_h, w * src_w, h * src_h
+    if w < 4 or h < 4:
+        raise VisionError("box troppo piccolo: almeno qualche pixel per lato")
+    x, y = max(0.0, min(x, src_w - w)), max(0.0, min(y, src_h - h))
+    return x, y, min(w, src_w), min(h, src_h)
+
+
+def _grigi(path: str, t0: float, t1: float, fps: float, width: int):
+    """Fotogrammi in scala di grigi del tratto t0..t1, come float32."""
+    import numpy as np
+
+    m = probe.probe(path)
+    if not m.has_video:
+        raise VisionError(f"{path} non ha video")
+    width = min(width, m.width or width) // 2 * 2
+    h = max(2, int(width * (m.height or 9) / (m.width or 16)) // 2 * 2)
+    cmd = [ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error"]
+    if t0 > 0:
+        cmd += ["-ss", f"{t0:.3f}"]
+    cmd += ["-t", f"{max(0.05, t1 - t0):.3f}", "-i", str(path), "-an", "-sn",
+            "-vf", f"fps={fps},scale={width}:{h},format=gray", "-f", "rawvideo", "-"]
+    raw = subprocess.run(cmd, capture_output=True, timeout=3600).stdout or b""
+    n = len(raw) // (width * h)
+    if n == 0:
+        raise VisionError(f"nessun fotogramma leggibile in {path}")
+    buf = np.frombuffer(raw[: n * width * h], dtype=np.uint8).reshape(n, h, width)
+    return buf.astype(np.float32), (m.width or width, m.height or h), (width, h)
+
+
+def ncc(regione, modello):
+    """Correlazione normalizzata del modello in ogni posizione della regione.
+
+    Con la FFT per il prodotto e le immagini integrali per media e varianza di
+    ogni finestra: e' la stessa misura di cv2.matchTemplate(TM_CCOEFF_NORMED)
+    senza tirarsi dietro OpenCV. Valori in -1..1, 1 = identico.
+    """
+    import numpy as np
+
+    h, w = modello.shape
+    H, W = regione.shape
+    t = modello - modello.mean()
+    tn = float(np.sqrt((t * t).sum()))
+    if tn < 1e-3 or H < h or W < w:
+        return None
+    F = np.fft.rfft2(regione)
+    T = np.fft.rfft2(t[::-1, ::-1], s=regione.shape)
+    corr = np.fft.irfft2(F * T, s=regione.shape)[h - 1:, w - 1:]
+
+    def finestre(a):
+        ii = np.zeros((H + 1, W + 1), dtype=np.float64)
+        ii[1:, 1:] = a.cumsum(0).cumsum(1)
+        return ii[h:, w:] - ii[:-h, w:] - ii[h:, :-w] + ii[:-h, :-w]
+
+    s1 = finestre(regione)
+    s2 = finestre(regione.astype(np.float64) ** 2)
+    var = np.maximum(s2 - s1 * s1 / (h * w), 1e-6)
+    return corr / (np.sqrt(var) * tn)
+
+
+def track_box(path: str, box: list[float], t: float, t0: float = 0.0,
+              t1: float | None = None, fps: float = BOX_FPS, width: int = 320) -> dict:
+    """Segue l'oggetto racchiuso da ``box`` al tempo ``t`` della sorgente.
+
+    YOLO conosce ottanta classi: un logo, una tazza particolare, un pallone in
+    mezzo al campo, una parte di macchina restano fuori. Qui l'oggetto lo indica
+    chi monta: il riquadro diventa un modello che si cerca, fotogramma dopo
+    fotogramma, in un intorno dell'ultima posizione — avanti e indietro da
+    ``t``. Il modello si aggiorna piano (10% a passo) per seguire luce e
+    rotazione senza scivolare sullo sfondo; quando la somiglianza crolla il
+    punto e' perso e la ricerca si allarga.
+
+    Ritorna la stessa forma di :func:`follow`, quindi maschere, aggancio e
+    reframe funzionano identici. Non segue cambi di scala forti: il riquadro
+    resta della misura indicata.
+    """
+    import numpy as np
+
+    durata = probe.probe(path).duration or 0.0
+    fine = t1 if t1 is not None else durata
+    if fine <= t0:
+        raise VisionError("tratto vuoto: niente da seguire")
+    t = max(t0, min(float(t), fine))
+    buf, (ow, oh), (pw, ph) = _grigi(path, t0, fine, fps, width)
+    k = pw / ow
+    bx, by, bw, bh = box_in_pixel(box, ow, oh)
+    bx, by = int(round(bx * k)), int(round(by * k))
+    bw, bh = max(6, int(round(bw * k))), max(6, int(round(bh * k)))
+    bx, by = min(bx, pw - bw), min(by, ph - bh)
+    n = len(buf)
+    i0 = max(0, min(n - 1, int(round((t - t0) * fps))))
+    base = buf[i0][by:by + bh, bx:bx + bw].copy()
+
+    pos: list[tuple[int, int] | None] = [None] * n
+    punteggi = [0.0] * n
+    pos[i0], punteggi[i0] = (bx, by), 1.0
+
+    def corsa(indici):
+        x, y = bx, by
+        modello = base.copy()
+        persi = 0
+        for i in indici:
+            r = int(max(bw, bh) * (0.6 + 0.6 * min(persi, 3))) + 6
+            x0, y0 = max(0, x - r), max(0, y - r)
+            x1, y1 = min(pw, x + bw + r), min(ph, y + bh + r)
+            mappa = ncc(buf[i][y0:y1, x0:x1], modello)
+            if mappa is None:
+                persi += 1
+                continue
+            j = int(np.argmax(mappa))
+            dy, dx = divmod(j, mappa.shape[1])
+            s = float(mappa.flat[j])
+            if s >= BOX_MIN_SCORE:
+                x, y = x0 + dx, y0 + dy
+                pos[i], punteggi[i] = (x, y), round(s, 3)
+                modello = 0.9 * modello + 0.1 * buf[i][y:y + bh, x:x + bw]
+                persi = 0
+            else:
+                persi += 1
+
+    corsa(range(i0 + 1, n))
+    corsa(range(i0 - 1, -1, -1))
+
+    traccia = []
+    for i, p in enumerate(pos):
+        tt = round(t0 + i / fps, 3)
+        if p is None:
+            traccia.append({"t": tt, "cx": None, "cy": None, "box": None})
+            continue
+        x, y = p[0] / k, p[1] / k
+        b = {"classe": "oggetto", "conf": punteggi[i], "x": round(x, 1), "y": round(y, 1),
+             "w": round(bw / k, 1), "h": round(bh / k, 1)}
+        traccia.append({"t": tt, "cx": round(x + b["w"] / 2, 2),
+                        "cy": round(y + b["h"] / 2, 2), "box": b})
+    visti = sum(1 for p in pos if p is not None)
+    # i buchi prendono la posizione vicina; la media mobile corta toglie il
+    # tremolio di un pixel del confronto senza ritardare il movimento
+    piena = smooth(fill_gaps(traccia), 3)
+    for p in piena:
+        if p["box"] is None and p["cx"] is not None:
+            p["box"] = {"classe": "oggetto", "conf": 0.0, "x": p["cx"] - bw / k / 2,
+                        "y": p["cy"] - bh / k / 2, "w": round(bw / k, 1), "h": round(bh / k, 1)}
+    return {"larghezza": ow, "altezza": oh, "fps": fps, "traccia": piena,
+            "copertura": round(visti / max(1, n), 3), "classi": ["oggetto"]}
+
+
 def follow(path: str, classes: tuple[str, ...] = ("person",), fps: float = SAMPLE_FPS,
            conf: float = CONF, window: int = SMOOTH_WINDOW, **kw) -> dict:
     """Rileva, sceglie il soggetto, riempie i buchi e leviga: la catena completa."""

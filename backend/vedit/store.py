@@ -1011,6 +1011,58 @@ class Store:
         self._done()
         return e
 
+    HIGHLIGHT_MODES = ("glow", "tint", "spotlight")
+
+    def highlight_subject(self, clip_id: str, file: str, t0: float = 0.0,
+                          mode: str = "glow", color: str = "#ffcc00",
+                          amount: float = 0.7, feather: float = 2.0) -> dict:
+        """Evidenzia il soggetto con la sua sagoma, non con un rettangolo.
+
+        La clip viene duplicata su una traccia appena sopra; il doppione ha lo
+        scontorno (``file``, da ``vision.segment_matte``) e quindi contiene solo
+        il soggetto, allineato fotogramma per fotogramma all'originale perche'
+        ha lo stesso attacco, velocita' e inquadratura. Poi:
+
+        - ``glow``: il doppione colorato e sfocato si somma in screen, alone
+          luminoso attorno alla sagoma;
+        - ``tint``: il doppione colorato copre il soggetto, che cambia tinta;
+        - ``spotlight``: l'originale si scurisce e desatura, il doppione resta
+          com'era, quindi il soggetto e' l'unica cosa in luce.
+
+        Il doppione e' muto: l'audio resta all'originale.
+        """
+        if mode not in self.HIGHLIGHT_MODES:
+            raise EditError(f"mode deve essere {' | '.join(self.HIGHLIGHT_MODES)}")
+        fx.tint_matrix(color, amount)   # colore sbagliato -> errore subito, non al render
+        track, clip = self.clip_for_edit(clip_id)
+        if clip.type != "media":
+            raise EditError("l'evidenziazione si applica a una clip con un video")
+        a = max(0.0, min(1.0, float(amount)))
+        with self.batch():
+            sopra = self.add_track("video", name="evidenzia",
+                                   index=self.project.tracks.index(track) + 1)
+            dup = copy.deepcopy(clip)
+            dup.id = new_id("c")
+            dup.name = f"{clip.name or clip.id} evidenziato"
+            dup.audio.mute = True
+            dup.transition_out = Transition()
+            dup.effects = [e for e in dup.effects if e.type != "matte"]
+            sopra.clips.append(dup)
+            self.set_matte(dup.id, file, t0, feather)
+            if mode == "glow":
+                self.add_effects(dup.id, [
+                    {"type": "tint", "params": {"color": color, "amount": 1.0}},
+                    {"type": "blur", "params": {"sigma": 18, "steps": 2}},
+                ])
+                self.set_clip(dup.id, blend="screen")
+                self.set_transform(dup.id, opacity=a)
+            elif mode == "tint":
+                self.add_effect(dup.id, "tint", {"color": color, "amount": a})
+            else:
+                self.add_effect(clip.id, "color", {"brightness": round(-0.35 * a, 3),
+                                                   "saturation": round(1 - 0.8 * a, 3)})
+        return {"clip": clip.id, "doppione": dup.id, "traccia": sopra.id, "mode": mode}
+
     def pin_to_subject(self, clip_id: str, target_id: str, track: list[dict],
                        src_w: int, src_h: int, offset_x: float = 0.0,
                        offset_y: float = 0.0) -> Clip:

@@ -205,3 +205,42 @@ def test_censor_spans_richiede_whisper(monkeypatch, assets):
     monkeypatch.setattr(builtins, "__import__", finto)
     with pytest.raises(analyze.AnalysisError, match="faster-whisper"):
         analyze.transcribe(assets["red"])
+
+
+def test_trascrizione_caduta_su_gpu_si_rifa_su_cpu(monkeypatch, tmp_path):
+    """Un crash nativo di cuDNN uccide il processo figlio, non l'editor.
+
+    Il figlio qui muore con os._exit come farebbe ctranslate2 con le librerie
+    cuDNN sbagliate: niente risultato, niente eccezione Python. La chiamata
+    deve accorgersene, rifare su CPU e dirlo.
+    """
+    import subprocess as sp
+    import sys
+
+    from vedit import analyze
+
+    vero = sp.run
+    chiamate = []
+
+    def finto(cmd, **kw):
+        import json as _j
+        a = _j.loads(cmd[-1])
+        chiamate.append(a["device"])
+        if a["device"] != "cpu":
+            return vero([sys.executable, "-c", "import os; os._exit(3)"], **kw)
+        with open(a["out"], "w", encoding="utf-8") as f:
+            f.write(_j.dumps({"ok": {"device": "cpu", "segments": [], "text": ""}}))
+        return vero([sys.executable, "-c", "pass"], **kw)
+
+    monkeypatch.setattr(analyze.subprocess, "run", finto)
+    monkeypatch.setattr(analyze, "_ASR_SOLO_CPU", [False])
+    monkeypatch.delenv("VEDIT_ASR_DEVICE", raising=False)
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"x")
+
+    r = analyze.transcribe(str(audio), "tiny", force=True)
+    assert chiamate == ["auto", "cpu"]
+    assert r["device"] == "cpu" and "GPU" in r["avviso"]
+    # la seconda volta non si riprova la GPU che e' gia' caduta
+    analyze.transcribe(str(audio), "tiny", force=True)
+    assert chiamate == ["auto", "cpu", "cpu"]

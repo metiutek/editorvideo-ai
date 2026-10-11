@@ -306,3 +306,25 @@ def test_render_compone_la_grafica_sopra(tmp_path):
     assert r > 200 and b < 60          # la grafica
     r, g, b = im.getpixel((160, 60))
     assert b > 200 and r < 60          # il colore sotto, dove la pagina e' vuota
+
+
+@pytest.mark.slow
+def test_piu_clip_si_fotografano_in_parallelo():
+    """Tre clip diverse, un browser ciascuna: ognuna col suo file e la sua grafica."""
+    _browser_o_salta()
+    s = Store.create("t", "720p")
+    s.project.settings.width, s.project.settings.height = 320, 180
+    ids = []
+    for i, colore in enumerate(("red", "lime", "blue")):
+        v = s.add_track("video")
+        doc = f"<div style='position:fixed;inset:0;background:{colore}'></div>"
+        ids.append(s.add_html(html=doc, track_id=v.id, start=i * 0.5, duration=0.5).id)
+    try:
+        fatti = htmlclip.prepare(s.project, width=320, height=180, fps=10)
+    except htmlclip.HtmlNonDisponibile as exc:
+        pytest.skip(str(exc))
+    assert set(fatti) == set(ids)
+    assert len({f for f, _ in fatti.values()}) == 3
+    attesi = {"red": (255, 0, 0), "lime": (0, 255, 0), "blue": (0, 0, 255)}
+    for cid, colore in zip(ids, attesi):
+        assert _pixel(fatti[cid][0], 0.1, 160, 90)[:3] == pytest.approx(attesi[colore], abs=8)

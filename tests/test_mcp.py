@@ -277,3 +277,95 @@ async def test_effetti_speciali_da_mcp(tmp_path):
     assert part["type"] == "html" and part["kind"] == "sparks"
     nomi = {t.name for t in await srv.mcp.list_tools()}
     assert {"remove_background", "pin_to_subject", "add_particles"} <= nomi
+
+
+@pytest.mark.anyio
+async def test_preview_media_guarda_senza_timeline(assets, tmp_path):
+    """Il girato si guarda prima di montarlo: la timeline resta vuota."""
+    p = str(tmp_path / "pm.json")
+    await call("project_create", path=p, preset="720p")
+    m = (await call("import_media", paths=[assets["blue"]]))[0]["id"]
+    for args in ({"media": m}, {"media": m, "t": 1.0, "width": 480, "guide": True},
+                 {"path": assets["blue"], "count": 4, "start": 1.0, "end": 3.0}):
+        r = await srv.mcp.call_tool("preview_media", args)
+        assert any(getattr(c, "type", "") == "image" for c in r.content), args
+    info = await call("project_info")
+    assert all(not t["clips"] for t in info["tracks"])
+
+
+@pytest.mark.anyio
+async def test_apply_style_e_review_edit(assets, tmp_path):
+    p = str(tmp_path / "st.json")
+    await call("project_create", path=p, preset="720p")
+    red, blue = [x["id"] for x in await call("import_media",
+                                              paths=[assets["red"], assets["blue"]])]
+    await call("add_clips", clips=[{"media": red if i % 2 else blue, "start": i * 1.0,
+                                    "in": 0.0, "duration": 1.0} for i in range(6)])
+    prima = await call("review_edit")
+    assert prima["solo_tagli"]
+    esito = await call("apply_style", style="cinematico")
+    assert esito["applicato"]["look"] == "cinema_teal_orange"
+    dopo = await call("review_edit", style="cinematico")
+    assert not dopo["solo_tagli"]
+    with pytest.raises(ToolError, match="stile sconosciuto"):
+        await call("apply_style", style="barocco")
+
+
+@pytest.mark.anyio
+async def test_l_agente_crea_e_applica_uno_stile(assets, tmp_path, monkeypatch):
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path / "cache"))
+    elenco = await call("list_styles")
+    assert "vhs" in elenco["looks"]
+    assert any(s["id"] == "cinematico" and s["ricetta"]["movimento"] == "spinta"
+               for s in elenco["stili_montaggio"])
+    creato = await call("create_style", name="Sogno", guide="Lento e caldo",
+                        base="cinematic", recipe={"look": "sogno", "musica": "crescendo"})
+    sid = creato["stile"]["id"]
+    assert creato["ricetta"]["look"] == "sogno" and sid in creato["prossimo_passo"]
+    assert any(s["id"] == sid for s in (await call("list_styles"))["stili_montaggio"])
+
+    p = str(tmp_path / "cs.json")
+    await call("project_create", path=p, preset="720p")
+    m = (await call("import_media", paths=[assets["red"]]))[0]["id"]
+    await call("add_clips", clips=[{"media": m, "start": i * 1.0, "in": 0.0,
+                                    "duration": 1.0} for i in range(4)])
+    assert (await call("apply_style", style=sid))["applicato"]["look"] == "sogno"
+    with pytest.raises(ToolError, match="look sconosciuto"):
+        await call("create_style", name="Z", guide="g", recipe={"look": "marte"})
+    await call("delete_style", style=sid)
+    with pytest.raises(ToolError, match="inesistente"):
+        await call("delete_style", style=sid)
+
+
+@pytest.mark.anyio
+async def test_track_mask_con_box_segue_un_oggetto_qualsiasi(tmp_path):
+    """Un oggetto che YOLO non conosce, indicato col riquadro: la cornice lo segue."""
+    import subprocess
+    from vedit import ffmpeg
+
+    src = tmp_path / "obj.mp4"
+    subprocess.run([
+        ffmpeg.binary("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "lavfi", "-i", "color=c=0x404040:s=1280x720:r=25:d=3",
+        "-f", "lavfi", "-i", "testsrc2=s=120x120:r=25:d=3",
+        "-filter_complex", "[0][1]overlay=x='80+t*120':y=300",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", str(src),
+    ], check=True, capture_output=True)
+    p = str(tmp_path / "tm.json")
+    await call("project_create", path=p, preset="720p")
+    m = (await call("import_media", paths=[str(src)]))[0]["id"]
+    c = await call("add_clip", media=m, start=0.0, in_=1.0, duration=1.5)
+    # al secondo 1 della sorgente (inizio clip) il riquadro sta a x=200
+    r = await call("track_mask", clip=c["id"], kind="mask_outline",
+                   box=[200 / 1280, 300 / 720, 120 / 1280, 120 / 720], box_t=0.0,
+                   padding=1.0, params={"color": "#00ff00", "thickness": 4})
+    assert r["copertura"] > 0.9
+    info = await call("project_info")
+    fx_ = info["tracks"][0]["clips"][0]["effects"][-1]
+    assert fx_["type"] == "mask_outline" and fx_["params"]["color"] == "#00ff00"
+    punti = fx_["params"]["x"]["kf"]
+    # canvas 1280 come la sorgente: in tempo di clip t=1 -> sorgente 2 s -> x=320
+    a_uno = min(punti, key=lambda q: abs(q["t"] - 1.0))
+    assert a_uno["v"] == pytest.approx(320, abs=12)
+    with pytest.raises(ToolError):
+        await call("track_mask", clip=c["id"], kind="mask_arcobaleno", box=[0, 0, 0.1, 0.1])

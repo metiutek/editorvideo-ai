@@ -359,18 +359,42 @@ def prepare(project, *, width: int, height: int, fps: float,
     s = project.settings
     a = 0.0 if start is None else float(start)
     b = project.duration() if end is None else float(end)
-    out: dict[str, tuple[str, float]] = {}
+    lavori = []
     for track in project.live_tracks("video"):
         for c in track.clips:
             if c.type != "html" or not c.enabled or c.duration <= 0:
                 continue
             if c.end <= a or c.start >= b:
                 continue
-            t0 = max(0.0, a - c.start)
-            t1 = min(c.duration, b - c.start)
-            out[c.id] = rasterize(
-                c.html or "", base=c.html_base, duration=c.duration, width=width,
-                height=height, fps=fps, page_w=int(s.width), page_h=int(s.height),
-                t0=t0, t1=t1,
-            )
-    return out
+            lavori.append((c, max(0.0, a - c.start), min(c.duration, b - c.start)))
+
+    def uno(lavoro):
+        c, t0, t1 = lavoro
+        return c.id, rasterize(
+            c.html or "", base=c.html_base, duration=c.duration, width=width,
+            height=height, fps=fps, page_w=int(s.width), page_h=int(s.height),
+            t0=t0, t1=t1,
+        )
+
+    # Un browser per clip, qualcuno alla volta: fotografare e' quasi tutto
+    # attesa di Chromium, e in fila diciotto clip a 1080p costavano minuti.
+    if len(lavori) <= 1:
+        return dict(uno(x) for x in lavori)
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=_browser_paralleli(len(lavori))) as ex:
+        return dict(ex.map(uno, lavori))
+
+
+# memoria di un Chromium headless con una pagina 1080p, misura prudente
+MEMORIA_BROWSER = 500 * 2**20
+
+
+def _browser_paralleli(n: int) -> int:
+    from .render import MEMORIA_RISERVA, memoria_libera
+
+    quanti = min(n, 4, max(1, (os.cpu_count() or 2) // 4))
+    libera = memoria_libera()
+    if libera is not None:
+        quanti = min(quanti, max(1, int((libera - MEMORIA_RISERVA) // MEMORIA_BROWSER)))
+    return max(1, quanti)

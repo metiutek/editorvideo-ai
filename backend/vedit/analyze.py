@@ -340,55 +340,140 @@ def silences(path: str, noise_db: float = SILENCE_DB, min_dur: float = SILENCE_M
     return _cached(path, f"sil{noise_db}x{min_dur}", build, force)
 
 
+# La GPU si e' gia' dimostrata inutilizzabile per la trascrizione in questo processo
+# (vedi _asr_isolata): non ci si riprova a ogni chiamata.
+_ASR_SOLO_CPU = [False]
+
+
+def _whisper(path: str, model_size: str, language: str | None, device: str) -> dict:
+    """La trascrizione vera: va eseguita nel processo figlio, non qui."""
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as e:
+        raise AnalysisError(
+            "faster-whisper non installato: pip install faster-whisper"
+        ) from e
+    if device == "cpu":
+        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+    else:
+        # "auto": la GPU se ctranslate2 ne vede una, altrimenti la CPU
+        compute = "int8_float16" if device == "cuda" else "auto"
+        model = WhisperModel(model_size, device=device, compute_type=compute)
+        device = str(getattr(model.model, "device", device))
+    segments, info = model.transcribe(
+        str(path), language=language, word_timestamps=True,
+        vad_filter=True, vad_parameters={"min_silence_duration_ms": 400},
+    )
+    segs = []
+    for s in segments:
+        segs.append({
+            "start": round(s.start, 3), "end": round(s.end, 3),
+            "text": s.text.strip(),
+            "words": [{"t": round(w.start, 3), "e": round(w.end, 3),
+                       "w": w.word.strip(), "p": round(float(w.probability), 3)}
+                      for w in (s.words or [])],
+        })
+    words = [w for s in segs for w in s["words"]]
+    speech = sum(s["end"] - s["start"] for s in segs)
+    return {
+        "language": info.language,
+        "language_prob": round(float(info.language_probability or 0), 3),
+        "duration": round(float(info.duration or 0), 3),
+        "speech_seconds": round(speech, 3),
+        "words_per_minute": round(60 * len(words) / speech, 1) if speech > 0 else 0.0,
+        "text": " ".join(s["text"] for s in segs).strip(),
+        "segments": segs,
+        "model": model_size, "device": device,
+    }
+
+
+def _asr_isolata(path: str, model_size: str, language: str | None, device: str) -> dict:
+    """Esegue _whisper in un processo figlio e ne legge il risultato.
+
+    Whisper su GPU passa da ctranslate2 e cuDNN, codice nativo: se le librerie
+    cuDNN caricate nel processo non sono quelle che si aspetta (``Could not load
+    symbol cudnnGetLibConfig``), il processo muore senza eccezione Python. Dentro
+    ``vedit ui`` o il server MCP voleva dire perdere l'editor intero. Nel figlio
+    muore solo il figlio, e il chiamante puo' riprovare su CPU.
+    """
+    import os
+    import sys
+    import tempfile
+
+    fd, out = tempfile.mkstemp(prefix="vedit_asr_", suffix=".json")
+    os.close(fd)
+    arg = json.dumps({"path": str(path), "model": model_size, "lang": language,
+                      "device": device, "out": out})
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", "from vedit import analyze; analyze._asr_figlio()", arg],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=6 * 3600)
+        try:
+            r = json.loads(Path(out).read_text("utf-8"))
+        except (OSError, ValueError):
+            coda = " | ".join((proc.stderr or "").strip().splitlines()[-6:])
+            raise _AsrCaduta(f"trascrizione interrotta (codice {proc.returncode}): {coda}")
+    finally:
+        Path(out).unlink(missing_ok=True)
+    if "errore" in r:
+        raise AnalysisError(r["errore"])
+    return r["ok"]
+
+
+def _asr_figlio() -> None:
+    """Punto d'ingresso del processo figlio: argomenti in JSON, risultato su file."""
+    import sys
+
+    a = json.loads(sys.argv[1])
+    try:
+        r = {"ok": _whisper(a["path"], a["model"], a["lang"], a["device"])}
+    except AnalysisError as e:
+        r = {"errore": str(e)}
+    Path(a["out"]).write_text(json.dumps(r, ensure_ascii=False), "utf-8")
+
+
+class _AsrCaduta(RuntimeError):
+    """Il processo della trascrizione e' morto senza dare un risultato."""
+
+
 def transcribe(path: str, model_size: str = "small", language: str | None = None,
                force: bool = False) -> dict:
     """Trascrizione con timestamp per parola (faster-whisper).
 
     I timestamp per parola sono il punto: permettono di tagliare sulla pausa
     giusta, togliere gli "ehm", censurare una singola parola.
+
+    Gira in un processo a parte (vedi _asr_isolata). Se sulla GPU cade, si rifa'
+    su CPU: piu' lenta, ma il risultato arriva e l'editor resta in piedi.
+    ``VEDIT_ASR_DEVICE=cpu`` salta la GPU fin dall'inizio.
     """
+    import os
 
     def build() -> dict:
+        # si controlla qui, non solo nel figlio: un errore di installazione deve
+        # arrivare come tale, senza far partire un processo per scoprirlo
         try:
-            from faster_whisper import WhisperModel
+            from faster_whisper import WhisperModel  # noqa: F401
         except ImportError as e:
             raise AnalysisError(
                 "faster-whisper non installato: pip install faster-whisper"
             ) from e
-        device, compute = "cpu", "int8"
+        voluto = os.environ.get("VEDIT_ASR_DEVICE", "auto").lower()
+        if voluto not in ("auto", "cuda", "cpu"):
+            voluto = "auto"
+        if _ASR_SOLO_CPU[0] and voluto != "cuda":
+            voluto = "cpu"
         try:
-            import torch
-            if torch.cuda.is_available():
-                device, compute = "cuda", "int8_float16"
-        except ImportError:
-            pass
-
-        model = WhisperModel(model_size, device=device, compute_type=compute)
-        segments, info = model.transcribe(
-            str(path), language=language, word_timestamps=True,
-            vad_filter=True, vad_parameters={"min_silence_duration_ms": 400},
-        )
-        segs = []
-        for s in segments:
-            segs.append({
-                "start": round(s.start, 3), "end": round(s.end, 3),
-                "text": s.text.strip(),
-                "words": [{"t": round(w.start, 3), "e": round(w.end, 3),
-                           "w": w.word.strip(), "p": round(float(w.probability), 3)}
-                          for w in (s.words or [])],
-            })
-        words = [w for s in segs for w in s["words"]]
-        speech = sum(s["end"] - s["start"] for s in segs)
-        return {
-            "language": info.language,
-            "language_prob": round(float(info.language_probability or 0), 3),
-            "duration": round(float(info.duration or 0), 3),
-            "speech_seconds": round(speech, 3),
-            "words_per_minute": round(60 * len(words) / speech, 1) if speech > 0 else 0.0,
-            "text": " ".join(s["text"] for s in segs).strip(),
-            "segments": segs,
-            "model": model_size, "device": device,
-        }
+            return _asr_isolata(path, model_size, language, voluto)
+        except _AsrCaduta as e:
+            if voluto == "cpu":
+                raise AnalysisError(str(e)) from e
+            _ASR_SOLO_CPU[0] = True
+            r = _asr_isolata(path, model_size, language, "cpu")
+            r["avviso"] = ("la trascrizione su GPU e' caduta (librerie CUDA/cuDNN "
+                           "incompatibili): rifatta su CPU. " + str(e)[-300:])
+            return r
 
     return _cached(path, f"asr{model_size}x{language or 'auto'}", build, force)
 

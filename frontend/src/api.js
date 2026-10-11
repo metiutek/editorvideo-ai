@@ -131,6 +131,7 @@ export const api = {
     }),
 
   // stili di montaggio scritti dall'utente (restano su questo computer)
+  stili: () => req('/api/stili'),
   salvaStile: (body) =>
     req('/api/stili', {
       method: 'POST',
