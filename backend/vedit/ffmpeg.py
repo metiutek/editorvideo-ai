@@ -47,6 +47,7 @@ def forget() -> None:
     version.cache_clear()
     filters.cache_clear()
     encoders.cache_clear()
+    misura_scale2ref.cache_clear()
 
 
 def run(args: list[str], *, timeout: float | None = None, check: bool = True) -> subprocess.CompletedProcess:
@@ -99,6 +100,23 @@ def filters() -> frozenset[str]:
         if len(parts) >= 3 and not line.startswith("Filters"):
             names.add(parts[1])
     return frozenset(names)
+
+
+@lru_cache(maxsize=1)
+def misura_scale2ref() -> str:
+    """Opzioni di ``scale2ref`` per portare l'ingresso alla misura del riferimento.
+
+    Il significato e' cambiato con la riscrittura di ``scale`` (ffmpeg 7.1): prima
+    il riferimento era ``main_w``/``main_h``, ora e' ``rw``/``rh`` e ``main_w``
+    indica l'ingresso stesso — la stessa stringa darebbe misure diverse. Si prova
+    se ``rw`` viene capito.
+    """
+    prova = run([binary("ffmpeg"), "-hide_banner", "-v", "error",
+                 "-f", "lavfi", "-i", "color=s=2x2:d=0.04",
+                 "-f", "lavfi", "-i", "color=s=4x2:d=0.04",
+                 "-filter_complex", "[0][1]scale2ref=w=rw:h=rh[a][b];[b]nullsink",
+                 "-map", "[a]", "-frames:v", "1", "-f", "null", "-"], check=False)
+    return "w=rw:h=rh" if prova.returncode == 0 else "w=main_w:h=main_h"
 
 
 @lru_cache(maxsize=1)

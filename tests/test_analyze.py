@@ -232,6 +232,10 @@ def test_trascrizione_caduta_su_gpu_si_rifa_su_cpu(monkeypatch, tmp_path):
             f.write(_j.dumps({"ok": {"device": "cpu", "segments": [], "text": ""}}))
         return vero([sys.executable, "-c", "pass"], **kw)
 
+    import types
+    finto_fw = types.ModuleType("faster_whisper")   # basta che l'import riesca: il figlio e' finto
+    finto_fw.WhisperModel = object
+    monkeypatch.setitem(sys.modules, "faster_whisper", finto_fw)
     monkeypatch.setattr(analyze.subprocess, "run", finto)
     monkeypatch.setattr(analyze, "_ASR_SOLO_CPU", [False])
     monkeypatch.delenv("VEDIT_ASR_DEVICE", raising=False)

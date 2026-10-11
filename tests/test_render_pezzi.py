@@ -216,3 +216,16 @@ def test_browser_paralleli_rispettano_la_memoria(monkeypatch):
     monkeypatch.setattr(render, "memoria_libera", lambda: 64 * 2**30)
     assert 1 <= htmlclip._browser_paralleli(10) <= 4
     assert htmlclip._browser_paralleli(2) <= 2
+
+
+def test_scale2ref_porta_alla_misura_del_riferimento(tmp_path):
+    """``rw`` esiste solo da ffmpeg 7.1, e prima ``main_w`` voleva dire l'opposto."""
+    from vedit import ffmpeg
+    out = tmp_path / "m.png"
+    ffmpeg.run(ffmpeg.base_cmd() + [
+        "-f", "lavfi", "-i", "color=s=10x10:d=0.1", "-f", "lavfi", "-i", "color=s=100x50:d=0.1",
+        "-filter_complex", f"[0][1]scale2ref={ffmpeg.misura_scale2ref()}[a][b];[b]nullsink",
+        "-map", "[a]", "-frames:v", "1", str(out)])
+    r = ffmpeg.run([ffmpeg.binary("ffprobe"), "-v", "error", "-show_entries", "stream=width,height",
+                    "-of", "csv=p=0", str(out)])
+    assert r.stdout.strip() == "100,50"

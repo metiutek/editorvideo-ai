@@ -599,6 +599,14 @@ def _ha_remap() -> bool:
     return _ha_filtri("remap", "scale2ref")
 
 
+def _misura_rif() -> str:
+    try:
+        from . import ffmpeg
+        return ffmpeg.misura_scale2ref()
+    except Exception:  # noqa: BLE001 — senza ffmpeg la catena resta comunque scrivibile
+        return "w=rw:h=rh"
+
+
 def _piccola(k: int):
     """Coordinate dell'immagine intera viste da una mappa ``k`` volte piu' piccola."""
     return (f"crop=w=iw/{k}:h=ih/{k}:x=0:y=0", f"((X+0.5)*{k}-0.5)", f"((Y+0.5)*{k}-0.5)",
@@ -614,14 +622,15 @@ def _remap(c: Ctx, sx, sy, k: int = 4) -> list[str]:
     glitch (acceso solo a raffiche) resta su displace.
     """
     crop, X, Y, W, H = _piccola(k)
+    rif = _misura_rif()
     a, b, d = c.uid("rma"), c.uid("rmb"), c.uid("rmc")
     mx, my, bx, by, r1, r2 = (c.uid(x) for x in ("rmx", "rmy", "rmbx", "rmby", "rmr", "rms"))
     return ["".join([
         f"format=gbrap,split=3[{a}][{b}][{d}];",
         f"[{b}]{crop},format=gray16,geq=lum='clip({sx(X, Y, W, H)},0,{W}-1)'[{mx}];",
         f"[{d}]{crop},format=gray16,geq=lum='clip({sy(X, Y, W, H)},0,{H}-1)'[{my}];",
-        f"[{mx}][{a}]scale2ref=w=rw:h=rh:flags=bilinear[{bx}][{r1}];",
-        f"[{my}][{r1}]scale2ref=w=rw:h=rh:flags=bilinear[{by}][{r2}];",
+        f"[{mx}][{a}]scale2ref={rif}:flags=bilinear[{bx}][{r1}];",
+        f"[{my}][{r1}]scale2ref={rif}:flags=bilinear[{by}][{r2}];",
         f"[{r2}][{bx}][{by}]remap",
     ])]
 
@@ -647,6 +656,7 @@ def _displace(c: Ctx, dx, dy, k: int = 4, righe: bool = False, en: str = "") -> 
     else:
         crop, X, Y, W, H = _piccola(k)
 
+    rif = _misura_rif()
     a, b, d = c.uid("dsa"), c.uid("dsb"), c.uid("dsc")
     parti = [f"format=gbrap,split=3[{a}][{b}][{d}];"]
     mappe = []
@@ -656,8 +666,8 @@ def _displace(c: Ctx, dx, dy, k: int = 4, righe: bool = False, en: str = "") -> 
         parti.append(f"[{src}]{crop},geq=r='{v}':g='{v}':b='{v}':a='{v}'[{m}];")
         mappe.append(m)
     mx, my, r1, r2 = (c.uid(x) for x in ("dsmx", "dsmy", "dsr", "dss"))
-    parti.append(f"[{mappe[0]}][{a}]scale2ref=w=rw:h=rh:flags=bilinear[{mx}][{r1}];")
-    parti.append(f"[{mappe[1]}][{r1}]scale2ref=w=rw:h=rh:flags=bilinear[{my}][{r2}];")
+    parti.append(f"[{mappe[0]}][{a}]scale2ref={rif}:flags=bilinear[{mx}][{r1}];")
+    parti.append(f"[{mappe[1]}][{r1}]scale2ref={rif}:flags=bilinear[{my}][{r2}];")
     parti.append(f"[{r2}][{mx}][{my}]displace=edge=smear{en}")
     return ["".join(parti)]
 
