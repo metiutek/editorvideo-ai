@@ -81,7 +81,7 @@ Le voci più recenti stanno in cima.
 
 ### Correzioni
 - `warp` e `glitch` funzionano anche con ffmpeg piu' vecchi del 7.1 (quello di Ubuntu 24.04):
-  `scale2ref` ha cambiato il significato di `main_w`, e la misura della mappa ora si sceglie
+  `scale2ref` ha cambiato il significato di `iw`/`ih`, e la misura della mappa ora si sceglie
   provando cosa capisce l'ffmpeg installato.
 - **Render che si bloccava a caso per sempre.** Con una musica lunga sotto tante clip brevi,
   `amix` di ffmpeg 8 restava fermo a consumare un core in circa un render su dieci (riprodotto

@@ -357,7 +357,7 @@ export default function App() {
             run('add_particles', { kind, start: playhead, duration: 5 })
               .then((c) => setSelected(c.id)).catch((err) => setError(err.message))
           }}>
-          <option value="">✦ particelle</option>
+          <option value="">+ particelle</option>
           {PARTICELLE.map(([k, nome]) => <option key={k} value={k}>{nome}</option>)}
         </select>
 
