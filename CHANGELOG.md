@@ -2,7 +2,7 @@
 
 Le voci più recenti stanno in cima.
 
-## Non rilasciato · Effetti speciali
+## v0.1.3 — 2026-10-11 · Effetti speciali, stili creati dall'agente, export veloce
 
 ### Nuovo
 - **Export molto più veloce sulle timeline lunghe.** Un progetto di 2 minuti con 370 tagli

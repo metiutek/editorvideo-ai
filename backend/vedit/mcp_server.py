@@ -151,7 +151,7 @@ i livelli, verify_edit per i problemi rimasti.
 
 mcp = MCPServer(
     name="vedit",
-    version="0.1.2",
+    version="0.1.3",
     instructions=ISTRUZIONI,
 )
 
