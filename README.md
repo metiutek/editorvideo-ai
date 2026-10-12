@@ -689,6 +689,10 @@ Issues and pull requests are welcome — see [CONTRIBUTING.md](https://github.co
 - before claiming it works: `pytest -m "not slow"` plus the part of `slow` it touches, and
   `cd frontend && npm test` if you changed the UI.
 
+Agents that edit with vedit log what breaks, what is clumsy and what is missing with the
+`report_issue` MCP tool, into [`SEGNALAZIONI.md`](SEGNALAZIONI.md) (from a clone) or
+`~/.vedit/SEGNALAZIONI.md`: it is the to-do list for improving the editor.
+
 No new dependencies without a reason: the core stands on ffmpeg, the standard library, `numpy`
 and Pillow.
 

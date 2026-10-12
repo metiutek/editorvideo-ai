@@ -280,6 +280,14 @@ collega li' lavora sul progetto aperto nel browser: senza `project` gli strument
 il progetto, ed e' il modo giusto anche per un agente esterno quando l'utente ha gia' l'editor
 aperto: `claude mcp add --transport http vedit-live http://127.0.0.1:8760/mcp/`.
 
+### Segnalare cio' che non va
+
+`report_issue` (`segnalazioni.py`) aggiunge una voce a `SEGNALAZIONI.md` — alla radice della
+repo se il pacchetto gira da un clone, altrimenti `~/.vedit/SEGNALAZIONI.md`
+(`VEDIT_SEGNALAZIONI` lo sposta). Tipi: `bug`, `scomodo`, `sbagliato`, `manca`, `lento`.
+L'agente lo usa da solo mentre monta, senza fermarsi; chi modifica la repo parte da li' e
+cancella le voci risolte.
+
 ### Domande all'utente ed export
 
 `ask_user` mostra nell'editor una scheda di domande con opzioni (`domande.py` per la forma,

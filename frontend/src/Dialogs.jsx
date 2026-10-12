@@ -110,8 +110,12 @@ export function FileBrowser({
         <span className="hint">{picked.length ? `${picked.length} selezionati` : ''}</span>
         <span className="spacer" />
         <button onClick={onClose}>annulla</button>
+        {!cartella && multiple && files.length > 1 && (
+          <button title="Seleziona tutti i file di questa cartella"
+            onClick={() => setPicked(files.map((f) => f.path))}>tutti ({files.length})</button>
+        )}
         {cartella ? (
-          <button className="primary" disabled={!cwd} onClick={() => scegli([cwd.path])}>
+          <button className="primary" disabled={!cwd || cwd.path === '::dischi'} onClick={() => scegli([cwd.path])}>
             usa questa cartella</button>
         ) : (
           <button className="primary" disabled={!picked.length}
@@ -121,7 +125,7 @@ export function FileBrowser({
     >
       {err && <div className="hint" style={{ color: 'var(--danger)', marginBottom: 8 }}>{err}</div>}
       <input
-        className="crumb percorso" value={scritto ?? cwd?.path ?? ''} placeholder="percorso della cartella"
+        className="crumb percorso" value={scritto ?? (cwd?.path === '::dischi' ? 'dischi' : cwd?.path) ?? ''} placeholder="percorso della cartella"
         title="Scrivi un percorso e premi Invio per andarci"
         onChange={(e) => setScritto(e.target.value)}
         onKeyDown={(e) => {

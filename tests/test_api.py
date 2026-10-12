@@ -367,3 +367,15 @@ def test_potatura_tiene_i_recenti(tmp_path):
     assert "f9.mov" in rimasti and "f0.mov" not in rimasti
     # sotto il tetto non si tocca niente
     assert proxy.pota(tmp_path, tetto=10**9) == 0
+
+
+def test_browse_risale_ai_dischi(client):
+    """Dalla radice di un disco si arriva agli altri dischi (esterni compresi)."""
+    from vedit import api
+    radice = Path(Path.home().anchor)
+    d = client.get("/api/browse", params={"path": str(radice)}).json()
+    dischi = client.get("/api/browse", params={"path": api.DISCHI}).json()
+    assert dischi["files"] == [] and dischi["dirs"]
+    assert any(Path(x["path"]) == radice for x in dischi["dirs"])
+    if len(dischi["dirs"]) > 1:
+        assert d["parent"] == api.DISCHI

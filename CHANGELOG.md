@@ -4,6 +4,16 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+### Aggiunto
+- **`report_issue`: l'agente annota cio' che non va.** Bug, strumenti scomodi, risultati
+  sbagliati, funzioni che mancano per un compito, lentezze finiscono in `SEGNALAZIONI.md`
+  (dal clone) o `~/.vedit/SEGNALAZIONI.md`, da cui decidere cosa migliorare. Le istruzioni
+  MCP dicono di usarlo subito, senza fermarsi (`segnalazioni.py`).
+- **Import da dischi esterni.** Il dialogo di import si fermava alla radice di `C:\`: D:,
+  chiavette e dischi di rete si raggiungevano solo scrivendo il percorso. Ora da `..` sulla
+  radice si arriva all'elenco dei dischi (su macOS/Linux anche `/Volumes`, `/media`, `/mnt`),
+  e il pulsante *tutti* seleziona in un clic i file di una cartella intera.
+
 ### Corretto
 - **Chiudere l'editor chiude anche i suoi render.** Su Windows un ffmpeg lanciato
   dall'interfaccia sopravviveva alla chiusura: un export a grafo unico è rimasto acceso da

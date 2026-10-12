@@ -463,6 +463,9 @@ def browse(path: str | None = None) -> dict:
 
     # .json compreso: la stessa finestra serve per aprire i progetti
     known = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS | {".json"}
+    if path == DISCHI:
+        return {"path": DISCHI, "parent": None, "files": [],
+                "dirs": [{"name": d, "path": d} for d in _dischi()]}
     base = Path(path) if path else Path.home()
     if not base.exists():
         raise HTTPException(404, f"cartella inesistente: {base}")
@@ -485,8 +488,30 @@ def browse(path: str | None = None) -> dict:
     except PermissionError as exc:
         raise HTTPException(403, str(exc)) from exc
 
-    return {"path": str(base), "parent": str(base.parent) if base.parent != base else None,
-            "dirs": dirs, "files": files}
+    # dalla radice di un disco si risale all'elenco dei dischi: senza, i dischi
+    # esterni (D:, chiavette, NAS montati) si raggiungevano solo scrivendo il percorso
+    if base.parent != base:
+        parent = str(base.parent)
+    else:
+        parent = DISCHI if len(_dischi()) > 1 else None
+    return {"path": str(base), "parent": parent, "dirs": dirs, "files": files}
+
+
+DISCHI = "::dischi"
+
+
+def _dischi() -> list[str]:
+    """Radici dei dischi montati: lettere su Windows, /Volumes e /media altrove."""
+    if os.name == "nt":
+        import string
+        return [f"{c}:\\" for c in string.ascii_uppercase if os.path.exists(f"{c}:\\")]
+    radici = ["/"]
+    for base in ("/Volumes", "/media", "/mnt", f"/media/{os.environ.get('USER', '')}"):
+        try:
+            radici += [str(p) for p in Path(base).iterdir() if p.is_dir()]
+        except OSError:
+            continue
+    return list(dict.fromkeys(radici))
 
 
 @app.get("/api/media/{media_id}/waveform")

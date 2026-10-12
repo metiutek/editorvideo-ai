@@ -100,6 +100,11 @@ Regola sopra tutte: **guarda il risultato**. preview_grid mostra il montaggio
 tutto insieme, preview_frame un fotogramma (alza width a 1280 per giudicare un
 dettaglio). Un montaggio non guardato e' un montaggio non fatto.
 
+Quando qualcosa non va — errore, strumento scomodo, risultato diverso da quello
+promesso, funzione che manca per il compito, lentezza — annotalo subito con
+report_issue (non chiedere, non fermarti) e poi prosegui come puoi: e' cosi'
+che l'editor migliora.
+
 1. LA MUSICA DEVE MUOVERSI. Una traccia a volume fisso per tutta la durata e' la
    prima cosa che rende un video piatto, e non si nota consapevolmente: si sente
    solo che "non succede niente". Usa music_beats: il profilo di energia dice
@@ -1754,6 +1759,22 @@ async def system_info() -> dict:
             "hardware_verificato": info.working,
             "cache": str(proxy.cache_dir()),
             "interfaccia": (api.background_info() if api else None)}
+
+
+@_strumento()
+async def report_issue(tipo: str, cosa: str, compito: str = "", strumento: str = "",
+                       proposta: str = "") -> dict:
+    """Annota in SEGNALAZIONI.md cio' che non va nell'editor, per migliorarlo.
+
+    Usalo appena succede, senza chiedere e senza interrompere il lavoro:
+    tipo = bug (errore/crash) | scomodo (troppi passi) | sbagliato (risultato
+    diverso dal promesso) | manca (serve per il compito e non c'e') | lento.
+    cosa = cosa e' successo, concreto (parametri, messaggio d'errore);
+    compito = cosa stavi cercando di fare; strumento = quello coinvolto;
+    proposta = come lo vorresti.
+    """
+    from . import segnalazioni
+    return segnalazioni.segnala(tipo, cosa, compito, strumento, proposta)
 
 
 @_strumento()

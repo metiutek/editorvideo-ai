@@ -369,3 +369,21 @@ async def test_track_mask_con_box_segue_un_oggetto_qualsiasi(tmp_path):
     assert a_uno["v"] == pytest.approx(320, abs=12)
     with pytest.raises(ToolError):
         await call("track_mask", clip=c["id"], kind="mask_arcobaleno", box=[0, 0, 0.1, 0.1])
+
+
+@pytest.mark.anyio
+async def test_report_issue_scrive_il_registro(tmp_path, monkeypatch):
+    from vedit import mcp_server as srv
+    f = tmp_path / "SEGNALAZIONI.md"
+    monkeypatch.setenv("VEDIT_SEGNALAZIONI", str(f))
+    esito = await srv.report_issue("scomodo", "servono 40 chiamate per 40 titoli",
+                                   compito="sottotitoli a mano", strumento="add_text")
+    assert esito["file"] == str(f)
+    await srv.report_issue("manca", "niente import di una cartella intera")
+    testo = f.read_text(encoding="utf-8")
+    assert testo.startswith("# Segnalazioni")
+    assert "[scomodo] add_text" in testo and "sottotitoli a mano" in testo
+    assert "[manca] generale" in testo
+    with pytest.raises(ValueError):
+        await srv.report_issue("boh", "x")
+    assert "report_issue" in srv.ISTRUZIONI

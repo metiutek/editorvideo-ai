@@ -483,6 +483,10 @@ dissolvenze incrociate, normalizzazione EBU R128, render, e `preview_frame` che 
 l'immagine vera** del fotogramma — così l'agente vede quello che ha montato invece di
 indovinarlo.
 
+Gli agenti che montano annotano cio' che si rompe, e' scomodo o manca con lo strumento
+`report_issue`, in [`SEGNALAZIONI.md`](SEGNALAZIONI.md) (da un clone) o
+`~/.vedit/SEGNALAZIONI.md`: e' l'elenco da cui migliorare l'editor.
+
 > **Un progetto alla volta per file.** Interfaccia e server MCP salvano da soli dopo ogni
 > modifica: se tieni lo stesso `.json` aperto in tutti e due contemporaneamente, l'ultimo che
 > salva vince. Lavora su uno per volta.
