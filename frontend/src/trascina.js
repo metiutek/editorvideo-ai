@@ -23,3 +23,57 @@ export function useFineTrascinamento(spegni) {
     }
   }, [spegni])
 }
+
+/**
+ * File trascinati dal desktop, cartelle comprese.
+ *
+ * ``dataTransfer.files`` di una cartella trascinata contiene la cartella stessa
+ * come un "file" senza estensione: il contenuto non c'e', e l'import diceva
+ * "nessun file multimediale riconosciuto" davanti a una cartella piena di
+ * effetti sonori e canzoni. Qui si scende nelle cartelle con le entry del
+ * filesystem e ogni file porta con se' la sua sottocartella relativa, che
+ * diventa la cartella del bin.
+ *
+ * Va chiamata dentro l'evento drop, prima di qualunque await: finito l'evento
+ * il browser svuota ``dataTransfer`` e le entry non si leggono piu'.
+ */
+export function leggiTrascinati(dt) {
+  const entries = [...(dt?.items || [])]
+    .filter((it) => it.kind === 'file')
+    .map((it) => it.webkitGetAsEntry?.())
+  if (!entries.length || entries.some((e) => !e)) {
+    // browser senza entry: si lavora coi soli file, come prima
+    return Promise.resolve([...(dt?.files || [])].map((file) => ({ file, cartella: '' })))
+  }
+  return Promise.all(entries.map((e) => visita(e, ''))).then((liste) => liste.flat())
+}
+
+async function visita(entry, cartella) {
+  if (entry.isFile) {
+    const file = await new Promise((ok, ko) => entry.file(ok, ko))
+    return [{ file, cartella }]
+  }
+  if (!entry.isDirectory) return []
+  const dentro = cartella ? `${cartella}/${entry.name}` : entry.name
+  const reader = entry.createReader()
+  const figli = []
+  // readEntries restituisce a blocchi (100 su Chrome): si legge finche' torna vuoto
+  for (;;) {
+    const blocco = await new Promise((ok, ko) => reader.readEntries(ok, ko))
+    if (!blocco.length) break
+    figli.push(...blocco)
+  }
+  const liste = await Promise.all(figli.map((f) => visita(f, dentro)))
+  return liste.flat()
+}
+
+/** Raggruppa per cartella di destinazione nel bin: ``base`` e' quella su cui si e' lasciato. */
+export function perCartella(voci, base = '') {
+  const gruppi = new Map()
+  for (const { file, cartella } of voci) {
+    const dest = [base, cartella].filter(Boolean).join('/')
+    if (!gruppi.has(dest)) gruppi.set(dest, [])
+    gruppi.get(dest).push(file)
+  }
+  return gruppi
+}

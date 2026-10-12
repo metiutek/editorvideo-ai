@@ -4,6 +4,7 @@
  *   node test-util.mjs
  */
 import assert from 'node:assert/strict'
+import { leggiTrascinati, perCartella } from './src/trascina.js'
 import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura, mostraEsatto } from './src/util.js'
 
 let ok = 0
@@ -137,5 +138,33 @@ test('natura della clip: cosa produce davvero, quindi cosa mostrare', () => {
   assert.deepEqual(n('a1'), { video: false, audio: true })
   assert.deepEqual(natura(null, project), { video: false, audio: false })
 })
+
+
+{
+  // cartella trascinata dal desktop: il contenuto va letto dalle entry, a blocchi
+  const f = (name) => ({ isFile: true, name, file: (ok) => ok({ name }) })
+  const d = (name, figli, blocco = 2) => ({
+    isDirectory: true, name,
+    createReader: () => {
+      let i = 0
+      return { readEntries: (ok) => { ok(figli.slice(i, i + blocco)); i += blocco } }
+    },
+  })
+  const sfx = d('SFX', [f('whoosh.wav'), f('boom.mp3'), d('Canzoni', [f('a.flac')]), f('note.txt')])
+  const dt = { items: [{ kind: 'file', webkitGetAsEntry: () => sfx },
+                       { kind: 'file', webkitGetAsEntry: () => f('clip.mp4') }] }
+  const voci = await leggiTrascinati(dt)
+  const nomi = voci.map((v) => `${v.cartella}|${v.file.name}`).sort()
+  test('trascinare una cartella legge anche le sottocartelle', () => {
+    assert.deepEqual(nomi, ['SFX/Canzoni|a.flac', 'SFX|boom.mp3', 'SFX|note.txt', 'SFX|whoosh.wav', '|clip.mp4'].sort())
+  })
+  test('ogni sottocartella diventa una cartella del bin', () => {
+    const g = perCartella(voci, 'audio')
+    assert.deepEqual([...g.keys()].sort(), ['audio', 'audio/SFX', 'audio/SFX/Canzoni'])
+    assert.equal(g.get('audio/SFX').length, 3)
+  })
+  const vecchio = await leggiTrascinati({ files: [{ name: 'x.mp4' }] })
+  test('senza entry restano i file', () => assert.deepEqual(vecchio, [{ file: { name: 'x.mp4' }, cartella: '' }]))
+}
 
 console.log(`\n${ok} verifiche superate`)

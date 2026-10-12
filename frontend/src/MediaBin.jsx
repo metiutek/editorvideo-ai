@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import useMediaAssets from './mediaAssets.js'
-import { useFineTrascinamento } from './trascina.js'
+import { leggiTrascinati, useFineTrascinamento } from './trascina.js'
 import { fmt } from './util.js'
 
 const ICON = { audio: 'audio', image: 'immagine', video: 'video' }
@@ -87,7 +87,7 @@ export default function MediaBin({ project, run, setError, onOpenSource, onImpor
       setDragOver(null)
       const id = e.dataTransfer.getData('text/media')
       if (id) { move(id, folder); return }
-      if (e.dataTransfer.files?.length) onImport(e.dataTransfer.files, folder)
+      if (e.dataTransfer.files?.length) onImport(leggiTrascinati(e.dataTransfer), folder)
     },
   })
 

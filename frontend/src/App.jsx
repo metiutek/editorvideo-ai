@@ -9,10 +9,10 @@ import MediaBin from './MediaBin.jsx'
 import Preview from './Preview.jsx'
 import SourceMonitor from './SourceMonitor.jsx'
 import Timeline from './Timeline.jsx'
-import { useFineTrascinamento } from './trascina.js'
+import { leggiTrascinati, perCartella, useFineTrascinamento } from './trascina.js'
 import { clamp, findClip, fmt } from './util.js'
 
-const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|flac|ogg|opus|png|jpe?g|webp|bmp|tiff?)$/i
+const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|flac|ogg|opus|wma|aiff?|png|jpe?g|webp|bmp|tiff?|gif)$/i
 
 // Le misure dei pannelli restano tra una sessione e l'altra. Vengono rilette
 // entro i limiti di adesso: una misura salvata da una versione precedente puo'
@@ -202,9 +202,12 @@ export default function App() {
   const importPaths = (paths) =>
     run('import_media', { paths }).catch((e) => setError(e.message))
 
+  // fileList: FileList, oppure la promessa di leggiTrascinati (cartelle comprese)
   const importFiles = async (fileList, folder = '') => {
     if (!fileList) { setDialog('import'); return }
-    const files = [...fileList].filter((f) => MEDIA_EXT.test(f.name))
+    const voci = (fileList.then ? await fileList : [...fileList].map((file) => ({ file, cartella: '' })))
+      .filter((v) => MEDIA_EXT.test(v.file.name))
+    const files = voci.map((v) => v.file)
     if (!files.length) { setError('nessun file multimediale riconosciuto'); return }
     if (!project) {
       // trascinare dei file e' il primo gesto naturale: senza progetto se ne
@@ -219,7 +222,10 @@ export default function App() {
     const mb = files.reduce((s, f) => s + f.size, 0) / 1e6
     setUploading(`${files.length} file, ${mb.toFixed(0)} MB`)
     try {
-      applyState(await api.upload(files, folder))
+      // una richiesta per cartella: ogni sottocartella trascinata resta tale nel bin
+      for (const [dest, gruppo] of perCartella(voci, folder)) {
+        applyState(await api.upload(gruppo, dest))
+      }
     } catch (e) { setError(e.message) } finally { setUploading(null) }
   }
 
@@ -314,7 +320,7 @@ export default function App() {
         if (!e.dataTransfer.files?.length) return
         e.preventDefault()
         setDropping(false)
-        importFiles(e.dataTransfer.files)
+        importFiles(leggiTrascinati(e.dataTransfer))
       }}
     >
       <div className="topbar">

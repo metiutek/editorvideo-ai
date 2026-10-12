@@ -13,6 +13,11 @@ Le voci più recenti stanno in cima.
   chiavette e dischi di rete si raggiungevano solo scrivendo il percorso. Ora da `..` sulla
   radice si arriva all'elenco dei dischi (su macOS/Linux anche `/Volumes`, `/media`, `/mnt`),
   e il pulsante *tutti* seleziona in un clic i file di una cartella intera.
+- **Trascinare una cartella la importa tutta.** Il browser passa la cartella come un file
+  senza estensione, e l'import rispondeva "nessun file multimediale riconosciuto" davanti a
+  una cartella di effetti sonori e canzoni. Ora si scende nelle sottocartelle, e ognuna
+  diventa una cartella del bin (`trascina.leggiTrascinati`). Riconosciuti anche `.aif`,
+  `.wma`, `.aiff` e `.gif` trascinati.
 
 ### Corretto
 - **Chiudere l'editor chiude anche i suoi render.** Su Windows un ffmpeg lanciato
