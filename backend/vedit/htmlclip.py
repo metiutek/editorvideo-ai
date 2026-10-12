@@ -33,6 +33,7 @@ import math
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 
 from . import ffmpeg
@@ -276,20 +277,75 @@ def frame_range(duration: float, fps: float, t0: float = 0.0, t1: float | None =
     return da, a
 
 
+# Le clip si fotografano a blocchi fissi, allineati al tempo della clip: un
+# tratto qualsiasi (un segmento d'anteprima, un fotogramma, un pezzo d'export)
+# riusa i blocchi gia' fatti. Con la cache per tratto ogni segmento nuovo
+# rifotografava tutto: 4 s d'anteprima costavano un minuto di Chromium.
+BLOCCO_S = 4.0
+# sotto questi fotogrammi (lo scrub chiede un fotogramma) si fotografa il solo
+# tratto, se i blocchi non ci sono gia': un blocco intero costerebbe 120 schermate
+FOTOGRAMMI_SOLI = 8
+
+
+def _blocchi(duration: float, fps: float, t0: float, t1: float | None) -> list[tuple[int, int]]:
+    """Blocchi ``[da, a)`` di fotogrammi che coprono il tratto [t0, t1] della clip."""
+    da, a = frame_range(duration, fps, t0, t1)
+    totale = max(1, math.ceil(duration * fps - 1e-6))
+    b = max(1, round(BLOCCO_S * fps))
+    return [(j * b, min(totale, (j + 1) * b)) for j in range(da // b, (a - 1) // b + 1)]
+
+
+def _pronto(path: Path) -> bool:
+    return path.exists() and path.stat().st_size > 0
+
+
 def rasterize(html: str, *, base: str | None, duration: float, width: int, height: int,
               fps: float, page_w: int, page_h: int, t0: float = 0.0,
               t1: float | None = None) -> tuple[str, float]:
-    """Fotografa la clip e ritorna ``(percorso .mov, tempo del primo fotogramma)``.
+    """Fotografa il tratto della clip e ritorna ``(file, tempo del primo fotogramma)``.
 
-    Il risultato sta in cache per contenuto: rifare il render di un progetto
-    con la stessa grafica non riapre il browser.
+    Il file e' un .mov se il tratto sta in un blocco, altrimenti un elenco
+    ``ffconcat`` dei blocchi, che ffmpeg legge in fila senza ricodifica. I
+    blocchi stanno in cache per contenuto: rifare il render di un progetto con
+    la stessa grafica non riapre il browser.
     """
-    da, a = frame_range(duration, fps, t0, t1)
-    chiave = firma(html, base, width, height, fps, page_w, page_h, da, a)
-    out = _cache_dir() / f"{chiave}.mov"
-    if out.exists() and out.stat().st_size > 0:
-        return str(out), da / fps
+    def file(da: int, a: int) -> Path:
+        return _cache_dir() / f"{firma(html, base, width, height, fps, page_w, page_h, da, a)}.mov"
 
+    # la clip intera gia' fotografata (un export di prima) copre ogni tratto,
+    # anche a piena misura per un'anteprima piu' piccola: il grafo la riduce
+    tutta = frame_range(duration, fps)
+    for intera in (file(*tutta), _cache_dir() / (
+            f"{firma(html, base, page_w, page_h, fps, page_w, page_h, *tutta)}.mov")):
+        if _pronto(intera):
+            return str(intera), 0.0
+    blocchi = [(da, a, file(da, a)) for da, a in _blocchi(duration, fps, t0, t1)]
+    mancano = [x for x in blocchi if not _pronto(x[2])]
+    da, a = frame_range(duration, fps, t0, t1)
+    if mancano and a - da <= FOTOGRAMMI_SOLI:
+        # un fotogramma dello scrub: i suoi soli fotogrammi, non 4 s per clip
+        solo = file(da, a)
+        if not _pronto(solo):
+            _fotografa(html, base, width, height, fps, page_w, page_h, [(da, a, solo)])
+        return str(solo), da / fps
+    if mancano:
+        _fotografa(html, base, width, height, fps, page_w, page_h, mancano)
+    primo = blocchi[0][0] / fps
+    if len(blocchi) == 1:
+        return str(blocchi[0][2]), primo
+    nomi = [x[2].name for x in blocchi]
+    elenco = _cache_dir() / f"{hashlib.sha1('|'.join(nomi).encode()).hexdigest()[:20]}.ffconcat"
+    if not _pronto(elenco):
+        tmp = elenco.with_name(f"~{os.getpid()}_{elenco.name}")
+        tmp.write_text("ffconcat version 1.0\n" + "".join(f"file '{n}'\n" for n in nomi),
+                       encoding="utf-8")
+        os.replace(tmp, elenco)
+    return str(elenco), primo
+
+
+def _fotografa(html: str, base: str | None, width: int, height: int, fps: float,
+               page_w: int, page_h: int, blocchi: list[tuple[int, int, Path]]) -> None:
+    """Un browser solo per tutti i blocchi mancanti di una clip, un .mov per blocco."""
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
@@ -299,18 +355,10 @@ def rasterize(html: str, *, base: str | None, duration: float, width: int, heigh
             "se mancano: python -m playwright install chromium"
         ) from exc
 
-    pagina = _cache_dir() / f"{chiave}.html"
+    chiave = blocchi[0][2].stem
+    pagina = _cache_dir() / f"~{os.getpid()}_{chiave}.html"
     base_href = Path(base).resolve().as_uri() + "/" if base else None
     pagina.write_text(compose(html, fps, base_href), encoding="utf-8")
-
-    tmp = out.with_name(f"~{chiave}.mov")
-    args = [ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
-            "-f", "image2pipe", "-framerate", repr(float(fps)), "-c:v", "png", "-i", "-",
-            # dimensioni esatte: il fattore di scala del browser arrotonda
-            "-vf", f"scale={width}:{height}:flags=bicubic,format=argb",
-            "-c:v", "qtrle", "-f", "mov", str(tmp)]
-    proc = subprocess.Popen(args, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
-                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     errore_js: list[str] = []
     try:
         with sync_playwright() as pw:
@@ -323,13 +371,32 @@ def rasterize(html: str, *, base: str | None, duration: float, width: int, heigh
                 page.on("pageerror", lambda e: errore_js.append(str(e)))
                 page.goto(pagina.as_uri(), wait_until="load", timeout=60_000)
                 page.evaluate("() => document.fonts ? document.fonts.ready.then(() => 1) : 1")
-                for i in range(da, a):
-                    page.evaluate("(t) => window.__vedit.seek(t)", i / fps)
-                    png = page.screenshot(type="png", omit_background=True)
-                    assert proc.stdin is not None
-                    proc.stdin.write(png)
+                for da, a, out in blocchi:
+                    _blocco(page, width, height, fps, da, a, out)
             finally:
                 browser.close()
+    finally:
+        pagina.unlink(missing_ok=True)
+    if errore_js:
+        # non blocca: la pagina puo' avere un errore innocuo, ma va detto
+        (_cache_dir() / f"{chiave}.log").write_text("\n".join(errore_js), encoding="utf-8")
+
+
+def _blocco(page, width: int, height: int, fps: float, da: int, a: int, out: Path) -> None:
+    tmp = out.with_name(f"~{os.getpid()}_{out.name}")
+    args = [ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+            "-f", "image2pipe", "-framerate", repr(float(fps)), "-c:v", "png", "-i", "-",
+            # dimensioni esatte: il fattore di scala del browser arrotonda
+            "-vf", f"scale={width}:{height}:flags=bicubic,format=argb",
+            "-c:v", "qtrle", "-f", "mov", str(tmp)]
+    proc = subprocess.Popen(args, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        for i in range(da, a):
+            page.evaluate("(t) => window.__vedit.seek(t)", i / fps)
+            png = _schermata(page)
+            assert proc.stdin is not None
+            proc.stdin.write(png)
         assert proc.stdin is not None
         proc.stdin.close()
         err = proc.stderr.read().decode("utf-8", "replace") if proc.stderr else ""
@@ -340,12 +407,22 @@ def rasterize(html: str, *, base: str | None, duration: float, width: int, heigh
         proc.kill()
         tmp.unlink(missing_ok=True)
         raise
-    finally:
-        pagina.unlink(missing_ok=True)
-    if errore_js:
-        # non blocca: la pagina puo' avere un errore innocuo, ma va detto
-        (_cache_dir() / f"{chiave}.log").write_text("\n".join(errore_js), encoding="utf-8")
-    return str(out), da / fps
+
+
+def _schermata(page) -> bytes:
+    """Una schermata, riprovata: sotto carico Chromium ogni tanto non la consegna.
+
+    ``Unable to capture screenshot`` con la CPU piena di ffmpeg buttava via
+    l'intero export per un fotogramma.
+    """
+    for prova in range(3):
+        try:
+            return page.screenshot(type="png", omit_background=True)
+        except Exception:  # noqa: BLE001 - l'errore di Playwright non ha un tipo utile
+            if prova == 2:
+                raise
+            time.sleep(0.2 * (prova + 1))
+    raise AssertionError("irraggiungibile")
 
 
 def prepare(project, *, width: int, height: int, fps: float,

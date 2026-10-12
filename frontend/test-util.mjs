@@ -4,13 +4,28 @@
  *   node test-util.mjs
  */
 import assert from 'node:assert/strict'
-import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura } from './src/util.js'
+import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura, mostraEsatto } from './src/util.js'
 
 let ok = 0
 const test = (name, fn) => {
   try { fn(); ok++; console.log('ok   ' + name) }
   catch (e) { console.log('FAIL ' + name + ': ' + e.message); process.exitCode = 1 }
 }
+
+test('diretta: fotogramma esatto da fermi dove il browser non basta', () => {
+  const base = { diretta: true, prova: null, approssimato: true, playing: false, url: 'f.jpg', pending: false }
+  assert.equal(mostraEsatto(base), true)
+  // in riproduzione resta la diretta: il fotogramma esatto sarebbe fermo
+  assert.equal(mostraEsatto({ ...base, playing: true }), false)
+  // mentre arriva quello nuovo non si mostra il vecchio, che e' di un altro istante
+  assert.equal(mostraEsatto({ ...base, pending: true }), false)
+  // il browser rifa' tutto: niente da sostituire
+  assert.equal(mostraEsatto({ ...base, approssimato: false }), false)
+  // in fedele e durante la prova di un effetto il monitor mostra gia' il fotogramma
+  assert.equal(mostraEsatto({ ...base, diretta: false }), false)
+  assert.equal(mostraEsatto({ ...base, prova: { label: 'glow' } }), false)
+  assert.equal(mostraEsatto({ ...base, url: null }), false)
+})
 
 test('passi dell\'assistente: su cosa lavorano, in parole', () => {
   const project = {

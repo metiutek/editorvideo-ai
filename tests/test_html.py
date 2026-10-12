@@ -328,3 +328,40 @@ def test_piu_clip_si_fotografano_in_parallelo():
     attesi = {"red": (255, 0, 0), "lime": (0, 255, 0), "blue": (0, 0, 255)}
     for cid, colore in zip(ids, attesi):
         assert _pixel(fatti[cid][0], 0.1, 160, 90)[:3] == pytest.approx(attesi[colore], abs=8)
+
+
+def test_blocchi_allineati_al_tempo_della_clip():
+    """Tratti diversi della stessa clip cadono negli stessi blocchi: si riusano."""
+    b = htmlclip._blocchi
+    fps = 30
+    n = round(htmlclip.BLOCCO_S * fps)
+    assert b(20.0, fps, 0.0, 1.0) == [(0, n)]
+    assert b(20.0, fps, 1.0, 3.0) == [(0, n)]                     # stesso blocco
+    assert b(20.0, fps, 3.5, 5.0) == [(0, n), (n, 2 * n)]          # a cavallo
+    assert b(20.0, fps, 18.0, None)[-1] == (4 * n, 600)            # l'ultimo e' corto
+    assert b(2.0, fps, 0.0, None) == [(0, 60)]                     # clip piu' corta di un blocco
+
+
+@pytest.mark.slow
+def test_tratto_su_piu_blocchi_uguale_alla_clip_intera(tmp_path):
+    """Un tratto a cavallo di due blocchi (elenco ffconcat) da' gli stessi fotogrammi."""
+    _browser_o_salta()
+    from vedit import render
+
+    s = Store.create("t", "720p")
+    s.project.settings.width, s.project.settings.height = 320, 180
+    s.add_color("blue", duration=10)
+    v2 = s.add_track("video")
+    s.add_html(html=ANIMATA, track_id=v2.id, duration=10)
+    try:
+        mov, t0 = htmlclip.rasterize(ANIMATA, base=None, duration=10.0, width=320, height=180,
+                                     fps=10, page_w=320, page_h=180, t0=3.0, t1=5.0)
+    except htmlclip.HtmlNonDisponibile as exc:
+        pytest.skip(str(exc))
+    assert mov.endswith(".ffconcat") and t0 == 0.0
+    # il render di un tratto a cavallo legge l'elenco e compone come sempre
+    out = tmp_path / "f.png"
+    render.render_frame(s.project, 4.5, str(out), width=320, use_proxy=False)
+    from PIL import Image
+    r, g, b = Image.open(out).convert("RGB").getpixel((160, 60))
+    assert b > 200 and r < 60          # pagina trasparente: sotto si vede il blu

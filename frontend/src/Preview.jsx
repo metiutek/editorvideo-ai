@@ -3,7 +3,7 @@ import { api } from './api.js'
 import Gizmo from './Gizmo.jsx'
 import LivePlayer from './LivePlayer.jsx'
 import useFrame from './useFrame.js'
-import { fmt } from './util.js'
+import { fmt, mostraEsatto } from './util.js'
 
 const SEGMENT = 12   // secondi renderizzati per volta durante la riproduzione
 // Il primo pezzo si aspetta da fermi, con il dito ancora sul tasto play: va
@@ -101,14 +101,19 @@ export default function Preview({
 
   const empty = !project || duration <= 0
 
-  // In diretta non si renderizza niente: il fotogramma da ffmpeg serve solo in
-  // modalita' fedele, o quando si sta guardando la prova di un effetto.
-  const usaFrame = !empty && (!diretta || prova) && !playing
+  // In diretta il fotogramma da ffmpeg serve da fermi dove il browser non sa
+  // rifare tutto (glitch, warp, LUT...): senza, non c'era modo di vedere un
+  // effetto se non passando a "fedele". In modalita' fedele e per la prova di
+  // un effetto serve sempre.
+  const usaFrame = !empty && !playing && (!diretta || prova || approssimato)
   const frame = useFrame(
     usaFrame
       ? api.frameUrl(Math.min(playhead, Math.max(0, duration - 0.02)), revision, 960, prova)
       : null,
   )
+  // il fotogramma esatto copre la diretta solo se e' quello della testina: uno
+  // vecchio mentre si trascina mostrerebbe l'istante sbagliato
+  const esatto = mostraEsatto({ diretta, prova, approssimato, playing, url: frame.url, pending: frame.pending })
 
   return (
     <div className="preview">
@@ -119,14 +124,21 @@ export default function Preview({
       ) : diretta && !prova ? (
         <>
           <LivePlayer project={project} playhead={playhead} seek={seek}
-            playing={playing} setPlaying={setPlaying} onApprossimato={setApprossimato} />
+            playing={playing} setPlaying={setPlaying} onApprossimato={setApprossimato}
+            esatto={esatto ? frame.url : null} />
           {approssimato && (
-            <div className="badge sottile" title={
-              'Qui la composizione la fa il browser: LUT, chroma key, glow, curve,'
-              + ' stabilizzazione, tendine e scorrimenti non si vedono.'
-              + '\nPassa a "fedele" per il risultato esatto.'}>
-              anteprima approssimata
-            </div>
+            esatto ? (
+              <div className="badge sottile" title="Fotogramma calcolato da ffmpeg, uguale all'export.">
+                fotogramma esatto
+              </div>
+            ) : (
+              <div className="badge sottile" title={
+                'In riproduzione la composizione la fa il browser: glitch, warp, LUT,'
+                + ' chroma key, glow, curve, tendine e scorrimenti non si vedono.'
+                + '\nFermati per il fotogramma esatto, o passa a "fedele" per riprodurlo esatto.'}>
+                {playing ? 'approssimata: fermati per vedere gli effetti' : 'calcolo il fotogramma esatto…'}
+              </div>
+            )
           )}
         </>
       ) : playing && segment ? (

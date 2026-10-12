@@ -323,6 +323,7 @@ input[type=range]::-moz-range-thumb {
   transform-origin: center; will-change: transform, opacity;
 }
 .livehtml { pointer-events: none; }
+.liveesatto { z-index: 5; pointer-events: none; object-fit: contain; }
 .livehtml iframe {
   position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0;
   background: transparent; color-scheme: normal; pointer-events: none;

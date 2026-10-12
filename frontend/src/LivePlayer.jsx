@@ -73,7 +73,7 @@ function fedele(clip) {
 }
 
 export default function LivePlayer({
-  project, playhead, seek, playing, setPlaying, onApprossimato,
+  project, playhead, seek, playing, setPlaying, onApprossimato, esatto = null,
 }) {
   const hostRef = useRef(null)
   const elementi = useRef(new Map())     // clip id -> elemento multimediale
@@ -185,7 +185,8 @@ export default function LivePlayer({
         setAttivi(ora)
       }
 
-      let approssimato = false
+      // gli effetti del master toccano tutto il quadro, e il CSS non li rifa'
+      let approssimato = (project?.master?.effects || []).some((e) => e.enabled !== false)
       for (const { clip, track, disegna } of ora) {
         const el = elementi.current.get(clip.id)
         if (!el) continue
@@ -343,6 +344,9 @@ export default function LivePlayer({
                 style={{ objectFit: fitCss(clip.fit) }} />
             )
           })}
+          {/* da fermi, dove il CSS non basta: il fotogramma vero di ffmpeg sopra
+              a tutto, cosi' glitch, warp e LUT si giudicano senza cambiare modo */}
+          {esatto && <img className="livelayer liveesatto" src={esatto} alt="" />}
         </div>
       )}
     </div>

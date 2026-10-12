@@ -201,3 +201,13 @@ export function natura(clip, project) {
   if (kind === 'audio') return { video: false, audio: true }
   return { video: true, audio: !!media?.audio }
 }
+
+/**
+ * Quando la diretta lascia il posto al fotogramma calcolato da ffmpeg: da
+ * fermi, dove il browser non sa rifare quello che c'e' (glitch, warp, LUT...),
+ * e solo quando il fotogramma pronto e' quello della testina — uno vecchio
+ * mentre si trascina mostrerebbe l'istante sbagliato.
+ */
+export function mostraEsatto({ diretta, prova, approssimato, playing, url, pending }) {
+  return !!(diretta && !prova && approssimato && !playing && url && !pending)
+}

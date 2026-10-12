@@ -4,6 +4,24 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+### Corretto
+- **In diretta gli effetti ora si vedono, da fermi.** La riproduzione in diretta la compone
+  il browser, che non sa rifare glitch, warp, lenti, LUT, chroma key, glow e simili: anche a
+  video fermo si vedeva l'immagine senza effetti, e l'unico modo per giudicarli era passare
+  a "fedele". Ora, quando ti fermi su un punto dove la diretta è approssimata, il monitor
+  mostra il fotogramma calcolato da ffmpeg (uguale all'export, mezzo secondo) con il badge
+  "fotogramma esatto". In riproduzione il badge dice di fermarsi per vedere gli effetti.
+  Anche gli effetti del master ora fanno scattare l'avviso.
+- **Le grafiche HTML non si rifotografano a ogni tratto.** La cache delle clip HTML era per
+  tratto: ogni segmento d'anteprima o fotogramma mai visto riapriva Chromium e rifotografava
+  la grafica, e sul videoclip con quattro clip HTML un segmento fedele da 4 s costava 50-62 s,
+  un fotogramma 5,5 s. Ora si fotografano a blocchi di 4 s allineati al tempo della clip,
+  riusati da qualunque tratto (più blocchi si leggono in fila con un elenco `ffconcat`), lo
+  scrub fotografa solo i fotogrammi che servono, e l'anteprima usa anche le grafiche intere
+  già fotografate a piena misura da un export. Stesso progetto: segmento da 4 s in 5,4 s,
+  fotogramma in 0,5-0,65 s. Una schermata che Chromium non consegna sotto carico si riprova
+  invece di far fallire l'export.
+
 ### Migliorato
 - **Riesportare rifa' solo quello che è cambiato.** I pezzi del render si conservano in
   `~/.vedit/pezzi`, con una chiave fatta dal comando ffmpeg e dai file che leggono: correggi

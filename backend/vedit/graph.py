@@ -287,9 +287,16 @@ class _Builder:
             salto = clip.in_ - float(t0)
             if salto > 1e-6:
                 args += ["-ss", n(salto)]
-            args += ["-t", n(clip_visible(clip) + 0.05), "-i", path]
+            args += ["-t", n(clip_visible(clip) + 0.05)]
+            if path.endswith(".ffconcat"):
+                # piu' blocchi fotografati in fila (htmlclip.rasterize)
+                args += ["-f", "concat", "-safe", "0"]
+            args += ["-i", path]
             src = f"{self.add_input(args)}:v"
-            f += ["setpts=PTS-STARTPTS", f"fps={n(self.fps)}"]
+            # il file puo' essere a piena misura anche in anteprima (la cache di
+            # un export): scale passa senza lavoro quando la misura e' gia' quella
+            f += ["setpts=PTS-STARTPTS", f"fps={n(self.fps)}",
+                  f"scale={self.w}:{self.h}:flags=bicubic"]
         elif clip.type == "media":
             if media is None or not media.has_video:
                 return None
