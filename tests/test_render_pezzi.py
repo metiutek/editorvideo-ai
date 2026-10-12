@@ -97,6 +97,22 @@ def test_warp_e_glitch_usano_la_mappa_ridotta(monkeypatch):
     assert fx._f_warp({"mode": "swirl", "amount": 60}, c)[0] == "format=gbrap"
 
 
+def test_warp_mappa_proporzionata_e_spenta_a_zero():
+    """Vortice e rigonfiamento su mappa 8x a 1080p; a keyframe, con amount 0 la mappa e' l'identita'."""
+    c = fx.Ctx(width=1920, height=1080)
+    assert "crop=w=iw/8" in fx._f_warp({"mode": "swirl", "amount": 60}, c)[0]
+    assert "crop=w=iw/8" in fx._f_warp({"mode": "bulge", "amount": 60}, c)[0]
+    # l'increspatura ha onde fitte: resta a 4
+    assert "crop=w=iw/4" in fx._f_warp({"mode": "ripple", "amount": 60}, c)[0]
+    # a 720p il fattore scende, la mappa resta grande uguale
+    assert "crop=w=iw/5" in fx._f_warp({"mode": "swirl", "amount": 60}, fx.Ctx(width=1280, height=720))[0]
+    smorza = {"kf": [{"t": 0, "v": 120}, {"t": 0.35, "v": 0}]}
+    g = fx._f_warp({"mode": "swirl", "amount": smorza}, c)[0]
+    assert "if(eq(" in g
+    # amount fisso: nessun ramo in piu'
+    assert "if(eq(" not in fx._f_warp({"mode": "swirl", "amount": 60}, c)[0]
+
+
 def _fotogrammi(path, w, h):
     raw = subprocess.run([ffmpeg.binary("ffmpeg"), "-v", "error", "-i", str(path), "-f", "rawvideo",
                           "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
@@ -108,6 +124,7 @@ def _fotogrammi(path, w, h):
     ("warp", {"mode": "wave", "amount": {"kf": [{"t": 0, "v": 20}, {"t": 1.5, "v": 60}]}}),
     ("warp", {"mode": "ripple", "amount": 40}),
     ("warp", {"mode": "swirl", "amount": 120}),
+    ("warp", {"mode": "swirl", "amount": {"kf": [{"t": 0, "v": 120}, {"t": 0.4, "v": 0}]}}),
     ("warp", {"mode": "bulge", "amount": 40}),
     ("glitch", {"intensity": 0.6, "amount": 60, "rate": 20}),
 ])

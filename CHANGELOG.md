@@ -2,6 +2,18 @@
 
 Le voci più recenti stanno in cima.
 
+## Non ancora rilasciato
+
+### Migliorato
+- **Vortice e rigonfiamento circa 7 volte più veloci quando si smorzano.** Un `warp` a
+  keyframe che arriva e torna a zero in qualche decimo di secondo pagava l'espressione su
+  tutta la mappa per l'intera clip: ora, con `amount` a zero, la mappa restituisce subito
+  la coordinata del pixel stesso, cioè nessuna distorsione. Vortice e rigonfiamento usano
+  inoltre una mappa 8 volte più piccola a 1080p (stesso errore della 4x, metà del costo),
+  proporzionata alla risoluzione; l'increspatura resta a 4x. Su un videoclip vero di
+  2'17" con 9 warp ogni 8 s il tempo di render è sceso del 30% (da 28 s a 19,5 s per 8 s di
+  video).
+
 ## v0.1.3 — 2026-10-11 · Effetti speciali, stili creati dall'agente, export veloce
 
 ### Nuovo

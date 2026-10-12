@@ -786,10 +786,28 @@ def _f_warp(p: dict, c: Ctx) -> list[str]:
             _, cy, f = _f(X, Y, W, H)
             return f"{cy}+({Y}-{cy})*{f}"
 
+    if kf.is_kf(p.get("amount")):
+        # Un warp a keyframe di solito arriva e si smorza a zero in qualche
+        # decimo di secondo, e la clip continua ferma. Con amount nullo la
+        # mappa e' l'identita': ``if`` di ffmpeg valuta solo il ramo scelto,
+        # quindi il resto della clip non paga l'espressione pixel per pixel.
+        sx0, sy0 = sx, sy
+
+        def sx(X, Y, W, H):
+            return f"if(eq({amt},0),{X},{sx0(X, Y, W, H)})"
+
+        def sy(X, Y, W, H):
+            return f"if(eq({amt},0),{Y},{sy0(X, Y, W, H)})"
+
     if mode == "wave" and _spostamento_warp(mode, p, c) <= DISPLACE_MAX and _ha_displace():
         return _displace(c, lambda X, Y, W, H: f"({sx(X, Y, W, H)})-{X}", None, righe=True)
     if _ha_remap():
-        return _remap(c, sx, sy)
+        # Vortice e rigonfiamento sono campi lisci: una mappa 8 volte piu'
+        # piccola (a 1080p) da' lo stesso errore di una 4 volte e costa la
+        # meta'. L'increspatura ha onde fitte e resta a 4. Il fattore segue la
+        # risoluzione, cosi' la mappa ha lo stesso dettaglio a ogni misura.
+        base = 4 if mode in ("ripple", "wave") else 8
+        return _remap(c, sx, sy, k=max(4, round(base * c.width / 1920)))
     return _geq_rgba(sx("X", "Y", "W", "H"), sy("X", "Y", "W", "H"))
 
 
