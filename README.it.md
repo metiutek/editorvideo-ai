@@ -638,7 +638,17 @@ Note tecniche che spiegano le scelte meno ovvie:
   legge (misura e data delle sorgenti, contenuto dei testi temporanei). Riesportare rifa' solo
   i pezzi che una modifica tocca, come il Render in Place di Resolve o le anteprime di
   Premiere: riesportare una timeline invariata costa pochi secondi. Tetto di 4 GB
-  (`VEDIT_CACHE_PEZZI_MB`, `0` la spegne), svuotata da `clear_cache`.
+  (`VEDIT_CACHE_PEZZI_MB`, `0` la spegne), svuotata da `clear_cache`. I segmenti
+  dell'anteprima fedele usano la stessa chiave per contenuto: una modifica altrove nella
+  timeline non butta via i segmenti gia' pronti.
+- **Grafiche HTML a blocchi**: una clip html si fotografa a blocchi di 4 s allineati al suo
+  tempo, ognuno in cache per conto suo; qualunque tratto (un segmento d'anteprima, un
+  fotogramma, un pezzo d'export) riusa i blocchi che tocca, letti in fila da un elenco
+  `ffconcat`. Un fotogramma solo fotografa solo i suoi fotogrammi. Le cache di render si
+  potano dai file usati meno di recente, mai quelli usati nell'ultima ora
+  (`VEDIT_CACHE_HTML_MB`, `VEDIT_CACHE_ANTEPRIMA_MB`).
+- **I figli muoiono con vedit**: su Windows `vedit ui` e il server MCP entrano in un Job
+  Object, cosi' chiuderli chiude anche gli ffmpeg e i Chromium che hanno lanciato.
 - **Distorsioni su mappa ridotta**: `warp` e `glitch` calcolano l'espressione su una mappa
   qualche volta più piccola e la applicano con `displace` / `remap`, invece di `geq` su ogni
   pixel. Gli zoom che scendono sotto 1 usano `scale` per fotogramma invece di una tela 4x per

@@ -134,3 +134,20 @@ def test_teal_and_orange_resta_teal_and_orange(tmp_path):
     luce = _pixel(tmp_path, "0xd0d0d0", eff)
     assert ombra[2] > ombra[0], f"ombre non fredde: {ombra}"
     assert luce[0] > luce[2], f"luci non calde: {luce}"
+
+
+def test_chromakey_toglie_il_riflesso_del_fondale(tmp_path):
+    """Il despill abbassa il canale del fondale sul soggetto (prima era chromanr: non faceva niente)."""
+    # grigio con riflesso verde, fondale verde
+    r, g, b = _pixel(tmp_path, "0x80A080", [("chromakey", {"color": "0x00FF00"})])
+    assert g <= max(r, b) + 4, (r, g, b)
+    r0, g0, b0 = _pixel(tmp_path, "0x80A080", [("chromakey", {"color": "0x00FF00", "despill": False})])
+    assert g0 > max(r0, b0) + 20, (r0, g0, b0)
+    # fondale blu: si toglie il blu, non il verde
+    r, g, b = _pixel(tmp_path, "0x8080A8", [("chromakey", {"color": "blue"})])
+    assert b <= max(r, g) + 4 and g > 110, (r, g, b)
+    # un colore senza riflesso il despill non lo tocca (il key da solo lo
+    # rende in parte trasparente: si confronta col despill spento)
+    con = _pixel(tmp_path, "0xC08040", [("chromakey", {"color": "green"})])
+    senza = _pixel(tmp_path, "0xC08040", [("chromakey", {"color": "green", "despill": False})])
+    assert con == pytest.approx(senza, abs=4)

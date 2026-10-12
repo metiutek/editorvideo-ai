@@ -1764,6 +1764,10 @@ async def clear_cache(kind: str | None = None) -> dict:
 
 
 def main() -> None:
+    # se il client chiude il server, i render che aveva lanciato si chiudono con lui
+    from . import figli
+
+    figli.lega_figli()
     mcp.run(transport="stdio")
 
 

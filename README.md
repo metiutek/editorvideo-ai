@@ -586,7 +586,15 @@ The less obvious choices, and why:
   sources, content of temporary text files). Exporting again only redoes the pieces an edit
   touches, like Resolve's Render in Place or Premiere's previews: a re-export of an unchanged
   timeline takes seconds. Capped at 4 GB (`VEDIT_CACHE_PEZZI_MB`, `0` turns it off), emptied
-  by `clear_cache`.
+  by `clear_cache`. The faithful preview's segments use the same content key, so an edit
+  elsewhere in the timeline does not throw away the segments already rendered.
+- **HTML graphics in blocks**: an HTML clip is captured in 4 s blocks aligned to the clip's own
+  time, each cached on its own; any stretch (a preview segment, a frame, an export piece)
+  reuses the blocks it touches, read in sequence through an `ffconcat` list. A single frame
+  captures only its own frames. Render caches are pruned least-recently-used first, never
+  touching files used in the last hour (`VEDIT_CACHE_HTML_MB`, `VEDIT_CACHE_ANTEPRIMA_MB`).
+- **Children die with vedit**: on Windows `vedit ui` and the MCP server join a Job Object, so
+  closing them also closes the ffmpeg and Chromium processes they started.
 - **Distortions on a small map**: `warp` and `glitch` evaluate their expression on a map a few
   times smaller and apply it with `displace` / `remap`, instead of `geq` on every pixel. Zooms
   that go below 1 use a per-frame `scale` instead of a 4x canvas for `zoompan`.

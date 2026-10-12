@@ -256,9 +256,32 @@ def _f_chromakey(p: dict, c: Ctx) -> list[str]:
         f"chromakey=color={esc_str(color)}:similarity={fnum(num(p, 'similarity', 0.20))}"
         f":blend={fnum(num(p, 'blend', 0.05))}",
     ]
-    if flag(p, "despill", True):
-        out.append(f"chromanr=thres={fnum(num(p, 'despill_amount', 20))}")
+    quanto = max(0.0, min(100.0, num(p, "despill_amount", 100))) / 100
+    if flag(p, "despill", True) and quanto > 0:
+        # Il riflesso del fondale sui bordi del soggetto. Prima era chromanr,
+        # che riduce il rumore di crominanza: costava il doppio del key e il
+        # verde restava tutto. despill abbassa il canale del fondale dove
+        # supera gli altri due, e i colori senza riflesso non li tocca.
+        if _fondale_blu(color):
+            out.append(f"despill=type=blue:green=0:blue={fnum(-quanto)}")
+        else:
+            out.append(f"despill=type=green:green={fnum(-quanto)}")
     return out
+
+
+def _fondale_blu(color: str) -> bool:
+    """Vero se il colore del key e' un blu (bluescreen); altrimenti e' verde."""
+    c = color.strip().lower()
+    if "blue" in c or "blu" in c:
+        return True
+    h = c.lstrip("#")[2:] if c.startswith("0x") else c.lstrip("#")
+    if len(h) >= 6:
+        try:
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        except ValueError:
+            return False
+        return b > g and b > r
+    return False
 
 
 def _f_crop(p: dict, c: Ctx) -> list[str]:
@@ -1190,7 +1213,8 @@ _DEFS: tuple[EffectDef, ...] = (
             Param("similarity", 0.20, min=0.01, max=1),
             Param("blend", 0.05, min=0, max=1),
             Param("despill", True, kind="bool"),
-            Param("despill_amount", 20, min=0, max=100),
+            Param("despill_amount", 100, min=0, max=100,
+                  desc="quanto riflesso del fondale togliere dai bordi, in %"),
         ),
         _f_chromakey, "Rimuove il fondale verde/blu rendendolo trasparente.",
     ),

@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import effects as fx
-from . import ffmpeg, htmlclip, hw, plugins, probe
+from . import ffmpeg, htmlclip, hw, plugins, probe, proxy
 from .graph import CompileOptions, compile_project
 from .model import Project
 
@@ -536,6 +536,11 @@ def _firma_file(path: str, workdir: Path, h) -> None:
         if workdir in p.parents:
             h.update(p.relative_to(workdir).as_posix().encode())
             h.update(p.read_bytes())
+        elif _cache_dir() in p.parents:
+            # la cache di vedit (grafiche html, proxy, stabilizzazione) ha gia'
+            # il contenuto nel nome; la data no, perche' la potatura la
+            # aggiorna a ogni uso e cambierebbe la chiave senza motivo
+            h.update(f"{p}|{p.stat().st_size}".encode())
         else:
             st = p.stat()
             h.update(f"{p}|{st.st_size}|{st.st_mtime_ns}".encode())
@@ -582,25 +587,16 @@ def _cache_pezzi() -> Path:
 
 def _tetto_cache_pezzi() -> int:
     """Byte concessi alla cache dei pezzi; ``VEDIT_CACHE_PEZZI_MB=0`` la spegne."""
-    env = os.environ.get("VEDIT_CACHE_PEZZI_MB", "").strip()
-    return (int(env) if env.isdigit() else CACHE_PEZZI_MB) * 2**20
+    return proxy.tetto_mb("VEDIT_CACHE_PEZZI_MB", CACHE_PEZZI_MB)
 
 
 def _pota_cache_pezzi() -> None:
-    """Tiene la cache sotto il tetto, buttando i pezzi usati meno di recente."""
-    tetto = _tetto_cache_pezzi()
-    file = [f for f in _cache_pezzi().iterdir() if f.is_file() and not f.name.startswith("~")]
-    totale = sum(f.stat().st_size for f in file)
-    if totale <= tetto:
-        return
-    for f in sorted(file, key=lambda f: f.stat().st_mtime):
-        if totale <= tetto * 0.8:
-            break
-        try:
-            totale -= f.stat().st_size
-            f.unlink()
-        except OSError:
-            pass
+    """Tiene la cache sotto il tetto, buttando i pezzi usati meno di recente.
+
+    Nessun riposo: un pezzo ripreso si copia nella cartella del render, quindi
+    toglierlo dalla cache non disturba un export in corso.
+    """
+    proxy.pota(_cache_pezzi(), _tetto_cache_pezzi(), riposo_s=0)
 
 
 def render_a_pezzi(project: Project, opts: RenderOptions, confini: list[float], workdir: Path,

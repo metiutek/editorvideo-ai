@@ -14,9 +14,11 @@ import json
 import mimetypes
 import os
 import threading
+import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import domande, ffmpeg, htmlclip, hw, llm, presets, proxy, render, stili
+from . import domande, ffmpeg, figli, htmlclip, hw, llm, presets, proxy, render, stili
 from .model import TRANSITIONS, Effect
 from .store import PRESETS, EditError, Store
 
@@ -763,20 +765,37 @@ def _segment(start: float, duration: float, height: int) -> tuple[Path, float, f
     # contenuto del file in cache.
     fps = min(float(store.project.settings.fps or PREVIEW_FPS), PREVIEW_FPS)
 
-    key = f"p_{S.revision()}_{start:.3f}_{duration:.3f}_{height}_{fps:g}"
-    out = _preview_dir() / f"{key}.mp4"
-    if _ready(out):
+    revisione = f"p_{S.revision()}_{start:.3f}_{duration:.3f}_{height}_{fps:g}"
+    out = _segmenti.get(revisione)
+    if out is not None and _ready(out):
         return out, start, duration
 
     w = int(store.project.settings.width * height / max(1, store.project.settings.height))
     w += w % 2
     snap = _snapshot()
+    opts = render.RenderOptions(
+        quality="draft", start=start, end=start + duration,
+        width=w, height=height, fps=fps, use_proxy=True, audio_bitrate="128k",
+    )
+    # Chiave dal contenuto, come i pezzi dell'export: con la revisione ogni
+    # modifica buttava via tutti i segmenti pronti, anche quelli lontani dal
+    # punto toccato, e in modalita' fedele si riaspettava a ogni ritocco.
+    try:
+        with tempfile.TemporaryDirectory(prefix="vedit_seg_") as wd:
+            args, *_ = render.build_command(snap, replace(opts, output=str(Path(wd) / "s.mp4")), Path(wd))
+            key = "s_" + render.chiave_pezzo(args, Path(wd))
+    except Exception as exc:
+        raise HTTPException(500, f"anteprima fallita: {exc}") from exc
+    out = _preview_dir() / f"{key}.mp4"
+    _segmenti[revisione] = out
+    if len(_segmenti) > 512:
+        _segmenti.clear()
+    if _ready(out):
+        os.utime(out)
+        return out, start, duration
 
     def make(tmp: Path) -> None:
-        render.render(snap, render.RenderOptions(
-            output=str(tmp), quality="draft", start=start, end=start + duration,
-            width=w, height=height, fps=fps, use_proxy=True, audio_bitrate="128k",
-        ))
+        render.render(snap, replace(opts, output=str(tmp)))
 
     with _key_lock(key):
         # potrebbe averlo appena finito il prefetch mentre aspettavamo il lock
@@ -785,7 +804,13 @@ def _segment(start: float, duration: float, height: int) -> tuple[Path, float, f
                 _produce(out, make)
             except Exception as exc:
                 raise HTTPException(500, f"anteprima fallita: {exc}") from exc
+            proxy.pota(_preview_dir(), proxy.tetto_mb("VEDIT_CACHE_ANTEPRIMA_MB", 2048))
     return out, start, duration
+
+
+# revisione + tratto -> file del segmento: a progetto fermo la chiave per
+# contenuto non si ricalcola a ogni richiesta del player
+_segmenti: dict[str, Path] = {}
 
 
 @app.get("/api/preview")
@@ -1267,6 +1292,8 @@ def serve(host: str = "127.0.0.1", port: int = 8760, project: str | None = None,
           open_browser: bool = True) -> None:
     import uvicorn
 
+    # chiudendo l'editor si chiudono anche i suoi export e anteprime in corso
+    figli.lega_figli()
     if project:
         attach(Store.open(project))
     _consenti_host(host)
@@ -1275,7 +1302,7 @@ def serve(host: str = "127.0.0.1", port: int = 8760, project: str | None = None,
     S.porta = port
     url = f"http://{host}:{port}"
     if open_browser:
-        threading.Timer(1.0, lambda: __import__("webbrowser").open(url)).start()
+        threading.Timer(1.0, lambda: figli.apri_nel_browser(url)).start()
     print(f"vedit su {url}")
     uvicorn.run(app, host=host, port=port, log_level="warning")
 
@@ -1325,7 +1352,7 @@ def serve_background(store: Store | None = None, host: str = "127.0.0.1", port: 
 
     if _background.get("url"):
         if open_browser:
-            __import__("webbrowser").open(_background["url"])
+            figli.apri_nel_browser(_background["url"])
         return {**_background, "avviato_ora": False,
                 "progetto": S.store.path if S.store else None}
 
@@ -1347,7 +1374,7 @@ def serve_background(store: Store | None = None, host: str = "127.0.0.1", port: 
     _background.update({"url": f"http://{host}:{port}", "host": host, "port": port,
                         "server": server, "thread": thread})
     if open_browser:
-        __import__("webbrowser").open(_background["url"])
+        figli.apri_nel_browser(_background["url"])
     return {"url": _background["url"], "host": host, "port": port, "avviato_ora": True,
             "progetto": S.store.path if S.store else None,
             "interfaccia_compilata": FRONTEND.is_dir()}

@@ -5,6 +5,26 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Corretto
+- **Chiudere l'editor chiude anche i suoi render.** Su Windows un ffmpeg lanciato
+  dall'interfaccia sopravviveva alla chiusura: un export a grafo unico è rimasto acceso da
+  solo per ore a 20 GB di memoria, con l'editor già chiuso e riaperto, rallentando tutto
+  il resto. Ora `vedit ui` e il server MCP entrano in un Job Object che chiude ffmpeg,
+  Chromium e la CLI di Claude Code quando vedit muore. Il browser con l'interfaccia resta
+  aperto (`figli.py`).
+- **Il "despill" del chroma key non toglieva il verde.** Era `chromanr`, una riduzione del
+  rumore di crominanza: raddoppiava il costo del key e il riflesso restava tutto. Ora è
+  `despill`, sul canale del fondale (verde o blu, dal colore del key). `despill_amount` è
+  la percentuale di riflesso tolta, 100 di default.
+- **Le cache non crescono più senza limite.** Le grafiche HTML lasciavano una versione per
+  ogni ritocco, fino a 1,4 GB l'una: la cartella era arrivata a 12 GB. Grafiche html (4 GB,
+  `VEDIT_CACHE_HTML_MB`), anteprime (2 GB, `VEDIT_CACHE_ANTEPRIMA_MB`) e pezzi d'export si
+  potano buttando i file usati meno di recente, mai quelli usati nell'ultima ora;
+  `clear_cache` svuota anche le grafiche html.
+- **In modalità fedele una modifica non butta via tutti i segmenti pronti.** La cache dei
+  segmenti era legata alla revisione del progetto: qualunque ritocco, anche a un minuto di
+  distanza, rifaceva tutto. Ora la chiave è il contenuto del segmento, come per i pezzi
+  dell'export: dopo una modifica lontana lo stesso segmento torna in 0,1 s invece di 5 s,
+  e un undo ritrova quello di prima.
 - **In diretta gli effetti ora si vedono, da fermi.** La riproduzione in diretta la compone
   il browser, che non sa rifare glitch, warp, lenti, LUT, chroma key, glow e simili: anche a
   video fermo si vedeva l'immagine senza effetti, e l'unico modo per giudicarli era passare

@@ -183,11 +183,11 @@ def filmstrip(media: Media, height: int = 44, max_tiles: int = 240) -> dict:
 
 
 def clear(kind: str | None = None) -> int:
-    """Svuota la cache (proxy/thumbs/stab/pezzi di render). Ritorna i byte liberati."""
+    """Svuota la cache (proxy/thumbs/stab/pezzi di render/grafiche html). Ritorna i byte liberati."""
     import shutil
 
     freed = 0
-    targets = [kind] if kind else ["proxy", "thumbs", "strip", "wave", "preview", "stab", "pezzi"]
+    targets = [kind] if kind else ["proxy", "thumbs", "strip", "wave", "preview", "stab", "pezzi", "html"]
     for t in targets:
         d = cache_dir(t)
         for f in d.rglob("*"):
@@ -196,3 +196,43 @@ def clear(kind: str | None = None) -> int:
         shutil.rmtree(d, ignore_errors=True)
         d.mkdir(parents=True, exist_ok=True)
     return freed
+
+
+def tetto_mb(variabile: str, predefinito: int) -> int:
+    """Byte concessi a una cache: la variabile d'ambiente vince, ``0`` = niente cache."""
+    v = os.environ.get(variabile, "").strip()
+    return (int(v) if v.isdigit() else predefinito) * 2**20
+
+
+def pota(cartella: Path, tetto: int, riposo_s: float = 3600.0) -> int:
+    """Tiene la cartella sotto il tetto buttando i file usati meno di recente.
+
+    Le cache di render (pezzi, grafiche html, anteprime) crescono a ogni
+    modifica: una versione nuova per ogni ritocco, e le vecchie non servono
+    piu'. Senza potatura la cache delle grafiche html era arrivata a 12 GB.
+    "Usato" e' la data di modifica, che chi legge dalla cache aggiorna. I file
+    toccati da meno di ``riposo_s`` non si toccano: un export in corso li
+    puo' ancora aprire. Ritorna i byte liberati.
+    """
+    import time
+
+    try:
+        file = [f for f in cartella.iterdir() if f.is_file() and not f.name.startswith("~")]
+        info = [(f, f.stat()) for f in file]
+    except OSError:
+        return 0
+    totale = sum(s.st_size for _, s in info)
+    if totale <= tetto:
+        return 0
+    limite = time.time() - riposo_s
+    liberati = 0
+    for f, s in sorted(info, key=lambda x: x[1].st_mtime):
+        if totale <= tetto * 0.8 or s.st_mtime > limite:
+            break
+        try:
+            f.unlink()
+        except OSError:
+            continue   # aperto da qualcuno (Windows): resta
+        totale -= s.st_size
+        liberati += s.st_size
+    return liberati

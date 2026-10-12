@@ -295,6 +295,21 @@ def _blocchi(duration: float, fps: float, t0: float, t1: float | None) -> list[t
     return [(j * b, min(totale, (j + 1) * b)) for j in range(da // b, (a - 1) // b + 1)]
 
 
+# Ogni ritocco a una grafica ne lascia una versione nuova in cache, e a piena
+# misura una clip lunga pesa piu' di un giga: senza tetto si arrivava a 12 GB.
+CACHE_HTML_MB = 4096
+
+
+def _usato(path: Path, *altri: Path) -> str:
+    """Segna i file come usati adesso, per la potatura; ritorna il primo come stringa."""
+    for f in (path, *altri):
+        try:
+            os.utime(f)
+        except OSError:
+            pass
+    return str(path)
+
+
 def _pronto(path: Path) -> bool:
     return path.exists() and path.stat().st_size > 0
 
@@ -318,7 +333,7 @@ def rasterize(html: str, *, base: str | None, duration: float, width: int, heigh
     for intera in (file(*tutta), _cache_dir() / (
             f"{firma(html, base, page_w, page_h, fps, page_w, page_h, *tutta)}.mov")):
         if _pronto(intera):
-            return str(intera), 0.0
+            return _usato(intera), 0.0
     blocchi = [(da, a, file(da, a)) for da, a in _blocchi(duration, fps, t0, t1)]
     mancano = [x for x in blocchi if not _pronto(x[2])]
     da, a = frame_range(duration, fps, t0, t1)
@@ -327,12 +342,12 @@ def rasterize(html: str, *, base: str | None, duration: float, width: int, heigh
         solo = file(da, a)
         if not _pronto(solo):
             _fotografa(html, base, width, height, fps, page_w, page_h, [(da, a, solo)])
-        return str(solo), da / fps
+        return _usato(solo), da / fps
     if mancano:
         _fotografa(html, base, width, height, fps, page_w, page_h, mancano)
     primo = blocchi[0][0] / fps
     if len(blocchi) == 1:
-        return str(blocchi[0][2]), primo
+        return _usato(blocchi[0][2]), primo
     nomi = [x[2].name for x in blocchi]
     elenco = _cache_dir() / f"{hashlib.sha1('|'.join(nomi).encode()).hexdigest()[:20]}.ffconcat"
     if not _pronto(elenco):
@@ -340,7 +355,7 @@ def rasterize(html: str, *, base: str | None, duration: float, width: int, heigh
         tmp.write_text("ffconcat version 1.0\n" + "".join(f"file '{n}'\n" for n in nomi),
                        encoding="utf-8")
         os.replace(tmp, elenco)
-    return str(elenco), primo
+    return _usato(elenco, *(x[2] for x in blocchi)), primo
 
 
 def _fotografa(html: str, base: str | None, width: int, height: int, fps: float,
@@ -456,11 +471,17 @@ def prepare(project, *, width: int, height: int, fps: float,
     # Un browser per clip, qualcuno alla volta: fotografare e' quasi tutto
     # attesa di Chromium, e in fila diciotto clip a 1080p costavano minuti.
     if len(lavori) <= 1:
-        return dict(uno(x) for x in lavori)
-    from concurrent.futures import ThreadPoolExecutor
+        fatti = dict(uno(x) for x in lavori)
+    else:
+        from concurrent.futures import ThreadPoolExecutor
 
-    with ThreadPoolExecutor(max_workers=_browser_paralleli(len(lavori))) as ex:
-        return dict(ex.map(uno, lavori))
+        with ThreadPoolExecutor(max_workers=_browser_paralleli(len(lavori))) as ex:
+            fatti = dict(ex.map(uno, lavori))
+    if lavori:
+        from . import proxy
+
+        proxy.pota(_cache_dir(), proxy.tetto_mb("VEDIT_CACHE_HTML_MB", CACHE_HTML_MB))
+    return fatti
 
 
 # memoria di un Chromium headless con una pagina 1080p, misura prudente

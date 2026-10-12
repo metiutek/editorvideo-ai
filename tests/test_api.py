@@ -316,3 +316,54 @@ def test_reset_del_browser_non_stampa_traceback():
     vero = ValueError("vero")
     api._zitto_su_reset(Loop(), {"exception": vero})
     assert visti == [vero]
+
+
+@pytest.mark.slow
+def test_segmento_sopravvive_a_una_modifica_lontana(client, tmp_path, assets):
+    """La cache dei segmenti segue il contenuto, non la revisione del progetto."""
+    _create(client, tmp_path)
+    mid = client.post("/api/op/import_media", json={"paths": [assets["red"]]}).json()["result"][0]["id"]
+    vicina = client.post("/api/op/add_clip", json={"media_id": mid, "duration": 1.0}).json()["result"]["id"]
+    lontana = client.post("/api/op/add_clip",
+                          json={"media_id": mid, "start": 5.0, "duration": 1.0}).json()["result"]["id"]
+
+    def segmenti():
+        return set(api_mod._preview_dir().glob("s_*.mp4"))
+
+    seg = {"start": 0.0, "duration": 1.0, "height": 90}
+    assert client.get("/api/preview", params=seg).status_code == 200
+    prima = segmenti()
+
+    # modifica fuori dal tratto: stesso file, niente render
+    client.post("/api/op/set_transform", json={"clip_id": lontana, "x": 40})
+    assert client.get("/api/preview", params=seg).status_code == 200
+    assert segmenti() == prima
+
+    # modifica dentro il tratto: segmento nuovo
+    client.post("/api/op/set_transform", json={"clip_id": vicina, "x": 40})
+    assert client.get("/api/preview", params=seg).status_code == 200
+    assert len(segmenti() - prima) == 1
+
+
+def test_potatura_tiene_i_recenti(tmp_path):
+    """Sopra il tetto via i file usati meno di recente, mai quelli appena usati."""
+    import os
+
+    from vedit import proxy
+
+    adesso = time.time()
+    for i in range(10):
+        f = tmp_path / f"f{i}.mov"
+        f.write_bytes(b"x" * 1000)
+        os.utime(f, (adesso - 7200 + i, adesso - 7200 + i))   # vecchi, il 9 il piu' recente
+    fresco = tmp_path / "fresco.mov"
+    fresco.write_bytes(b"x" * 1000)                              # usato adesso
+    (tmp_path / "~in_scrittura.mov").write_bytes(b"x" * 1000)    # temporaneo: non si conta
+
+    liberati = proxy.pota(tmp_path, tetto=5000)
+    rimasti = {f.name for f in tmp_path.iterdir()}
+    assert liberati >= 7000
+    assert "fresco.mov" in rimasti and "~in_scrittura.mov" in rimasti
+    assert "f9.mov" in rimasti and "f0.mov" not in rimasti
+    # sotto il tetto non si tocca niente
+    assert proxy.pota(tmp_path, tetto=10**9) == 0
