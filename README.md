@@ -581,6 +581,12 @@ The less obvious choices, and why:
   370-cut edit rendered at 1/69 of real time). Above 20 s the export is split into ~4 s pieces
   on cut points, each compiled with only its own clips (`slice_project`), rendered in parallel
   within a memory budget, and joined with no re-encode; audio is mixed in one pass.
+- **Piece cache**: since the render is a pure function of the project, a finished piece is kept in
+  `~/.vedit/pezzi`, keyed by its ffmpeg command and the files it reads (size and date of the
+  sources, content of temporary text files). Exporting again only redoes the pieces an edit
+  touches, like Resolve's Render in Place or Premiere's previews: a re-export of an unchanged
+  timeline takes seconds. Capped at 4 GB (`VEDIT_CACHE_PEZZI_MB`, `0` turns it off), emptied
+  by `clear_cache`.
 - **Distortions on a small map**: `warp` and `glitch` evaluate their expression on a map a few
   times smaller and apply it with `displace` / `remap`, instead of `geq` on every pixel. Zooms
   that go below 1 use a per-frame `scale` instead of a 4x canvas for `zoompan`.

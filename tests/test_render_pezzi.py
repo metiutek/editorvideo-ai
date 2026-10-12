@@ -8,6 +8,7 @@ stesso file del grafo unico e che le distorsioni veloci diano la stessa
 immagine di geq.
 """
 
+import os
 import subprocess
 
 import numpy as np
@@ -169,16 +170,20 @@ def test_a_pezzi_uguale_al_grafo_unico(assets, tmp_path):
     assert any("pezzi" in x for x in r.warnings), r.warnings
 
     # memoria scarsa: i pezzi vanno in fila, uno alla volta, e il file e' lo stesso
+    # (cache spenta, se no i pezzi tornerebbero dal render di prima)
     poca = tmp_path / "poca.mp4"
     import vedit.render as rmod
     vera = rmod.memoria_libera
     rmod.memoria_libera = lambda: 0
+    os.environ["VEDIT_CACHE_PEZZI_MB"] = "0"
     try:
         r2 = render.render(s.project, render.RenderOptions(output=str(poca), quality="max",
                                                            jobs=3, prefer_hw=False, **piccolo))
     finally:
         rmod.memoria_libera = vera
+        os.environ.pop("VEDIT_CACHE_PEZZI_MB", None)
     assert any("fino a 1 alla volta" in x for x in r2.warnings), r2.warnings
+    assert not any("cache" in x for x in r2.warnings), r2.warnings
 
     a, b = probe.probe(str(uno)), probe.probe(str(pezzi))
     assert b.duration == pytest.approx(a.duration, abs=0.05)
@@ -246,3 +251,62 @@ def test_scale2ref_porta_alla_misura_del_riferimento(tmp_path):
     r = ffmpeg.run([ffmpeg.binary("ffprobe"), "-v", "error", "-show_entries", "stream=width,height",
                     "-of", "csv=p=0", str(out)])
     assert r.stdout.strip() == "100,50"
+
+
+def _comando_pezzo(s, tmp_path, nome, a=0.0, b=4.0):
+    wd = tmp_path / nome
+    wd.mkdir()
+    o = render.RenderOptions(output=str(wd / "p.ts"), start=a, end=b, audio=False, jobs=1)
+    args, *_ = render.build_command(s.project, o, wd, render._preparativi(s.project, o, True, False))
+    return args, wd
+
+
+def test_chiave_pezzo_stabile_e_sensibile(assets, tmp_path):
+    """Stesso pezzo in due render: stessa chiave. Testo o sorgente cambiati: chiave diversa."""
+    s = _montaggio(assets, n=6)
+    s.add_text("ciao", start=0.5, duration=2.0)
+    k1 = render.chiave_pezzo(*_comando_pezzo(s, tmp_path, "a"))
+    k2 = render.chiave_pezzo(*_comando_pezzo(s, tmp_path, "b"))
+    assert k1 == k2, "la cartella temporanea non deve entrare nella chiave"
+    # il testo sta in un file nella cartella temporanea: conta il contenuto
+    t = next(c for tr in s.project.tracks for c in tr.clips if c.type == "text")
+    s.set_text(t.id, text="ciao!")
+    assert render.chiave_pezzo(*_comando_pezzo(s, tmp_path, "c")) != k1
+    s.undo()
+    assert render.chiave_pezzo(*_comando_pezzo(s, tmp_path, "d")) == k1
+    # una sorgente riscritta con lo stesso nome: chiave diversa
+    m = s.project.media[0].path
+    st = os.stat(m)
+    os.utime(m, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    try:
+        assert render.chiave_pezzo(*_comando_pezzo(s, tmp_path, "e")) != k1
+    finally:
+        os.utime(m, ns=(st.st_atime_ns, st.st_mtime_ns))
+
+
+@pytest.mark.slow
+def test_cache_pezzi_riprende_solo_quello_che_non_cambia(assets, tmp_path):
+    """Riesportare rifa' solo i pezzi toccati, e il file resta identico."""
+    import shutil
+    shutil.rmtree(render._cache_pezzi())   # i test di prima hanno gli stessi pezzi
+    s = _montaggio(assets, n=26, durata=1.0)
+    # clip rosse e blu alternate fanno pezzi identici, che si riprenderebbero
+    # a vicenda gia' nel primo render: ogni clip diversa dalle altre
+    for i, c in enumerate(s.project.tracks[0].clips):
+        s.set_transform(c.id, opacity=0.6 + i * 0.015)
+    piccolo = {"width": 320, "height": 180, "prefer_hw": False, "audio": False}
+    a = tmp_path / "a.mp4"
+    r1 = render.render(s.project, render.RenderOptions(output=str(a), **piccolo))
+    n = int(r1.warnings[-1].split()[2])
+    assert "cache" not in r1.warnings[-1]
+
+    b = tmp_path / "b.mp4"
+    r2 = render.render(s.project, render.RenderOptions(output=str(b), **piccolo))
+    assert f"{n} ripresi dalla cache" in r2.warnings[-1], r2.warnings
+    assert (_fotogrammi(a, 320, 180) == _fotogrammi(b, 320, 180)).all()
+
+    # una clip a meta': tutti gli altri pezzi tornano dalla cache
+    s.set_transform(s.project.tracks[0].clips[13].id, opacity=0.3)
+    r3 = render.render(s.project, render.RenderOptions(output=str(tmp_path / "c.mp4"), **piccolo))
+    riusati = int(r3.warnings[-1].split(", ")[-1].split()[0])
+    assert n - 2 <= riusati < n, r3.warnings

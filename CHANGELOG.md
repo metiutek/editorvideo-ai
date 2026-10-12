@@ -5,6 +5,12 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Migliorato
+- **Riesportare rifa' solo quello che è cambiato.** I pezzi del render si conservano in
+  `~/.vedit/pezzi`, con una chiave fatta dal comando ffmpeg e dai file che leggono: correggi
+  un taglio e riesporti, e si ricalcolano solo i pezzi che quel taglio tocca. Sul videoclip
+  vero, 40 s di timeline: 124 s il primo export, 2,9 s il secondo, 12,7 s dopo aver cambiato
+  una clip, con un file identico bit per bit. Tetto di 4 GB (`VEDIT_CACHE_PEZZI_MB`, `0` la
+  spegne), i pezzi usati meno di recente vanno via per primi; `clear_cache` la svuota.
 - **Vortice e rigonfiamento circa 7 volte più veloci quando si smorzano.** Un `warp` a
   keyframe che arriva e torna a zero in qualche decimo di secondo pagava l'espressione su
   tutta la mappa per l'intera clip: ora, con `amount` a zero, la mappa restituisce subito

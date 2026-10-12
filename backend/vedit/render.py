@@ -16,6 +16,7 @@ si fa in un passaggio solo e alla fine si incolla tutto senza ricodificare.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -514,6 +515,94 @@ def _confini_se_conviene(project: Project, opts: RenderOptions) -> list[float] |
     return confini if len(confini) > 2 else None
 
 
+# --------------------------------------------------------------------------
+# cache dei pezzi
+# --------------------------------------------------------------------------
+#
+# Il render e' una funzione pura del progetto, e un pezzo e' gia' nel formato
+# finale (si incolla senza ricodifica): un pezzo con lo stesso comando e gli
+# stessi file d'ingresso esce identico. Si conserva per contenuto, come il
+# Render in Place di Resolve o le anteprime di Premiere: correggere un taglio
+# e riesportare rifa' solo i pezzi che quel taglio tocca.
+
+CACHE_PEZZI_MB = 4096
+_FILE_NEL_GRAFO = re.compile(r"(?:file|filename|fontfile|textfile|input)='([^']*)'")
+
+
+def _firma_file(path: str, workdir: Path, h) -> None:
+    """Un file usato dal pezzo: il contenuto se e' temporaneo, altrimenti misura e data."""
+    p = Path(path)
+    try:
+        if workdir in p.parents:
+            h.update(p.relative_to(workdir).as_posix().encode())
+            h.update(p.read_bytes())
+        else:
+            st = p.stat()
+            h.update(f"{p}|{st.st_size}|{st.st_mtime_ns}".encode())
+    except OSError:
+        h.update(f"{p}|assente".encode())
+
+
+def chiave_pezzo(args: list[str], workdir: Path) -> str:
+    """Firma del comando di un pezzo, senza i percorsi che cambiano a ogni render."""
+    h = hashlib.sha256()
+    wd = str(workdir)
+    segnaposto = (wd, wd.replace("\\", "/"), fx.esc_path(wd))
+    exe = Path(args[0])
+    try:
+        h.update(f"{exe}|{exe.stat().st_mtime_ns}".encode())
+    except OSError:
+        h.update(str(exe).encode())
+    salta = False
+    for i, a in enumerate(args[1:-1], 1):   # l'ultimo e' l'uscita
+        if salta:
+            salta = False
+            continue
+        if args[i - 1] == "-i":
+            _firma_file(a, workdir, h)
+        elif a == "-filter_complex_script":
+            grafo = Path(args[i + 1]).read_text(encoding="utf-8")
+            for f in _FILE_NEL_GRAFO.findall(grafo):
+                _firma_file(f.replace("\\:", ":"), workdir, h)
+            for s in segnaposto:
+                grafo = grafo.replace(s, "<WD>")
+            h.update(grafo.encode())
+            salta = True
+        else:
+            h.update(a.encode())
+        h.update(b"\0")
+    return h.hexdigest()[:32]
+
+
+def _cache_pezzi() -> Path:
+    d = _cache_dir() / "pezzi"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _tetto_cache_pezzi() -> int:
+    """Byte concessi alla cache dei pezzi; ``VEDIT_CACHE_PEZZI_MB=0`` la spegne."""
+    env = os.environ.get("VEDIT_CACHE_PEZZI_MB", "").strip()
+    return (int(env) if env.isdigit() else CACHE_PEZZI_MB) * 2**20
+
+
+def _pota_cache_pezzi() -> None:
+    """Tiene la cache sotto il tetto, buttando i pezzi usati meno di recente."""
+    tetto = _tetto_cache_pezzi()
+    file = [f for f in _cache_pezzi().iterdir() if f.is_file() and not f.name.startswith("~")]
+    totale = sum(f.stat().st_size for f in file)
+    if totale <= tetto:
+        return
+    for f in sorted(file, key=lambda f: f.stat().st_mtime):
+        if totale <= tetto * 0.8:
+            break
+        try:
+            totale -= f.stat().st_size
+            f.unlink()
+        except OSError:
+            pass
+
+
 def render_a_pezzi(project: Project, opts: RenderOptions, confini: list[float], workdir: Path,
                    on_progress: Progress | None, t0: float) -> tuple[list[str], float, list[str], str]:
     """Video a pezzi in parallelo, audio in un passaggio, poi un incollaggio senza ricodifica."""
@@ -544,10 +633,41 @@ def render_a_pezzi(project: Project, opts: RenderOptions, confini: list[float], 
     pezzi = [(i, a, b, workdir / f"pezzo_{i:04d}{pext}")
              for i, (a, b) in enumerate(zip(confini, confini[1:]))]
 
+    riusati = [0]
+    con_cache = _tetto_cache_pezzi() > 0
+
     def uno(pezzo, o: RenderOptions):
         i, a, b, path = pezzo
         po = replace(o, output=str(path), start=a, end=b, audio=False, jobs=1)
-        return _passaggio(project, po, workdir, avanzamento(f"v{i}"), t0, pre)
+        if not con_cache:
+            return _passaggio(project, po, workdir, avanzamento(f"v{i}"), t0, pre)
+        args, _, _, _ = build_command(project, po, workdir, pre)
+        chiave = chiave_pezzo(args, workdir)
+        salvato = _cache_pezzi() / f"{chiave}{path.suffix}"
+        meta = salvato.with_suffix(".json")
+        if salvato.exists() and meta.exists():
+            try:
+                info = json.loads(meta.read_text(encoding="utf-8"))
+                shutil.copyfile(salvato, path)
+                os.utime(salvato)   # usato adesso: la potatura lo tiene
+                os.utime(meta)
+                avanzamento(f"v{i}")({"seconds": b - a})
+                with lock:
+                    riusati[0] += 1
+                return args, b - a, info["avvisi"], info["encoder"]
+            except (OSError, ValueError, KeyError):
+                pass   # cache rovinata: si rifa' il pezzo
+        esito = _passaggio(project, po, workdir, avanzamento(f"v{i}"), t0, pre)
+        # la chiave e' quella del comando chiesto; se c'e' stato un ripiego
+        # l'encoder vero e' scritto accanto, e l'incollaggio lo controlla
+        try:
+            tmp = salvato.with_name(f"~{os.getpid()}_{i}_{salvato.name}")
+            shutil.copyfile(path, tmp)
+            os.replace(tmp, salvato)
+            meta.write_text(json.dumps({"encoder": esito[3], "avvisi": esito[2]}), encoding="utf-8")
+        except OSError:
+            pass   # senza cache il render vale lo stesso
+        return esito
 
     # Quanti pezzi alla volta lo decide anche la memoria: un pezzo parte solo
     # se la sua stima ci sta in quella libera all'inizio del render. Il primo
@@ -651,7 +771,12 @@ def render_a_pezzi(project: Project, opts: RenderOptions, confini: list[float], 
     proc = ffmpeg.run(args, check=False, timeout=3600)
     if proc.returncode != 0:
         raise ffmpeg.FFmpegError(args, proc.returncode, (proc.stderr or "")[-2000:])
-    avvisi.append(f"render a {len(pezzi)} pezzi, fino a {stato['picco']} alla volta")
+    avvisi.append(f"render a {len(pezzi)} pezzi, fino a {stato['picco']} alla volta"
+                  + (f", {riusati[0]} ripresi dalla cache" if riusati[0] else ""))
+    try:
+        _pota_cache_pezzi()
+    except OSError:
+        pass
     return args, durata, avvisi, encoder[0]
 
 

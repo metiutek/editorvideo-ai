@@ -633,6 +633,12 @@ Note tecniche che spiegano le scelte meno ovvie:
   di circa 4 s sugli stacchi, ognuno compilato con le sole clip che lo toccano
   (`slice_project`), resi in parallelo entro un budget di memoria e incollati senza
   ricodifica; l'audio si mixa in un passaggio solo.
+- **Cache dei pezzi**: il render e' una funzione pura del progetto, quindi un pezzo finito si
+  conserva in `~/.vedit/pezzi` con una chiave fatta dal suo comando ffmpeg e dai file che
+  legge (misura e data delle sorgenti, contenuto dei testi temporanei). Riesportare rifa' solo
+  i pezzi che una modifica tocca, come il Render in Place di Resolve o le anteprime di
+  Premiere: riesportare una timeline invariata costa pochi secondi. Tetto di 4 GB
+  (`VEDIT_CACHE_PEZZI_MB`, `0` la spegne), svuotata da `clear_cache`.
 - **Distorsioni su mappa ridotta**: `warp` e `glitch` calcolano l'espressione su una mappa
   qualche volta più piccola e la applicano con `displace` / `remap`, invece di `geq` su ogni
   pixel. Gli zoom che scendono sotto 1 usano `scale` per fotogramma invece di una tela 4x per

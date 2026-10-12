@@ -183,11 +183,11 @@ def filmstrip(media: Media, height: int = 44, max_tiles: int = 240) -> dict:
 
 
 def clear(kind: str | None = None) -> int:
-    """Svuota la cache (proxy/thumbs/stab). Ritorna i byte liberati."""
+    """Svuota la cache (proxy/thumbs/stab/pezzi di render). Ritorna i byte liberati."""
     import shutil
 
     freed = 0
-    targets = [kind] if kind else ["proxy", "thumbs", "strip", "wave", "preview", "stab"]
+    targets = [kind] if kind else ["proxy", "thumbs", "strip", "wave", "preview", "stab", "pezzi"]
     for t in targets:
         d = cache_dir(t)
         for f in d.rglob("*"):
