@@ -39,7 +39,7 @@ export default function SourceMonitor({ media, tracks, run, setError, playhead, 
     <div className="source">
       <div className="preview">
         <video
-          ref={ref} src={api.streamUrl(media.id)} controls={false}
+          ref={ref} src={api.streamUrl(media.id, media)} controls={false}
           onLoadedMetadata={(e) => setDur(e.target.duration || media.duration || 0)}
           onTimeUpdate={(e) => setT(e.target.currentTime)}
           onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}

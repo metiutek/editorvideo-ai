@@ -497,6 +497,8 @@ input[type=range]::-moz-range-thumb {
 }
 .wave { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .45; }
 .wave polygon { fill: #bce8d5; }
+/* audio dentro una clip video: una fascia in basso, sopra la striscia dei fotogrammi */
+.wave.interna { top: auto; height: 34%; opacity: .8; background: rgba(10, 30, 24, .55); }
 
 .playhead {
   position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent);

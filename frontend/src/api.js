@@ -58,7 +58,9 @@ export const api = {
   browse: (path) => req(`/api/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
   waveform: (id) => req(`/api/media/${id}/waveform`),
   strip: (id, height = 44) => req(`/api/media/${id}/strip?height=${height}`),
-  streamUrl: (id) => `/api/media/${id}/stream`,
+  // quando il proxy e' pronto l'indirizzo cambia: il <video> lo ricarica invece
+  // di restare sul file originale che non sapeva decodificare
+  streamUrl: (id, media) => `/api/media/${id}/stream${media?.proxy ? '?p=1' : ''}`,
   // documento di una clip html con l'orologio virtuale: v cambia col contenuto
   htmlUrl: (id, v) => `/api/html/${id}?v=${v}`,
 

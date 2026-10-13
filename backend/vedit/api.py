@@ -1251,6 +1251,72 @@ def build_proxies(height: int = 540) -> dict:
     return {"avviato": True}
 
 
+# --------------------------------------------------------------------------
+# proxy automatici: i file che il browser non sa riprodurre
+# --------------------------------------------------------------------------
+#
+# Un .mov DNxHR o ProRes, un H.265, un MXF nel monitor restano neri e muti: il
+# browser non li decodifica. Come Resolve con gli "optimized media" e CapCut
+# all'import, il proxy H.264/AAC si prepara da solo, in fondo, appena il file
+# entra nel progetto. Il render usa sempre l'originale.
+
+_proxy_sveglia = threading.Event()
+_proxy_filo: threading.Thread | None = None
+_proxy_filo_lock = threading.Lock()
+
+
+def prepara_proxy() -> None:
+    """Sveglia il lavoratore dei proxy: guarda lui cosa manca."""
+    global _proxy_filo
+    if os.environ.get("VEDIT_PROXY_AUTO", "1") == "0":
+        return
+    _proxy_sveglia.set()
+    with _proxy_filo_lock:
+        if _proxy_filo is None or not _proxy_filo.is_alive():
+            _proxy_filo = threading.Thread(target=_lavora_proxy, daemon=True, name="proxy-auto")
+            _proxy_filo.start()
+
+
+def _lavora_proxy() -> None:
+    while True:
+        _proxy_sveglia.wait()
+        _proxy_sveglia.clear()
+        try:
+            _proxy_mancanti()
+        except Exception as exc:   # il lavoratore non deve morire per un file
+            S.publish({"type": "proxy_auto", "state": "error", "error": str(exc)})
+
+
+def _proxy_mancanti() -> None:
+    store = S.store
+    if store is None:
+        return
+    da_fare = proxy.da_preparare(store.project)
+    for i, m in enumerate(da_fare):
+        if S.store is not store:
+            return                      # progetto cambiato: ricomincia la sveglia dopo
+        S.publish({"type": "proxy_auto", "state": "running", "fatti": i,
+                   "totale": len(da_fare), "nome": m.name})
+        try:
+            with proxy.lavoro_pesante(f"proxy:{m.path}"):
+                p = proxy.generate(m)
+        except Exception as exc:
+            S.publish({"type": "proxy_auto", "state": "error", "nome": m.name,
+                       "error": _errore_breve(exc)})
+            continue
+        with S.lock:
+            # il percorso del proxy non e' una modifica al montaggio: niente undo,
+            # ma la revisione cambia, se no le anteprime in cache restano vecchie
+            m.proxy = p
+            store.version += 1
+        S.publish({"type": "project"})
+    if da_fare:
+        with S.lock:
+            if store.path and S.store is store:
+                store.save()
+        S.publish({"type": "proxy_auto", "state": "done", "totale": len(da_fare)})
+
+
 @app.post("/api/loudness")
 def loudness() -> dict:
     # Sulla copia, non sotto lock: la misura e' un passaggio intero di ffmpeg
@@ -1644,7 +1710,13 @@ def attach(store: Store) -> None:
     if S.store is not None and S.store is not store:
         S.store.on_change = None
     S.store = store
-    store.on_change = lambda: S.publish({"type": "project"})
+
+    def cambiato() -> None:
+        S.publish({"type": "project"})
+        prepara_proxy()          # un media appena entrato puo' volere il proxy
+
+    store.on_change = cambiato
+    prepara_proxy()
 
 
 def _porta_libera(host: str, porta: int) -> int:

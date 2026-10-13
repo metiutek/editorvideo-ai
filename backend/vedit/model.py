@@ -121,6 +121,10 @@ class Media:
     sample_rate: int = 0
     channels: int = 0
     proxy: str | None = None  # path del proxy a bassa risoluzione, se generato
+    # codec e formato dei pixel: dicono se il browser lo sa riprodurre o se serve il proxy
+    vcodec: str = ""
+    acodec: str = ""
+    pix_fmt: str = ""
     name: str = ""
     folder: str = ""  # cartella nel media bin, es. "b-roll/interviste"
 

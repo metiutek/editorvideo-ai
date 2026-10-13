@@ -108,6 +108,9 @@ def probe(path: str, media_id: str | None = None) -> Media:
         has_audio=a is not None,
         sample_rate=int((a or {}).get("sample_rate") or 0),
         channels=int((a or {}).get("channels") or 0),
+        vcodec=str((v or {}).get("codec_name") or ""),
+        acodec=str((a or {}).get("codec_name") or ""),
+        pix_fmt=str((v or {}).get("pix_fmt") or ""),
         name=p.name,
     )
 

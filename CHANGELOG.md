@@ -41,6 +41,17 @@ Le voci più recenti stanno in cima.
   `.wma`, `.aiff` e `.gif` trascinati.
 
 ### Corretto
+- **Video neri e muti nel monitor (DNxHR, ProRes, H.265, MXF...).** Il browser riproduce
+  solo H.264/VP9/AV1 a 8 bit 4:2:0 con audio AAC/MP3/Opus: i .mov esportati da Resolve
+  (DNxHR 4:2:2 con audio PCM) restavano neri e senza suono, mentre il render usciva
+  giusto. Ora `probe` legge codec e formato dei pixel, e appena un file non leggibile
+  entra nel progetto (import, apertura di un progetto vecchio, agente via MCP) il server
+  ne prepara da solo un proxy H.264/AAC in fondo, uno alla volta, con l'avviso
+  "preparo l'anteprima". Il monitor passa al proxy appena è pronto; il render usa
+  sempre l'originale. `VEDIT_PROXY_AUTO=0` lo spegne.
+- **L'audio delle clip video si vede in timeline.** Era già nel montaggio e nel render,
+  ma la clip video non lo mostrava: ora la forma d'onda sta in fondo alla clip finché
+  l'audio non viene scollegato o silenziato.
 - **File trascinati che fallivano su Windows con "Permission denied" / "file utilizzato
   da un altro processo".** L'antivirus (o l'indicizzazione, o un client di sincronizzazione)
   apre il `.part` appena chiuso per scansionarlo, e in quei secondi il pezzo dopo non si

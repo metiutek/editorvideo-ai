@@ -95,9 +95,79 @@ def generate(media: Media, height: int = 540, force: bool = False) -> str:
             args += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2"]
         else:
             args += ["-an"]
-    args += [str(dst)]
-    ffmpeg.run(args, timeout=7200)
+    # su un file a parte: un proxy interrotto a meta' non deve sembrare pronto
+    tmp = dst.with_name(f"~{dst.stem}{dst.suffix}")
+    args += [str(tmp)]
+    try:
+        ffmpeg.run(args, timeout=7200)
+        os.replace(tmp, dst)
+    finally:
+        tmp.unlink(missing_ok=True)
     return str(dst)
+
+
+# Quello che Chrome ed Edge riproducono da soli in un <video>. Il resto (DNxHR e
+# ProRes dai programmi di montaggio, H.265, 10 bit, 4:2:2, MXF, AVI, MTS, PCM
+# dentro un .mov) nel monitor resta nero e muto: serve un proxy H.264/AAC, come
+# gli "optimized media" di Resolve o la transcodifica che CapCut fa all'import.
+# H.265 e' escluso apposta: dipende dalla scheda video del singolo PC.
+_CONTENITORI_OK = {".mp4", ".m4v", ".mov", ".webm", ".mp3", ".m4a", ".aac", ".wav",
+                   ".ogg", ".oga", ".opus", ".flac"}
+_VIDEO_OK = {"h264", "vp8", "vp9", "av1"}
+_PIXEL_OK = {"yuv420p", "yuvj420p", "nv12"}
+_AUDIO_OK = {"aac", "mp3", "opus", "vorbis", "flac"}
+
+
+def completa_codec(media: Media) -> None:
+    """I progetti salvati prima del campo codec: lo si legge una volta dal file."""
+    if media.vcodec or media.acodec or media.kind == "image":
+        return
+    from .probe import probe_raw
+
+    try:
+        streams = probe_raw(media.path).get("streams", [])
+    except Exception:
+        return
+    v = next((s for s in streams if s.get("codec_type") == "video"
+              and not s.get("disposition", {}).get("attached_pic")), {})
+    a = next((s for s in streams if s.get("codec_type") == "audio"), {})
+    media.vcodec = str(v.get("codec_name") or "")
+    media.acodec = str(a.get("codec_name") or "")
+    media.pix_fmt = str(v.get("pix_fmt") or "")
+
+
+def serve_proxy(media: Media) -> bool:
+    """Vero se il browser non sa riprodurre il file com'e'."""
+    if media.kind == "image":
+        return False
+    ext = Path(media.path).suffix.lower()
+    if ext not in _CONTENITORI_OK:
+        return True
+    if media.has_video and media.kind == "video":
+        if media.vcodec not in _VIDEO_OK or media.pix_fmt not in _PIXEL_OK:
+            return True
+    if media.has_audio:
+        if media.acodec in _AUDIO_OK:
+            return False
+        # il PCM si', ma solo dentro un .wav
+        return not (ext == ".wav" and media.acodec.startswith("pcm_"))
+    return False
+
+
+def proxy_pronto(media: Media) -> bool:
+    return bool(media.proxy) and Path(media.proxy).is_file()
+
+
+def da_preparare(project: Project) -> list[Media]:
+    """I media che nel monitor resterebbero neri o muti senza un proxy."""
+    out = []
+    for m in project.media:
+        if proxy_pronto(m) or m.kind == "image" or not Path(m.path).is_file():
+            continue
+        completa_codec(m)
+        if (m.vcodec or m.acodec) and serve_proxy(m):
+            out.append(m)
+    return out
 
 
 def ensure(project: Project, height: int = 540, force: bool = False) -> dict:

@@ -312,7 +312,7 @@ export default function LivePlayer({
             const m = clip.media ? media[clip.media] : null
             const chiave = clip.id
             if (track.kind === 'audio') {
-              return <audio key={chiave} ref={registra(chiave)} src={api.streamUrl(clip.media)}
+              return <audio key={chiave} ref={registra(chiave)} src={api.streamUrl(clip.media, m)}
                 preload="auto" />
             }
             if (clip.type === 'html') {
@@ -336,11 +336,11 @@ export default function LivePlayer({
             }
             if (m?.kind === 'image') {
               return <img key={chiave} ref={registra(chiave)} className="livelayer"
-                src={api.streamUrl(clip.media)} alt="" style={{ objectFit: fitCss(clip.fit) }} />
+                src={api.streamUrl(clip.media, m)} alt="" style={{ objectFit: fitCss(clip.fit) }} />
             }
             return (
               <video key={chiave} ref={registra(chiave)} className="livelayer"
-                src={api.streamUrl(clip.media)} preload="auto" playsInline
+                src={api.streamUrl(clip.media, m)} preload="auto" playsInline
                 style={{ objectFit: fitCss(clip.fit) }} />
             )
           })}

@@ -390,6 +390,12 @@ export default function Timeline({
                         <Wave peaks={assets.peaks(media)} media={media}
                           inPoint={inPoint} span={dur * (clip.speed || 1)} />
                       )}
+                      {/* l'audio della ripresa viaggia con la clip video: si vede
+                          in fondo, come in CapCut, finche' non lo si scollega */}
+                      {track.kind === 'video' && clip.type === 'media' && media?.audio && !clip.audio?.mute && (
+                        <Wave className="wave interna" peaks={assets.peaks(media)} media={media}
+                          inPoint={inPoint} span={dur * (clip.speed || 1)} />
+                      )}
 
                       <div className="label">{clip.name || clip.type}</div>
                       <div className="tags">
@@ -529,7 +535,7 @@ function stripStyle(strip, clip, inPoint, pxPerSec, kind) {
 }
 
 /** Forma d'onda in SVG: si adatta alla larghezza senza essere ridisegnata. */
-function Wave({ peaks, media, inPoint, span }) {
+function Wave({ peaks, media, inPoint, span, className = 'wave' }) {
   if (!peaks?.length || !media?.duration) return null
   const from = Math.max(0, Math.floor((inPoint / media.duration) * peaks.length))
   const to = Math.min(peaks.length, Math.ceil(((inPoint + span) / media.duration) * peaks.length))
@@ -540,7 +546,7 @@ function Wave({ peaks, media, inPoint, span }) {
   const d = pts.map((v, i) => `${i},${50 - v * 46}`).join(' ') +
     ' ' + pts.map((v, i) => `${pts.length - 1 - i},${50 + pts[pts.length - 1 - i] * 46}`).join(' ')
   return (
-    <svg className="wave" viewBox={`0 0 ${Math.max(1, pts.length - 1)} 100`} preserveAspectRatio="none">
+    <svg className={className} viewBox={`0 0 ${Math.max(1, pts.length - 1)} 100`} preserveAspectRatio="none">
       <polygon points={d} />
     </svg>
   )

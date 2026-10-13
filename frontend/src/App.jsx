@@ -132,6 +132,16 @@ export default function App() {
         if (ev.state === 'error') setError(`proxy non riusciti: ${ev.error}`)
         else aggiorna()   // i media adesso hanno il proxy: le anteprime lo usano
       }
+      if (ev.type === 'proxy_auto') {
+        // file che il browser non sa riprodurre (DNxHR, ProRes, H.265...): il
+        // server ne prepara da solo una copia leggera, intanto si vede nero
+        if (ev.state === 'running') {
+          setBusy(`preparo l'anteprima di ${ev.nome} (${ev.fatti + 1}/${ev.totale})`)
+        } else {
+          setBusy(null)
+          if (ev.state === 'error') setError(`anteprima non riuscita${ev.nome ? ` per ${ev.nome}` : ''}: ${ev.error}`)
+        }
+      }
       // l'evento porta solo il numero: se e' piu' nuovo di quello che si vede,
       // si chiede lo stato. Le proprie operazioni arrivano gia' con la risposta.
       if ((ev.type === 'project' || ev.type === 'hello') && ev.seq > seqRef.current) aggiorna()

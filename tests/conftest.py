@@ -43,6 +43,9 @@ def _cache_isolata(tmp_path_factory):
             shutil.copy(vera / nome, d / nome)
     prima = os.environ.get("VEDIT_CACHE")
     os.environ["VEDIT_CACHE"] = str(d)
+    # i proxy automatici partirebbero in un thread a ogni import dei test:
+    # chi li verifica chiama il lavoratore direttamente
+    os.environ["VEDIT_PROXY_AUTO"] = "0"
     yield
     if prima is None:
         os.environ.pop("VEDIT_CACHE", None)
