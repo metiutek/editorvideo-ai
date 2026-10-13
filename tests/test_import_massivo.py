@@ -1,5 +1,6 @@
 """Import di tanti file: a blocchi, per riferimento, a pezzi riprendibili."""
 
+import os
 import shutil
 import threading
 import time
@@ -118,6 +119,59 @@ def test_upload_a_pezzi_riprende_e_non_ricopia(client, tmp_path, assets):
 def test_upload_rifiuta_pezzi_oltre_la_dimensione(client):
     TOT["x.mp4"] = 10
     assert _pezzo(client, "x.mp4", b"0" * 20, 0).status_code == 400
+
+
+def test_upload_aspetta_il_file_bloccato_dall_antivirus(client, assets, monkeypatch):
+    """Su Windows l'antivirus tiene il .part appena chiuso: si riprova, non si esplode."""
+    monkeypatch.setattr(api_mod, "_ATTESE_BLOCCO", (0.01, 0.01, 0.01))
+    vero = os.replace
+    bloccati = [2]
+
+    def replace_occupato(a, b):
+        if str(a).endswith(".part") and bloccati[0]:
+            bloccati[0] -= 1
+            raise PermissionError(32, "Il file è utilizzato da un altro processo")
+        return vero(a, b)
+
+    monkeypatch.setattr(api_mod.os, "replace", replace_occupato)
+    dati = Path(assets["red"]).read_bytes()
+    TOT["bloccato.mp4"] = len(dati)
+    r = _pezzo(client, "bloccato.mp4", dati, 0)
+    assert r.status_code == 200 and r.json()["completo"] and bloccati[0] == 0
+
+
+def test_upload_bloccato_per_sempre_da_503_non_500(client, monkeypatch):
+    monkeypatch.setattr(api_mod, "_ATTESE_BLOCCO", (0.01,))
+    vero_open = Path.open
+
+    def open_occupato(self, *a, **k):
+        if self.suffix == ".part":
+            raise PermissionError(13, "Permission denied")
+        return vero_open(self, *a, **k)
+
+    monkeypatch.setattr(Path, "open", open_occupato)
+    TOT["sempre.mp4"] = 4
+    r = _pezzo(client, "sempre.mp4", b"abcd", 0)
+    assert r.status_code == 503        # il browser lo rimanda da solo
+
+
+def test_due_upload_dello_stesso_file_non_si_pestano(client, assets):
+    dati = Path(assets["blue"]).read_bytes()
+    TOT["doppio.mp4"] = len(dati)
+    esiti = []
+
+    def manda():
+        esiti.append(_pezzo(client, "doppio.mp4", dati, 0))
+
+    fili = [threading.Thread(target=manda) for _ in range(3)]
+    for t in fili:
+        t.start()
+    for t in fili:
+        t.join()
+    corpi = [r.json() for r in esiti if r.status_code == 200]
+    assert corpi and all(c["completo"] for c in corpi)
+    assert len({c["path"] for c in corpi}) == 1          # un file solo, non tre
+    assert Path(corpi[0]["path"]).read_bytes() == dati
 
 
 def test_nome_caricato_senza_percorsi_ne_caratteri_proibiti():

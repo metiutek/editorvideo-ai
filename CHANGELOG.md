@@ -41,6 +41,13 @@ Le voci più recenti stanno in cima.
   `.wma`, `.aiff` e `.gif` trascinati.
 
 ### Corretto
+- **File trascinati che fallivano su Windows con "Permission denied" / "file utilizzato
+  da un altro processo".** L'antivirus (o l'indicizzazione, o un client di sincronizzazione)
+  apre il `.part` appena chiuso per scansionarlo, e in quei secondi il pezzo dopo non si
+  poteva scrivere e il file finito non si poteva rinominare: il server rispondeva 500 con
+  una traccia lunghissima. Ora aspetta e riprova fino a una ventina di secondi; se il
+  blocco resta risponde 503, e il browser rimanda il pezzo da solo. Due upload dello stesso
+  file (trascinato due volte, un secondo tab) non scrivono più insieme sullo stesso `.part`.
 - **Chiudere l'editor chiude anche i suoi render.** Su Windows un ffmpeg lanciato
   dall'interfaccia sopravviveva alla chiusura: un export a grafo unico è rimasto acceso da
   solo per ore a 20 GB di memoria, con l'editor già chiuso e riaperto, rallentando tutto

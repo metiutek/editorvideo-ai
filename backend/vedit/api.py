@@ -740,6 +740,26 @@ def _completo(cartella: Path, chiave: str, size: int) -> str | None:
 
 
 _upload_lock = threading.Lock()
+# un pezzo alla volta per file: due richieste sullo stesso .part (lo stesso file
+# trascinato due volte, un secondo tab) su Windows si bloccano a vicenda
+_pezzi_in_corso: dict[str, asyncio.Lock] = {}
+
+# Su Windows l'antivirus, l'indicizzazione o un client di sincronizzazione aprono
+# il file appena chiuso per qualche secondo, e intanto aprirlo in scrittura o
+# rinominarlo da' "file utilizzato da un altro processo". Non e' un errore vero:
+# si aspetta e si riprova.
+_ATTESE_BLOCCO = (0.1, 0.25, 0.5, 1, 2, 3, 5, 8)
+
+
+def _riprova_se_bloccato(fn, *args):
+    for attesa in (*_ATTESE_BLOCCO, None):
+        try:
+            return fn(*args)
+        except PermissionError:
+            if attesa is None:
+                raise HTTPException(
+                    503, "file bloccato da un altro programma (antivirus o sincronizzazione): riprovo")
+            time.sleep(attesa)
 
 
 @app.get("/api/upload/stato")
@@ -781,6 +801,17 @@ async def upload_pezzo(request: Request, nome: str, size: int, offset: int,
     """
     cartella = _cartella_media(S.need())
     chiave = _chiave_upload(nome, size, mtime)
+    lock = _pezzi_in_corso.setdefault(chiave, asyncio.Lock())
+    try:
+        async with lock:
+            return await _scrivi_pezzo(request, cartella, chiave, nome, size, offset)
+    finally:
+        if not lock.locked() and _pezzi_in_corso.get(chiave) is lock:
+            _pezzi_in_corso.pop(chiave, None)
+
+
+async def _scrivi_pezzo(request: Request, cartella: Path, chiave: str, nome: str,
+                        size: int, offset: int) -> dict:
     if path := _completo(cartella, chiave, size):
         return {"ricevuti": size, "completo": True, "path": path}
     parte = cartella / ".parti" / f"{chiave}.part"
@@ -795,7 +826,7 @@ async def upload_pezzo(request: Request, nome: str, size: int, offset: int,
         fh.truncate()   # un pezzo rimandato sostituisce quello che c'era dopo
         return fh
 
-    fh = await asyncio.to_thread(apri)
+    fh = await asyncio.to_thread(_riprova_se_bloccato, apri)
     scritti = offset
     try:
         buf = bytearray()
@@ -823,7 +854,10 @@ def _finisci_upload(cartella: Path, parte: Path, chiave: str, nome: str, size: i
     """Dal .part al nome vero, senza sovrascrivere un file diverso con lo stesso nome."""
     with _upload_lock:
         if path := _completo(cartella, chiave, size):
-            parte.unlink(missing_ok=True)
+            try:
+                _riprova_se_bloccato(parte.unlink, True)
+            except HTTPException:
+                pass    # resta un .part orfano: lo pota upload_spazio
             return path
         base = _nome_sicuro(nome)
         target = cartella / base
@@ -831,13 +865,13 @@ def _finisci_upload(cartella: Path, parte: Path, chiave: str, nome: str, size: i
         while target.exists():
             target = cartella / f"{Path(base).stem}_{i}{Path(base).suffix}"
             i += 1
-        os.replace(parte, target)
+        _riprova_se_bloccato(os.replace, parte, target)
         arrivati = _arrivati(cartella)
         arrivati[chiave] = target.name
         reg = cartella / ".parti" / "arrivati.json"
         tmp = reg.with_name("~arrivati.json")
         tmp.write_text(json.dumps(arrivati, ensure_ascii=False), encoding="utf-8")
-        os.replace(tmp, reg)
+        _riprova_se_bloccato(os.replace, tmp, reg)
         return str(target)
 
 
