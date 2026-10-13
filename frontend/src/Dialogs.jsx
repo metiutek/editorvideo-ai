@@ -87,6 +87,7 @@ const cartellaRicordata = (chiave) => {
  */
 export function FileBrowser({
   title, filter, multiple = true, onPick, onClose, startPath, memoria, recenti, cartella = false,
+  onPickFolder,
 }) {
   const [cwd, setCwd] = useState(null)
   const [picked, setPicked] = useState([])
@@ -113,6 +114,13 @@ export function FileBrowser({
         {!cartella && multiple && files.length > 1 && (
           <button title="Seleziona tutti i file di questa cartella"
             onClick={() => setPicked(files.map((f) => f.path))}>tutti ({files.length})</button>
+        )}
+        {onPickFolder && (
+          // la scheda di una camera, la cartella di un girato: tutto, sottocartelle
+          // comprese, usato dove sta e senza copiarlo
+          <button disabled={!cwd || cwd.path === '::dischi'}
+            title="Importa tutti i file multimediali di questa cartella e delle sue sottocartelle, senza copiarli"
+            onClick={() => { onPickFolder(cwd.path); onClose() }}>importa cartella</button>
         )}
         {cartella ? (
           <button className="primary" disabled={!cwd || cwd.path === '::dischi'} onClick={() => scegli([cwd.path])}>

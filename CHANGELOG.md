@@ -5,6 +5,27 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Importare tanti file senza bloccare l'editor.** Centinaia di file o decine di GB
+  fermavano tutto. Quattro cause, sistemate come fanno gli editor desktop:
+  - *trascinati*: partiva una sola richiesta multipart con tutti i file, senza progresso,
+    rifiutata oltre i 1000 file e da rifare da capo se cadeva. Ora ogni file viaggia a pezzi
+    da 32 MB (`/api/upload/pezzo`), tre alla volta, con avanzamento, velocità e pulsante
+    *ferma*. Un pezzo fallito si ritenta, un file arrivato a metà riprende da lì, uno già
+    arrivato non si ricopia. Prima di copiare si controlla lo spazio libero (`caricamento.js`);
+  - *metadati*: ffprobe girava un file alla volta, col progetto bloccato. Ora va in
+    parallelo (`probe.probe_many`) e fuori dal lock (`/api/import`). I file arrivano a
+    blocchi da 50, quindi il bin si riempie man mano. Un file rovinato viene scartato e
+    segnalato, e gli altri entrano lo stesso. Misurato: 300 clip 1080p in 6 s, con l'API
+    che risponde in meno di 30 ms;
+  - *miniature e forme d'onda*: la UI le chiedeva tutte insieme e il server lanciava fino
+    a 40 ffmpeg che decodificavano file interi. Ora c'è una coda: al massimo 3 richieste
+    dal browser, la timeline prima del pannello, e il pannello chiede solo quello che si
+    vede. Sul server al massimo `cpu/2` lavori pesanti alla volta (`VEDIT_LAVORI`), in un
+    gruppo di thread separato, e un solo lavoro per risultato. Sui file lunghi la striscia
+    legge solo i keyframe (`-skip_frame nokey`);
+  - *importa cartella*: nel dialogo di import prende una cartella intera con le
+    sottocartelle, per riferimento e senza copia (`/api/scan`). Le sottocartelle diventano
+    cartelle del bin.
 - **`report_issue`: l'agente annota cio' che non va.** Bug, strumenti scomodi, risultati
   sbagliati, funzioni che mancano per un compito, lentezze finiscono in `SEGNALAZIONI.md`
   (dal clone) o `~/.vedit/SEGNALAZIONI.md`, da cui decidere cosa migliorare. Le istruzioni

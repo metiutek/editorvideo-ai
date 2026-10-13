@@ -20,7 +20,13 @@ export default function Timeline({
 
   // strisce e forme d'onda arrivano dalla cache condivisa con il pannello media:
   // sono gli stessi file, e dietro la forma d'onda c'e' la decodifica dell'audio
-  const assets = useMediaAssets(project?.media)
+  // Solo i media che stanno in timeline, e prima di quelli del pannello: con
+  // trecento file importati la striscia della clip appena messa non aspetta le altre
+  const usati = useMemo(() => {
+    const ids = new Set((project?.tracks || []).flatMap((t) => (t.clips || []).map((c) => c.media)))
+    return (project?.media || []).filter((m) => ids.has(m.id))
+  }, [project?.tracks, project?.media])
+  const assets = useMediaAssets(usati, 0)
   const [renaming, setRenaming] = useState(null)   // id della traccia in rinomina
   const [giunzione, setGiunzione] = useState(null) // stacco sotto una transizione trascinata
 

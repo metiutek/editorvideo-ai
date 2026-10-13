@@ -324,9 +324,11 @@ and the rest).
 
 Panels resize by dragging the dividers, and the sizes are remembered.
 
-**1. Media.** `+` imports files *leaving them where they are*. Dragging files from the desktop
-**copies** them into `media/` next to the project (the browser does not hand over the source
-path) — for heavy files use `+`. `📁+` creates a folder, which is just a label on the media.
+**1. Media.** `+` imports files *leaving them where they are*; **import folder** takes a whole
+folder with its subfolders (a camera card, a shoot of hundreds of files). Dragging files from the
+desktop **copies** them into `media/` next to the project (the browser does not hand over the
+source path): the copy goes in chunks, with progress and a stop button, and resumes where it left
+off — dropping the same files again does not copy them twice. For heavy shoots use `+`, which copies nothing. `📁+` creates a folder, which is just a label on the media.
 Click opens a media in the *source* monitor, double click appends it to the timeline, drag
 puts it exactly where you want.
 

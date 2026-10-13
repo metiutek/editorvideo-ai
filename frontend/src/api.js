@@ -20,7 +20,9 @@ async function req(url, options) {
     try {
       detail = (await res.json()).detail || detail
     } catch { /* risposta non JSON */ }
-    throw new Error(detail)
+    const err = new Error(detail)
+    err.status = res.status    // chi riprova distingue un rifiuto da un guasto
+    throw err
   }
   return res.status === 204 ? null : res.json()
 }
@@ -79,12 +81,26 @@ export const api = {
     return req('/api/chat/allega', { method: 'POST', body: form })
   },
 
-  upload: (files, folder = '') => {
-    const form = new FormData()
-    for (const f of files) form.append('files', f)
-    form.append('folder', folder)
-    return req('/api/upload', { method: 'POST', body: form })
-  },
+  // import per riferimento, a blocchi: i file illeggibili tornano in ``scartati``
+  importa: (paths, folder = '') =>
+    req('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths, folder }),
+    }),
+  // tutti i file multimediali di una cartella, sottocartelle comprese
+  scan: (path) => req(`/api/scan?path=${encodeURIComponent(path)}`),
+
+  // upload a pezzi dei file trascinati (caricamento.js)
+  uploadSpazio: () => req('/api/upload/spazio'),
+  uploadStato: (q) => req(`/api/upload/stato?${new URLSearchParams(q)}`),
+  uploadPezzo: (q, offset, blob, signal) =>
+    req(`/api/upload/pezzo?${new URLSearchParams({ ...q, offset })}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: blob,
+      signal,
+    }),
 
   prefetch: (start, duration, height = PREVIEW_H) =>
     req(`/api/preview/prefetch?start=${start.toFixed(3)}&duration=${duration.toFixed(3)}&height=${height}`,

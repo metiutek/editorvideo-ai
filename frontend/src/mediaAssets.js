@@ -14,22 +14,57 @@ export const STRIP_H = 44
  * sono validi dentro un progetto, il percorso identifica il file.
  */
 const valori = new Map()    // chiave -> valore, null se non disponibile
-const inCorso = new Set()   // chiavi gia' richieste
+const inCorso = new Set()   // chiavi in lavorazione
+const inCoda = new Map()    // chiave -> {carica, prio, n}
 const ascolto = new Set()   // componenti da ridisegnare quando arriva qualcosa
 
-function chiedi(chiave, carica) {
-  if (valori.has(chiave) || inCorso.has(chiave)) return
-  inCorso.add(chiave)
-  carica()
-    .then((r) => valori.set(chiave, r ?? null))
-    .catch(() => valori.set(chiave, null))
-    .finally(() => {
-      inCorso.delete(chiave)
-      for (const sveglia of ascolto) sveglia()
-    })
+// Dietro ogni richiesta c'e' ffmpeg che decodifica un file intero. Importati
+// trecento file partivano trecento richieste insieme: il browser ne tiene sei
+// per server, e fotogrammi e modifiche restavano in fila dietro di loro. Ne
+// girano poche alla volta, prima quelle della timeline (priorita' 0) e poi
+// quelle del pannello media (1), che chiede solo cio' che si vede.
+export const IN_PARALLELO = 3
+let attive = 0
+let ordine = 0
+
+function avanti() {
+  while (attive < IN_PARALLELO && inCoda.size) {
+    let scelta = null
+    for (const [k, v] of inCoda) {
+      if (!scelta || v.prio < scelta[1].prio || (v.prio === scelta[1].prio && v.n < scelta[1].n)) {
+        scelta = [k, v]
+      }
+    }
+    const [chiave, { carica }] = scelta
+    inCoda.delete(chiave)
+    inCorso.add(chiave)
+    attive += 1
+    carica()
+      .then((r) => valori.set(chiave, r ?? null))
+      .catch(() => valori.set(chiave, null))
+      .finally(() => {
+        inCorso.delete(chiave)
+        attive -= 1
+        for (const sveglia of ascolto) sveglia()
+        avanti()
+      })
+  }
 }
 
-export default function useMediaAssets(media) {
+export function chiedi(chiave, carica, prio = 1) {
+  if (valori.has(chiave) || inCorso.has(chiave)) return
+  const gia = inCoda.get(chiave)
+  if (gia) { gia.prio = Math.min(gia.prio, prio); return }
+  inCoda.set(chiave, { carica, prio, n: ordine++ })
+  avanti()
+}
+
+/** Solo per i test: riparte da cache e coda vuote. */
+export function _azzera() {
+  valori.clear(); inCorso.clear(); inCoda.clear(); attive = 0
+}
+
+export default function useMediaAssets(media, prio = 1) {
   const [arrivi, ridisegna] = useState(0)
 
   useEffect(() => {
@@ -37,11 +72,11 @@ export default function useMediaAssets(media) {
     ascolto.add(sveglia)
     for (const m of media || []) {
       if (!m.path) continue
-      if (m.kind !== 'audio') chiedi(`s:${m.path}`, () => api.strip(m.id, STRIP_H))
-      if (m.audio) chiedi(`w:${m.path}`, () => api.waveform(m.id))
+      if (m.kind !== 'audio') chiedi(`s:${m.path}`, () => api.strip(m.id, STRIP_H), prio)
+      if (m.audio) chiedi(`w:${m.path}`, () => api.waveform(m.id), prio)
     }
     return () => ascolto.delete(sveglia)
-  }, [media])
+  }, [media, prio])
 
   // L'oggetto cambia identita' solo quando arriva qualcosa di nuovo: la
   // timeline lo tiene fra le dipendenze del memo che disegna le clip, e uno

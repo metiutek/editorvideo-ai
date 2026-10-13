@@ -9,7 +9,8 @@ import MediaBin from './MediaBin.jsx'
 import Preview from './Preview.jsx'
 import SourceMonitor from './SourceMonitor.jsx'
 import Timeline from './Timeline.jsx'
-import { leggiTrascinati, perCartella, useFineTrascinamento } from './trascina.js'
+import { caricaTrascinati, importaPercorsi } from './caricamento.js'
+import { leggiTrascinati, useFineTrascinamento } from './trascina.js'
 import { clamp, findClip, fmt } from './util.js'
 
 const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|flac|ogg|opus|wma|aiff?|png|jpe?g|webp|bmp|tiff?|gif)$/i
@@ -199,34 +200,76 @@ export default function App() {
   }, [project, selected, run])
 
   // ---- import ---------------------------------------------------------------
+  // Import lunghi (centinaia di file, decine di GB): uno alla volta, con
+  // l'avanzamento nel pannello media e un pulsante per fermarlo. Ogni blocco
+  // importato aggiorna subito il progetto: il bin si riempie mentre si lavora.
+  const fermaImport = useRef(null)
+  const apiImport = { ...api, importa: async (paths, folder) => {
+    const r = await api.importa(paths, folder)
+    applyState(r)
+    return r
+  } }
+  const lavoraImport = async (lavoro) => {
+    if (fermaImport.current) { setError("c'e' gia' un import in corso: aspetta che finisca o fermalo"); return }
+    const ctrl = new AbortController()
+    fermaImport.current = ctrl
+    try {
+      const fine = await lavoro({ signal: ctrl.signal, onProgress: setUploading })
+      const n = fine.scartati.length
+      if (n) {
+        const nome = (p) => p.split(/[\\/]/).pop()
+        setError(`${n} file non importati: ${fine.scartati.slice(0, 3)
+          .map((s) => `${nome(s.path)} (${s.errore})`).join(', ')}${n > 3 ? '…' : ''}`)
+      }
+    } catch (e) {
+      if (!ctrl.signal.aborted) setError(e.message)
+    } finally {
+      fermaImport.current = null
+      setUploading(null)
+    }
+  }
+
+  // dal disco: per riferimento, i file restano dove sono
   const importPaths = (paths) =>
-    run('import_media', { paths }).catch((e) => setError(e.message))
+    lavoraImport((o) => importaPercorsi(apiImport, paths.map((path) => ({ path, cartella: '' })), o))
+
+  // una cartella intera, sottocartelle comprese: nel bin diventa una cartella col suo nome
+  const importFolder = (path) => lavoraImport(async (o) => {
+    const r = await api.scan(path)
+    if (!r.files.length) throw new Error(`nessun file multimediale in ${r.path}`)
+    const voci = r.files.map((f) => ({ ...f, cartella: [r.nome, f.cartella].filter(Boolean).join('/') }))
+    return importaPercorsi(apiImport, voci, o)
+  })
 
   // fileList: FileList, oppure la promessa di leggiTrascinati (cartelle comprese)
   const importFiles = async (fileList, folder = '') => {
     if (!fileList) { setDialog('import'); return }
     const voci = (fileList.then ? await fileList : [...fileList].map((file) => ({ file, cartella: '' })))
       .filter((v) => MEDIA_EXT.test(v.file.name))
-    const files = voci.map((v) => v.file)
-    if (!files.length) { setError('nessun file multimediale riconosciuto'); return }
+      // ogni sottocartella trascinata resta tale nel bin, dentro quella su cui si e' lasciato
+      .map((v) => ({ file: v.file, cartella: [folder, v.cartella].filter(Boolean).join('/') }))
+    if (!voci.length) { setError('nessun file multimediale riconosciuto'); return }
     if (!project) {
       // trascinare dei file e' il primo gesto naturale: senza progetto se ne
       // crea uno nella cartella proposta, col nome del primo file
       if (!sys?.home) { setError('crea prima un progetto'); return }
       const sep = sys.home.includes('\\') ? '\\' : '/'
-      const nome = files[0].name.replace(/\.[^.]+$/, '') || 'progetto'
+      const nome = voci[0].file.name.replace(/\.[^.]+$/, '') || 'progetto'
       try {
         progettoAperto(await api.createProject(`${sys.home}${sep}${nome}.json`, nome, '1080p'))
       } catch (e) { setError(e.message); return }
     }
-    const mb = files.reduce((s, f) => s + f.size, 0) / 1e6
-    setUploading(`${files.length} file, ${mb.toFixed(0)} MB`)
+    // meglio dirlo prima che a meta' copia: il disco pieno lascia file troncati
+    const byte = voci.reduce((s, v) => s + v.file.size, 0)
     try {
-      // una richiesta per cartella: ogni sottocartella trascinata resta tale nel bin
-      for (const [dest, gruppo] of perCartella(voci, folder)) {
-        applyState(await api.upload(gruppo, dest))
+      const { liberi, cartella } = await api.uploadSpazio()
+      if (liberi < byte) {
+        setError(`servono ${(byte / 1e9).toFixed(1)} GB in ${cartella}, liberi ${(liberi / 1e9).toFixed(1)} GB. `
+          + 'Per usare i file dove sono, senza copiarli: + → «importa cartella».')
+        return
       }
-    } catch (e) { setError(e.message) } finally { setUploading(null) }
+    } catch { /* lo spazio non si sa: si prova lo stesso */ }
+    lavoraImport((o) => caricaTrascinati(apiImport, voci, o))
   }
 
   // ---- scorciatoie da tastiera --------------------------------------------
@@ -388,6 +431,7 @@ export default function App() {
             </div>
             {leftTab === 'media' ? (
               <MediaBin project={project} run={run} setError={setError} uploading={uploading}
+                onAnnulla={() => fermaImport.current?.abort()}
                 onImport={importFiles} ask={ask}
                 onOpenSource={(m) => { setSource(m); setTab('source') }} />
             ) : (
@@ -544,7 +588,7 @@ export default function App() {
       )}
       {dialog === 'import' && (
         <FileBrowser title="Importa file" onClose={() => setDialog(null)} memoria="media"
-          filter={(n) => MEDIA_EXT.test(n)} onPick={importPaths} />
+          filter={(n) => MEDIA_EXT.test(n)} onPick={importPaths} onPickFolder={importFolder} />
       )}
       {dialog === 'render' && (
         <RenderDialog project={project} path={path} job={job} onStart={startRender}

@@ -229,16 +229,36 @@ class Store:
         return True
 
     # ---- media ---------------------------------------------------------
-    def import_media(self, paths: list[str]) -> list[Media]:
-        # un file illeggibile a meta' lista non deve lasciare importati i primi
+    def import_media(self, paths: list[str], folder: str | None = None,
+                     probed: dict[str, Media] | None = None) -> list[Media]:
+        """Importa i file; ``folder`` e' la cartella del bin dei media nuovi.
+
+        I metadati si leggono in parallelo: uno alla volta, cinquecento file
+        tenevano fermo l'editor per minuti. ``probed`` sono metadati gia' letti
+        da chi chiama (l'API li legge fuori dal lock, cosi' la UI non si ferma
+        mentre ffprobe lavora). Atomico: un file illeggibile non lascia
+        importati gli altri.
+        """
+        nuovi = [p for p in dict.fromkeys(paths)
+                 if not self.project.media_by_path(str(Path(p).resolve()))
+                 and not (probed and p in probed)]
+        letti = dict(probed or {})
+        for p, esito in probe_mod.probe_many(nuovi).items():
+            if isinstance(esito, Exception):
+                raise esito
+            letti[p] = esito
+        cartella = (folder or "").strip().strip("/")
         with self._edit():
             out = []
             for p in paths:
                 existing = self.project.media_by_path(str(Path(p).resolve()))
                 if existing:
-                    out.append(existing)
+                    if existing not in out:
+                        out.append(existing)
                     continue
-                m = probe_mod.probe(p)
+                m = letti[p]
+                if cartella:
+                    m.folder = cartella
                 self.project.media.append(m)
                 out.append(m)
         return out

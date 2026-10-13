@@ -7,14 +7,48 @@ qualsiasi frame. Il render finale usa sempre le sorgenti originali.
 
 from __future__ import annotations
 
-import array
 import hashlib
 import json
 import os
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import ffmpeg, hw
 from .model import Media, Project
+
+
+def _quanti_pesanti() -> int:
+    v = os.environ.get("VEDIT_LAVORI", "").strip()
+    if v.isdigit() and int(v) > 0:
+        return int(v)
+    return max(1, min(4, (os.cpu_count() or 2) // 2))
+
+
+# Strisce e forme d'onda decodificano il file intero. La UI le chiede per ogni
+# media appena importato e il server ne eseguiva fino a 40 insieme (i thread di
+# FastAPI): con qualche centinaio di file la macchina si sedeva, anteprima
+# compresa. Come le code in background degli editor desktop: pochi alla volta,
+# gli altri aspettano il turno.
+_PESANTI = threading.BoundedSemaphore(_quanti_pesanti())
+_in_corso: dict[str, threading.Lock] = {}
+_in_corso_lock = threading.Lock()
+
+
+@contextmanager
+def lavoro_pesante(chiave: str):
+    """Un posto nella coda dei lavori pesanti, e uno solo per lo stesso risultato.
+
+    Due richieste per la stessa striscia (timeline e pannello media) aspettano
+    la stessa generazione invece di farla due volte: chi arriva secondo trova
+    il file in cache quando entra.
+    """
+    # i lucchetti restano: uno per risultato, pochi byte, e toglierli mentre
+    # qualcuno ci aspetta sopra farebbe partire due generazioni dello stesso file
+    with _in_corso_lock:
+        mio = _in_corso.setdefault(chiave, threading.Lock())
+    with mio, _PESANTI:
+        yield
 
 
 def cache_dir(sub: str = "") -> Path:
@@ -89,36 +123,24 @@ def waveform(media: Media, points_per_second: int = 40, max_points: int = 40000)
         return []
 
     cache = cache_dir("wave") / f"{_key(media.path, f'w{points_per_second}x{max_points}')}.json"
-    if cache.exists() and cache.stat().st_size > 0:
-        try:
-            return json.loads(cache.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
-            pass  # cache illeggibile: si rifa'
 
-    rate = 8000
-    args = [
-        ffmpeg.binary("ffmpeg"), "-hide_banner", "-loglevel", "error", "-nostdin",
-        "-i", media.path, "-vn", "-ac", "1", "-ar", str(rate),
-        "-f", "s16le", "-acodec", "pcm_s16le", "-",
-    ]
-    import subprocess
+    def letta() -> list[float] | None:
+        if cache.exists() and cache.stat().st_size > 0:
+            try:
+                return json.loads(cache.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                pass  # cache illeggibile: si rifa'
+        return None
 
-    proc = subprocess.run(args, capture_output=True, timeout=1800,
-                          creationflags=0x08000000 if os.name == "nt" else 0)
-    raw = proc.stdout
-    if not raw:
+    if (pronta := letta()) is not None:
+        return pronta
+    with lavoro_pesante(str(cache)):
+        # chi aspettava il turno trova spesso il lavoro gia' fatto da un altro
+        if (pronta := letta()) is not None:
+            return pronta
+        peaks = _picchi(media.path, points_per_second, max_points)
+    if not peaks:
         return []
-    samples = array.array("h")
-    samples.frombytes(raw[: len(raw) - (len(raw) % 2)])
-
-    total_points = min(max_points, max(1, int((len(samples) / rate) * points_per_second)))
-    block = max(1, len(samples) // total_points)
-    peaks = []
-    for i in range(0, len(samples), block):
-        chunk = samples[i : i + block]
-        if not chunk:
-            break
-        peaks.append(round(max(abs(min(chunk)), abs(max(chunk))) / 32768.0, 4))
 
     tmp = cache.with_name(f"~{cache.name}")
     try:
@@ -127,6 +149,36 @@ def waveform(media: Media, points_per_second: int = 40, max_points: int = 40000)
     except OSError:
         tmp.unlink(missing_ok=True)   # senza cache si ricalcola, non e' un errore
     return peaks
+
+
+def _picchi(path: str, points_per_second: int, max_points: int) -> list[float]:
+    """Decodifica l'audio a 8 kHz mono e ne tiene il picco per blocco."""
+    import subprocess
+
+    import numpy as np
+
+    rate = 8000
+    args = [
+        ffmpeg.binary("ffmpeg"), "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-i", path, "-vn", "-sn", "-ac", "1", "-ar", str(rate),
+        "-f", "s16le", "-acodec", "pcm_s16le", "-",
+    ]
+    proc = subprocess.run(args, capture_output=True, timeout=1800,
+                          creationflags=0x08000000 if os.name == "nt" else 0)
+    raw = proc.stdout
+    if not raw:
+        return []
+    samples = np.frombuffer(raw[: len(raw) - (len(raw) % 2)], dtype="<i2")
+
+    total_points = min(max_points, max(1, int((len(samples) / rate) * points_per_second)))
+    block = max(1, len(samples) // total_points)
+    # stessi blocchi del ciclo in Python di prima (l'ultimo puo' essere corto),
+    # ma in numpy: un'ora di audio passava secondi nel ciclo
+    n = len(samples) // block * block
+    pieni = np.abs(samples[:n].astype(np.int32)).reshape(-1, block).max(axis=1)
+    if n < len(samples):
+        pieni = np.append(pieni, np.abs(samples[n:].astype(np.int32)).max())
+    return [round(float(v) / 32768.0, 4) for v in pieni]
 
 
 def thumbnails(media: Media, count: int = 10, height: int = 90) -> list[str]:
@@ -168,18 +220,43 @@ def filmstrip(media: Media, height: int = 44, max_tiles: int = 240) -> dict:
     tile_w += tile_w % 2
 
     dst = cache_dir("strip") / f"{_key(media.path, f's{height}x{tiles}')}.jpg"
-    if not dst.exists() or dst.stat().st_size == 0:
-        src = media.proxy if media.proxy and Path(media.proxy).exists() else media.path
-        args = ffmpeg.base_cmd() + [
-            "-i", src,
-            "-vf", f"fps=1/{interval:.6f},scale={tile_w}:{height},tile={tiles}x1",
-            "-frames:v", "1", "-q:v", "6", str(dst),
-        ]
-        ffmpeg.run(args, timeout=1800, check=False)
-        if not dst.exists():
+
+    def pronta() -> bool:
+        return dst.exists() and dst.stat().st_size > 0
+
+    if not pronta():
+        with lavoro_pesante(str(dst)):
+            if not pronta():
+                src = media.proxy if media.proxy and Path(media.proxy).exists() else media.path
+                _genera_striscia(src, dst, interval, tile_w, height, tiles)
+        if not pronta():
             return {}
     return {"path": str(dst), "tiles": tiles, "interval": round(interval, 6),
             "tile_width": tile_w, "tile_height": height}
+
+
+def _genera_striscia(src: str, dst: Path, interval: float, tile_w: int, height: int,
+                     tiles: int) -> None:
+    """Un fotogramma ogni ``interval`` secondi, affiancati in un'unica immagine.
+
+    Decodificare ogni fotogramma di un'ora di 4K per tenerne 240 era la parte
+    lenta. Con un fotogramma ogni due secondi o piu' bastano i keyframe
+    (``-skip_frame nokey``): il decoder salta tutto il resto, ed e' quello che
+    fanno gli editor desktop per le miniature. Sulle clip corte resta la
+    decodifica completa, che costa poco e prende il fotogramma giusto; se coi
+    soli keyframe non esce niente (file senza keyframe utili) si rifa' per intero.
+    """
+    tmp = dst.with_name(f"~{dst.name}")
+    vf = f"fps=1/{interval:.6f},scale={tile_w}:{height}:flags=fast_bilinear,tile={tiles}x1"
+    tentativi = [["-skip_frame", "nokey"], []] if interval >= 2.0 else [[]]
+    for salta in tentativi:
+        args = ffmpeg.base_cmd() + [*salta, "-i", src, "-an", "-sn", "-vf", vf,
+                                    "-frames:v", "1", "-q:v", "6", "-f", "image2", str(tmp)]
+        ffmpeg.run(args, timeout=1800, check=False)
+        if tmp.exists() and tmp.stat().st_size > 0:
+            os.replace(tmp, dst)   # nessuno legge una striscia scritta a meta'
+            return
+    tmp.unlink(missing_ok=True)
 
 
 def clear(kind: str | None = None) -> int:

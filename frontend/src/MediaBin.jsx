@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import useMediaAssets from './mediaAssets.js'
 import { leggiTrascinati, useFineTrascinamento } from './trascina.js'
@@ -54,14 +54,104 @@ function Onda({ peaks }) {
  * Le cartelle non esistono su disco: sono un'etichetta sul media, quindi
  * spostare un file nel bin non tocca nulla sul filesystem.
  */
-export default function MediaBin({ project, run, setError, onOpenSource, onImport, uploading, ask }) {
+/**
+ * Quali media del pannello sono a schermo (con un margine).
+ *
+ * Le miniature si chiedono solo per quelli: con mille file importati il
+ * pannello ne mostra una ventina, e generare le altre novecento strisce prima
+ * di quelle visibili e' lavoro che nessuno guarda. Senza IntersectionObserver
+ * (jsdom, browser vecchi) ``visibili`` e' null e si chiede tutto, come prima.
+ */
+function useVisibili() {
+  const [visibili, setVisibili] = useState(() =>
+    (typeof IntersectionObserver === 'undefined' ? null : new Set()))
+  const lista = useRef(null)
+  const osservatore = useRef(null)
+  const inAttesa = useRef(new Set())
+
+  const listaRef = useCallback((el) => {
+    lista.current = el
+    osservatore.current?.disconnect()
+    osservatore.current = null
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    osservatore.current = new IntersectionObserver((voci) => {
+      setVisibili((prima) => {
+        const dopo = new Set(prima)
+        for (const v of voci) {
+          const id = v.target.dataset.media
+          if (v.isIntersecting) dopo.add(id); else dopo.delete(id)
+        }
+        return dopo
+      })
+    }, { root: el, rootMargin: '400px 0px' })
+    for (const voce of inAttesa.current) osservatore.current.observe(voce)
+  }, [])
+
+  const osserva = useCallback((el) => {
+    if (!el) return
+    inAttesa.current.add(el)
+    osservatore.current?.observe(el)
+  }, [])
+
+  // le voci smontate escono dall'elenco, altrimenti l'insieme cresce per sempre
+  useEffect(() => () => osservatore.current?.disconnect(), [])
+  useEffect(() => {
+    for (const el of inAttesa.current) {
+      if (!el.isConnected) { inAttesa.current.delete(el); osservatore.current?.unobserve(el) }
+    }
+  })
+  return { visibili, osserva, listaRef }
+}
+
+const GB = 1e9
+const misura = (b) => (b >= GB ? `${(b / GB).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`)
+
+/** Copia o import in corso: quanti file, quanti byte, a che velocita', e come fermarlo. */
+function Avanzamento({ stato, onAnnulla }) {
+  const copia = stato.fase === 'copio'
+  const sec = Math.max(0.5, (Date.now() - stato.inizio) / 1000)
+  const quota = copia && stato.byte
+    ? stato.inviati / stato.byte
+    : stato.fatti / Math.max(1, stato.file)
+  return (
+    <div className="avanzamento">
+      <div className="riga">
+        <Icon name="attesa" className="spin" />
+        <span>
+          {copia ? 'copio' : 'importo'} {stato.fatti}/{stato.file} file
+          {copia && stato.byte > 0 && <> · {misura(stato.inviati)} di {misura(stato.byte)}
+            {' '}· {misura(stato.inviati / sec)}/s</>}
+        </span>
+        <span className="spacer" />
+        {onAnnulla && <button className="sm" onClick={onAnnulla}>ferma</button>}
+      </div>
+      <div className="barra"><i style={{ width: `${Math.min(100, quota * 100).toFixed(1)}%` }} /></div>
+      {stato.scartati.length > 0 && (
+        <div className="hint">{stato.scartati.length} file non letti</div>
+      )}
+      {copia && stato.byte > 2 * GB && (
+        <div className="hint">
+          I file trascinati vengono copiati accanto al progetto. Per usarli dove sono,
+          senza copia: <b>+</b> → «importa cartella».
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function MediaBin({
+  project, run, setError, onOpenSource, onImport, uploading, onAnnulla, ask,
+}) {
   const [open, setOpen] = useState({})
   const [dragOver, setDragOver] = useState(null)
   // il tratteggio di lista e cartelle si spegne comunque finisca il trascinamento
   useFineTrascinamento(useCallback(() => setDragOver(null), []))
   const [newFolder, setNewFolder] = useState(null)   // nome in scrittura, null = nessuno
   const media = project?.media || []
-  const assets = useMediaAssets(media)
+  const { visibili, osserva, listaRef } = useVisibili()
+  const daMostrare = useMemo(
+    () => (visibili ? media.filter((m) => visibili.has(m.id)) : media), [media, visibili])
+  const assets = useMediaAssets(daMostrare, 1)
 
   const tree = useMemo(() => {
     const folders = new Map()
@@ -116,12 +206,14 @@ export default function MediaBin({ project, run, setError, onOpenSource, onImpor
     run('add_clip', { media_id: m.id }).catch((e) => setError(e.message))
   }
 
-  const Item = ({ m }) => {
+  // una funzione e non un componente: definito qui dentro, React lo vedrebbe
+  // nuovo a ogni render e rimonterebbe ogni voce (e l'osservatore con lei)
+  const voce = (m) => {
     const strip = assets.strip(m)
     const peaks = m.kind === 'audio' ? assets.peaks(m) : null
     return (
     <div
-      className="media" draggable
+      key={m.id} className="media" draggable data-media={m.id} ref={osserva}
       onDragStart={(e) => {
         clearTimeout(clicSingolo.current)
         e.dataTransfer.setData('text/media', m.id)
@@ -161,7 +253,8 @@ export default function MediaBin({ project, run, setError, onOpenSource, onImpor
           onClick={() => onImport(null)}><Icon name="piu" size={14} /></button>
       </div>
 
-      <div className={`medialist ${dragOver === '' ? 'droptarget' : ''}`} {...dropTarget('')}>
+      <div className={`medialist ${dragOver === '' ? 'droptarget' : ''}`} ref={listaRef}
+        {...dropTarget('')}>
         {newFolder !== null && (
           <div className="folder">
             <Icon name="cartella" />
@@ -190,7 +283,7 @@ export default function MediaBin({ project, run, setError, onOpenSource, onImpor
               <span className="spacer" />
               <span className="hint">{items.length}</span>
             </div>
-            {open[name] !== false && items.map((m) => <Item key={m.id} m={m} />)}
+            {open[name] !== false && items.map(voce)}
           </div>
         ))}
 
@@ -201,7 +294,7 @@ export default function MediaBin({ project, run, setError, onOpenSource, onImpor
           </div>
         ))}
 
-        {tree.root.map((m) => <Item key={m.id} m={m} />)}
+        {tree.root.map(voce)}
 
         {project && !media.length && (
           <div className="hint" style={{ padding: 16, textAlign: 'center' }}>
@@ -213,11 +306,7 @@ export default function MediaBin({ project, run, setError, onOpenSource, onImpor
             Nessun progetto aperto.
           </div>
         )}
-        {uploading && (
-          <div className="hint" style={{ padding: 10, display: 'flex', gap: 7, alignItems: 'center' }}>
-            <Icon name="attesa" className="spin" />copio i file… {uploading}
-          </div>
-        )}
+        {uploading && <Avanzamento stato={uploading} onAnnulla={onAnnulla} />}
       </div>
     </div>
   )

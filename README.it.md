@@ -289,9 +289,12 @@ Le zone si ridimensionano trascinando i divisori tra loro; le misure restano sal
 
 ### 1. Media (pannello sinistro, scheda *media*)
 
-- **`+`** importa file *lasciandoli dove sono*.
+- **`+`** importa file *lasciandoli dove sono*; **importa cartella** prende una cartella
+  intera con le sottocartelle (la scheda di una camera, un girato di centinaia di file).
 - **Trascinare file dal desktop** dentro la finestra li **copia** in `media/` accanto al
-  progetto (il browser non passa il percorso di origine). Per file pesanti usa `+`.
+  progetto (il browser non passa il percorso di origine). La copia va a pezzi, con
+  avanzamento e pulsante per fermarla, e riprende da dove era rimasta: trascinare di nuovo
+  gli stessi file non li ricopia. Per girati pesanti conviene `+`, che non copia niente.
 - **`📁+`** crea una cartella: è solo un'etichetta sul media, non sposta niente su disco.
 - **Clic** su un media lo apre nel monitor *sorgente*; **doppio clic** lo accoda in timeline;
   **trascina** su una traccia per metterlo dove vuoi.

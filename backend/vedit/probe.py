@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -109,6 +110,38 @@ def probe(path: str, media_id: str | None = None) -> Media:
         channels=int((a or {}).get("channels") or 0),
         name=p.name,
     )
+
+
+def lavoratori() -> int:
+    """Quanti ffprobe in parallelo: abbastanza da nascondere l'avvio dei processi.
+
+    ffprobe legge solo l'intestazione del file: il costo vero e' far partire il
+    processo (100-300 ms su Windows), non la CPU. Su un disco meccanico o di rete
+    troppi lettori insieme si pestano i piedi, da qui il tetto.
+    """
+    return max(2, min(8, (os.cpu_count() or 2)))
+
+
+def probe_many(paths: list[str]) -> dict[str, Media | Exception]:
+    """Legge i metadati di molti file in parallelo; ogni file ha il suo esito.
+
+    Un file illeggibile non ferma gli altri: chi chiama decide se scartarlo o
+    annullare tutto.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    unici = list(dict.fromkeys(paths))
+
+    def uno(p: str) -> Media | Exception:
+        try:
+            return probe(p)
+        except Exception as exc:  # noqa: BLE001 - l'errore e' l'esito del file
+            return exc
+
+    if len(unici) <= 1:
+        return {p: uno(p) for p in unici}
+    with ThreadPoolExecutor(min(lavoratori(), len(unici))) as pool:
+        return dict(zip(unici, pool.map(uno, unici)))
 
 
 def recorded_at(path: str) -> dict:

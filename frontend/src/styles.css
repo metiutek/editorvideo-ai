@@ -1070,3 +1070,10 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .scattivo { display: flex; align-items: center; gap: 6px; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
 /* mentre si scrive uno stile il menu si allarga: le istruzioni vanno lette per intero */
 .stilimenu:has(.editorstile) { max-height: 85%; }
+
+/* copia / import di tanti file nel pannello media */
+.avanzamento { padding: 8px 10px; display: flex; flex-direction: column; gap: 5px;
+  border-top: 1px solid var(--line-soft); font-size: 12px; }
+.avanzamento .riga { display: flex; gap: 7px; align-items: center; }
+.avanzamento .barra { height: 3px; background: var(--line-soft); border-radius: 2px; overflow: hidden; }
+.avanzamento .barra i { display: block; height: 100%; background: var(--accent); transition: width .3s; }

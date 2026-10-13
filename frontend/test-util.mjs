@@ -4,7 +4,9 @@
  *   node test-util.mjs
  */
 import assert from 'node:assert/strict'
-import { leggiTrascinati, perCartella } from './src/trascina.js'
+import { leggiTrascinati } from './src/trascina.js'
+import { BLOCCO, PEZZO, caricaTrascinati, importaPercorsi, mandaFile } from './src/caricamento.js'
+import { IN_PARALLELO, _azzera, chiedi } from './src/mediaAssets.js'
 import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura, mostraEsatto } from './src/util.js'
 
 let ok = 0
@@ -158,13 +160,107 @@ test('natura della clip: cosa produce davvero, quindi cosa mostrare', () => {
   test('trascinare una cartella legge anche le sottocartelle', () => {
     assert.deepEqual(nomi, ['SFX/Canzoni|a.flac', 'SFX|boom.mp3', 'SFX|note.txt', 'SFX|whoosh.wav', '|clip.mp4'].sort())
   })
-  test('ogni sottocartella diventa una cartella del bin', () => {
-    const g = perCartella(voci, 'audio')
-    assert.deepEqual([...g.keys()].sort(), ['audio', 'audio/SFX', 'audio/SFX/Canzoni'])
-    assert.equal(g.get('audio/SFX').length, 3)
-  })
+
   const vecchio = await leggiTrascinati({ files: [{ name: 'x.mp4' }] })
   test('senza entry restano i file', () => assert.deepEqual(vecchio, [{ file: { name: 'x.mp4' }, cartella: '' }]))
+}
+
+{
+  // upload a pezzi: riprende da dove il server si era fermato, ritenta i guasti
+  const finto = (name, size, lastModified = 7) => ({ name, size, lastModified, slice: (a, b) => ({ a, b }) })
+  const server = (opts = {}) => {
+    const ricevuti = new Map(opts.gia || [])
+    const chiamate = { pezzi: [], import: [] }
+    let guasti = opts.guasti || 0
+    return {
+      chiamate,
+      uploadStato: async (q) => {
+        const r = ricevuti.get(q.nome) || 0
+        return { ricevuti: r, completo: r === q.size, path: r === q.size ? `/m/${q.nome}` : undefined }
+      },
+      uploadPezzo: async (q, off, pezzo) => {
+        if (opts.rifiuta === q.nome) throw Object.assign(new Error('no'), { status: 400 })
+        if (guasti > 0) { guasti -= 1; throw Object.assign(new Error('guasto'), { status: 503 }) }
+        assert.equal(off, ricevuti.get(q.nome) || 0)
+        chiamate.pezzi.push([q.nome, pezzo.a, pezzo.b])
+        ricevuti.set(q.nome, pezzo.b)
+        return { ricevuti: pezzo.b, completo: pezzo.b === q.size, path: `/m/${q.nome}` }
+      },
+      importa: async (paths, cartella) => {
+        chiamate.import.push([cartella, paths])
+        return { scartati: paths.filter((p) => p.includes('rotto')).map((path) => ({ path, errore: 'x' })) }
+      },
+    }
+  }
+
+  const s1 = server({ gia: [['grande.mov', PEZZO]], guasti: 1 })
+  let byte = 0
+  const path = await mandaFile(s1, finto('grande.mov', 2 * PEZZO + 5), { onByte: (n) => { byte += n } })
+  test('upload: riprende dal pezzo che mancava e ritenta un guasto', () => {
+    assert.equal(path, '/m/grande.mov')
+    assert.deepEqual(s1.chiamate.pezzi, [['grande.mov', PEZZO, 2 * PEZZO], ['grande.mov', 2 * PEZZO, 2 * PEZZO + 5]])
+    assert.equal(byte, 2 * PEZZO + 5)
+  })
+
+  const s2 = server({ rifiuta: 'no.mp4', gia: [['fatto.mp4', 10]] })
+  const voci = [
+    { file: finto('a.mp4', 3), cartella: 'scheda/A001' },
+    { file: finto('no.mp4', 3), cartella: '' },
+    { file: finto('fatto.mp4', 10), cartella: 'scheda/A001' },
+    { file: finto('rotto.mp4', 3), cartella: '' },
+  ]
+  const stati = []
+  const fine = await caricaTrascinati(s2, voci, { onProgress: (s) => stati.push(s) })
+  test('trascinati: i file buoni entrano, i rifiutati sono scartati, non bloccano', () => {
+    assert.equal(fine.fatti, 4)
+    assert.deepEqual(fine.scartati.map((s) => s.path).sort(), ['/m/rotto.mp4', 'no.mp4'])
+    const importati = s2.chiamate.import.flatMap(([c, ps]) => ps.map((p) => `${c}|${p}`)).sort()
+    assert.deepEqual(importati, ['scheda/A001|/m/a.mp4', 'scheda/A001|/m/fatto.mp4', '|/m/rotto.mp4'].sort())
+    // il file gia' arrivato non si rimanda
+    assert.ok(!s2.chiamate.pezzi.some(([n]) => n === 'fatto.mp4'))
+    assert.equal(stati.at(-1).importati, 2)
+  })
+
+  const s3 = server()
+  const tanti = Array.from({ length: 120 }, (_, i) => ({ path: `/d/c${i}.mp4`, cartella: i < 60 ? 'x' : 'y' }))
+  const fine3 = await importaPercorsi(s3, tanti)
+  test('dal disco: a blocchi per cartella, tutti contati', () => {
+    assert.ok(s3.chiamate.import.every(([, ps]) => ps.length <= BLOCCO))
+    assert.equal(s3.chiamate.import.flatMap(([, ps]) => ps).length, 120)
+    assert.equal(fine3.fatti, 120)
+    assert.equal(fine3.importati, 120)
+  })
+
+  const ctrl = new AbortController()
+  ctrl.abort()
+  const s4 = server()
+  const fine4 = await importaPercorsi(s4, tanti, { signal: ctrl.signal })
+  test('dal disco: fermato, non manda altro', () => {
+    assert.ok(fine4.interrotto)
+    assert.equal(s4.chiamate.import.length, 0)
+  })
+}
+
+{
+  // strisce e forme d'onda: poche alla volta, la timeline prima del pannello
+  _azzera()
+  const sblocca = []
+  let attive = 0
+  let picco = 0
+  const ordine = []
+  const lavoro = (nome) => () => new Promise((ok) => {
+    attive += 1; picco = Math.max(picco, attive); ordine.push(nome)
+    sblocca.push(() => { attive -= 1; ok(nome) })
+  })
+  for (let i = 0; i < 8; i += 1) chiedi(`bin${i}`, lavoro(`bin${i}`), 1)
+  chiedi('timeline', lavoro('timeline'), 0)
+  chiedi('bin7', lavoro('doppio'), 0)   // gia' in coda: sale di priorita', non si duplica
+  while (sblocca.length) { sblocca.shift()(); await new Promise((r) => setTimeout(r, 0)) }
+  test('coda anteprime: al massimo IN_PARALLELO, priorita\' rispettata, niente doppioni', () => {
+    assert.ok(picco <= IN_PARALLELO)
+    assert.deepEqual(ordine.slice(IN_PARALLELO, IN_PARALLELO + 2).sort(), ['bin7', 'timeline'])
+    assert.equal(ordine.length, 9)
+  })
 }
 
 console.log(`\n${ok} verifiche superate`)

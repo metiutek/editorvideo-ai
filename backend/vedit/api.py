@@ -41,6 +41,7 @@ from pydantic import BaseModel
 from . import chat as chat_mod
 from . import effects as fx
 from . import domande, ffmpeg, figli, htmlclip, hw, llm, presets, proxy, render, stili
+from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
 from .store import PRESETS, EditError, Store
 
@@ -514,19 +515,37 @@ def _dischi() -> list[str]:
     return list(dict.fromkeys(radici))
 
 
+_coda_anteprime = None
+
+
+async def _in_coda(fn, *args):
+    """Esegue strisce e forme d'onda in un gruppo di thread tutto loro.
+
+    Aspettano il turno dentro ``proxy.lavoro_pesante``: nei thread comuni di
+    FastAPI, cento richieste in attesa li occupavano tutti e fotogrammi,
+    modifiche e salvataggi restavano in coda dietro di loro.
+    """
+    import anyio
+
+    global _coda_anteprime
+    if _coda_anteprime is None:
+        _coda_anteprime = anyio.CapacityLimiter(16)
+    return await anyio.to_thread.run_sync(fn, *args, limiter=_coda_anteprime)
+
+
 @app.get("/api/media/{media_id}/waveform")
-def waveform(media_id: str) -> dict:
+async def waveform(media_id: str) -> dict:
     store = S.need()
     m = store.media_or_die(media_id)
-    return {"peaks": proxy.waveform(m), "duration": m.duration}
+    return {"peaks": await _in_coda(proxy.waveform, m), "duration": m.duration}
 
 
 @app.get("/api/media/{media_id}/strip")
-def strip(media_id: str, height: int = 44) -> dict:
+async def strip(media_id: str, height: int = 44) -> dict:
     """Striscia di fotogrammi usata come sfondo delle clip video in timeline."""
     store = S.need()
     m = store.media_or_die(media_id)
-    info = proxy.filmstrip(m, height)
+    info = await _in_coda(proxy.filmstrip, m, height)
     if not info:
         return {}
     return {**info, "url": f"/api/file?path={quote(info['path'])}"}
@@ -573,12 +592,253 @@ async def upload(files: list[UploadFile] = File(...), folder: str = Form("")) ->
         saved.append(str(target))
 
     with S.lock:
-        media = store.import_media(saved)
-        if folder:
-            for m in media:
-                store.set_media(m.id, folder=folder)
+        media = store.import_media(saved, folder=folder)
     _avvisa(store)
     return {"importati": [m.id for m in media], **S.state_of_project()}
+
+
+# --------------------------------------------------------------------------
+# import di molti file
+# --------------------------------------------------------------------------
+
+
+class ImportBody(BaseModel):
+    paths: list[str]
+    folder: str = ""
+
+
+@app.post("/api/import")
+def importa(body: ImportBody) -> dict:
+    """Importa per riferimento: i file restano dove sono, nessuna copia.
+
+    A differenza di ``/api/op/import_media`` un file illeggibile viene scartato
+    e segnalato invece di annullare tutto (in una cartella di trecento file ce
+    n'e' sempre uno rovinato), e i metadati si leggono *fuori* dal lock: mentre
+    ffprobe lavora l'editor resta usabile. La UI manda i file a blocchi, cosi'
+    il bin si riempie mentre l'import procede.
+    """
+    store = S.need()
+    gia = {p for p in body.paths if store.project.media_by_path(str(Path(p).resolve()))}
+    esiti = probe_mod.probe_many([p for p in body.paths if p not in gia])
+    letti = {p: m for p, m in esiti.items() if not isinstance(m, Exception)}
+    scartati = [{"path": p, "errore": _errore_breve(e)}
+                for p, e in esiti.items() if isinstance(e, Exception)]
+    buoni = [p for p in body.paths if p in gia or p in letti]
+    media = []
+    if buoni:
+        try:
+            with S.lock:
+                media = store.import_media(buoni, folder=body.folder, probed=letti)
+        except (EditError, OSError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        _avvisa(store)
+    return {"importati": [m.id for m in media], "scartati": scartati, **S.state_of_project()}
+
+
+def _errore_breve(exc: Exception) -> str:
+    """La riga che spiega il problema, senza il JSON vuoto di ffprobe e senza percorso.
+
+    ffprobe chiude con ``{ }`` anche quando fallisce, e la riga utile ripete
+    il percorso intero davanti al motivo: ``C:\\...\\clip.mp4: Invalid data...``.
+    """
+    righe = [r.strip() for r in str(exc).splitlines()
+             if any(c.isalpha() for c in r) and "uscito con codice" not in r]
+    if not righe:
+        return type(exc).__name__
+    return righe[-1].rsplit(": ", 1)[-1][:300]
+
+
+# oltre questo numero la cartella e' quasi certamente sbagliata (la home intera)
+MAX_SCAN = 20000
+
+
+@app.get("/api/scan")
+def scan(path: str) -> dict:
+    """Tutti i file multimediali di una cartella e delle sue sottocartelle.
+
+    Ogni file porta la sottocartella relativa, che diventa la cartella del bin:
+    importare la scheda di una camera tiene la sua struttura.
+    """
+    from .model import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
+
+    base = Path(path)
+    if not base.is_dir():
+        raise HTTPException(404, f"cartella inesistente: {base}")
+    known = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
+    files, totale = [], 0
+    for radice, dirs, nomi in os.walk(base):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        rel = Path(radice).relative_to(base).as_posix()
+        for n in sorted(nomi, key=str.lower):
+            if n.startswith(".") or Path(n).suffix.lower() not in known:
+                continue
+            p = Path(radice) / n
+            try:
+                size = p.stat().st_size
+            except OSError:
+                continue
+            files.append({"path": str(p), "cartella": "" if rel == "." else rel, "size": size})
+            totale += size
+            if len(files) > MAX_SCAN:
+                raise HTTPException(400, f"piu' di {MAX_SCAN} file multimediali in {base}: "
+                                         "scegli una cartella piu' precisa")
+    return {"path": str(base), "nome": base.name, "files": files, "byte": totale}
+
+
+# --------------------------------------------------------------------------
+# upload a pezzi (file trascinati dal desktop)
+# --------------------------------------------------------------------------
+#
+# Il browser non dice da dove viene un file trascinato, quindi l'unico modo di
+# averlo e' farselo mandare. Prima partiva una sola richiesta multipart con
+# tutti i file: niente progresso, oltre 1000 file Starlette la rifiutava, e se
+# cadeva a meta' si ricominciava da zero. Qui ogni file viaggia a pezzi su una
+# richiesta sua, il pezzo si scrive al suo posto in un file .part, e la
+# chiave (nome, dimensione, data di modifica) permette di riprendere da dove ci
+# si era fermati o di saltare un file gia' arrivato.
+
+
+def _cartella_media(store: Store) -> Path:
+    if not store.path:
+        raise HTTPException(400, "salva il progetto prima di trascinarci dentro dei file")
+    d = Path(store.path).parent / "media"
+    (d / ".parti").mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _chiave_upload(nome: str, size: int, mtime: int) -> str:
+    return hashlib.sha1(f"{nome}|{size}|{mtime}".encode()).hexdigest()[:20]
+
+
+def _nome_sicuro(nome: str) -> str:
+    """Il nome del file senza cartelle e senza i caratteri che Windows rifiuta."""
+    import re
+
+    base = Path(nome.replace("\\", "/")).name
+    base = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", base).strip(" .")
+    return base or "file"
+
+
+def _arrivati(cartella: Path) -> dict:
+    try:
+        return json.loads((cartella / ".parti" / "arrivati.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _completo(cartella: Path, chiave: str, size: int) -> str | None:
+    """Percorso del file gia' arrivato con questa chiave, se c'e' ancora intero."""
+    nome = _arrivati(cartella).get(chiave)
+    if nome:
+        p = cartella / nome
+        try:
+            if p.stat().st_size == size:
+                return str(p)
+        except OSError:
+            pass
+    return None
+
+
+_upload_lock = threading.Lock()
+
+
+@app.get("/api/upload/stato")
+def upload_stato(nome: str, size: int, mtime: int = 0) -> dict:
+    """Quanto di questo file e' gia' arrivato: per riprendere o saltarlo."""
+    cartella = _cartella_media(S.need())
+    chiave = _chiave_upload(nome, size, mtime)
+    if path := _completo(cartella, chiave, size):
+        return {"chiave": chiave, "ricevuti": size, "completo": True, "path": path}
+    parte = cartella / ".parti" / f"{chiave}.part"
+    ricevuti = parte.stat().st_size if parte.exists() else 0
+    return {"chiave": chiave, "ricevuti": min(ricevuti, size), "completo": False}
+
+
+@app.get("/api/upload/spazio")
+def upload_spazio() -> dict:
+    """Spazio libero dove finiscono i file trascinati: meglio dirlo prima di copiare."""
+    import shutil
+
+    cartella = _cartella_media(S.need())
+    # i pezzi di un upload abbandonato da una settimana non li riprende nessuno
+    vecchi = time.time() - 7 * 86400
+    for p in (cartella / ".parti").glob("*.part"):
+        try:
+            if p.stat().st_mtime < vecchi:
+                p.unlink()
+        except OSError:
+            continue
+    return {"liberi": shutil.disk_usage(cartella).free, "cartella": str(cartella)}
+
+
+@app.put("/api/upload/pezzo")
+async def upload_pezzo(request: Request, nome: str, size: int, offset: int,
+                       mtime: int = 0) -> dict:
+    """Scrive un pezzo del file alla sua posizione; all'ultimo il file e' completo.
+
+    Il corpo e' il pezzo grezzo, letto a flusso: niente multipart, niente file
+    temporaneo intermedio, nessun limite al numero di file.
+    """
+    cartella = _cartella_media(S.need())
+    chiave = _chiave_upload(nome, size, mtime)
+    if path := _completo(cartella, chiave, size):
+        return {"ricevuti": size, "completo": True, "path": path}
+    parte = cartella / ".parti" / f"{chiave}.part"
+    attuale = parte.stat().st_size if parte.exists() else 0
+    if offset > attuale or offset < 0:
+        # un pezzo perso in mezzo: si riparte da quello che c'e' davvero
+        raise HTTPException(409, f"atteso offset {attuale}, arrivato {offset}")
+
+    def apri():
+        fh = parte.open("r+b" if parte.exists() else "wb")
+        fh.seek(offset)
+        fh.truncate()   # un pezzo rimandato sostituisce quello che c'era dopo
+        return fh
+
+    fh = await asyncio.to_thread(apri)
+    scritti = offset
+    try:
+        buf = bytearray()
+        async for blocco in request.stream():
+            buf += blocco
+            if scritti + len(buf) > size:
+                raise HTTPException(400, "il pezzo va oltre la dimensione dichiarata")
+            if len(buf) >= 4 << 20:   # su disco a blocchi grandi, fuori dal loop
+                await asyncio.to_thread(fh.write, bytes(buf))
+                scritti += len(buf)
+                buf.clear()
+        if buf:
+            await asyncio.to_thread(fh.write, bytes(buf))
+            scritti += len(buf)
+    finally:
+        await asyncio.to_thread(fh.close)
+
+    if scritti < size:
+        return {"ricevuti": scritti, "completo": False}
+    return {"ricevuti": size, "completo": True,
+            "path": await asyncio.to_thread(_finisci_upload, cartella, parte, chiave, nome, size)}
+
+
+def _finisci_upload(cartella: Path, parte: Path, chiave: str, nome: str, size: int) -> str:
+    """Dal .part al nome vero, senza sovrascrivere un file diverso con lo stesso nome."""
+    with _upload_lock:
+        if path := _completo(cartella, chiave, size):
+            parte.unlink(missing_ok=True)
+            return path
+        base = _nome_sicuro(nome)
+        target = cartella / base
+        i = 1
+        while target.exists():
+            target = cartella / f"{Path(base).stem}_{i}{Path(base).suffix}"
+            i += 1
+        os.replace(parte, target)
+        arrivati = _arrivati(cartella)
+        arrivati[chiave] = target.name
+        reg = cartella / ".parti" / "arrivati.json"
+        tmp = reg.with_name("~arrivati.json")
+        tmp.write_text(json.dumps(arrivati, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, reg)
+        return str(target)
 
 
 @app.get("/api/file")

@@ -66,14 +66,3 @@ async function visita(entry, cartella) {
   const liste = await Promise.all(figli.map((f) => visita(f, dentro)))
   return liste.flat()
 }
-
-/** Raggruppa per cartella di destinazione nel bin: ``base`` e' quella su cui si e' lasciato. */
-export function perCartella(voci, base = '') {
-  const gruppi = new Map()
-  for (const { file, cartella } of voci) {
-    const dest = [base, cartella].filter(Boolean).join('/')
-    if (!gruppi.has(dest)) gruppi.set(dest, [])
-    gruppi.get(dest).push(file)
-  }
-  return gruppi
-}
