@@ -221,6 +221,9 @@ class Clip:
     blend: str = "normal"
     enabled: bool = True
     name: str = ""
+    # video e audio della stessa ripresa: le clip con lo stesso link si spostano,
+    # si tagliano e si cancellano insieme (come in Premiere e Resolve)
+    link: str = ""
 
     transform: Transform = field(default_factory=Transform)
     audio: ClipAudio = field(default_factory=ClipAudio)

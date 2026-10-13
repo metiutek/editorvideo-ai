@@ -31,7 +31,7 @@ export default function SourceMonitor({ media, tracks, run, setError, playhead, 
   const len = Math.max(0.05, mark.out - mark.in)
   const insert = (start) =>
     run('add_clip', {
-      media_id: media.id, start, in_: mark.in, duration: len,
+      media_id: media.id, start, in_: mark.in, duration: len, audio_collegato: true,
       track_id: tracks.find((tr) => tr.kind === (media.kind === 'audio' ? 'audio' : 'video'))?.id,
     }).catch((e) => setError(e.message))
 

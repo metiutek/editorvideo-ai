@@ -221,6 +221,15 @@ export default function Timeline({
    * ridisegnate un centinaio di volte al secondo durante uno scrub, ed era il
    * motivo per cui la timeline si impastava.
    */
+  // la clip collegata a quella selezionata (il suo audio, o il suo video)
+  const linkSel = useMemo(() => {
+    for (const t of project?.tracks || []) {
+      const c = t.clips.find((x) => x.id === selected)
+      if (c) return c.link || null
+    }
+    return null
+  }, [project?.tracks, selected])
+
   const corpo = useMemo(() => {
     if (!project) return null
     return (
@@ -337,7 +346,8 @@ export default function Timeline({
                   if (!mediaId) return
                   const inPoint = parseFloat(e.dataTransfer.getData('text/inpoint'))
                   const length = parseFloat(e.dataTransfer.getData('text/length'))
-                  const args = { media_id: mediaId, track_id: track.id, start: round(timeAt(e.clientX)) }
+                  // come negli editor desktop: il video su questa traccia, il suo audio sotto
+                  const args = { media_id: mediaId, track_id: track.id, start: round(timeAt(e.clientX)), audio_collegato: true }
                   if (!Number.isNaN(inPoint)) args.in_ = round(inPoint)
                   if (!Number.isNaN(length)) args.duration = round(length)
                   run('add_clip', args).catch((err) => setError(err.message))
@@ -360,6 +370,8 @@ export default function Timeline({
                         clip.type === 'html' ? 'html' : '',
                         clip.enabled === false ? 'disabled' : '',
                         selected === clip.id ? 'sel' : '',
+                        clip.link && clip.link === linkSel && selected !== clip.id ? 'gemella' : '',
+                        clip.link ? 'collegata' : '',
                       ].join(' ')}
                       style={{
                         left: start * pxPerSec, width: w,
@@ -480,7 +492,7 @@ export default function Timeline({
           </div>
       </>
     )
-  }, [project, lanes, drag, assets, selected, setSelected, pxPerSec, trackH,
+  }, [project, lanes, drag, assets, selected, linkSel, setSelected, pxPerSec, trackH,
       renaming, mediaById, run, setError, onPreset, onTransition, ask, giunzione, giunzioni,
       shiftTrack, soloOn, startDrag])
 

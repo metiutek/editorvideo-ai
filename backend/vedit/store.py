@@ -457,8 +457,24 @@ class Store:
         return max((c.end for c in track.clips), default=0.0)
 
     def add_clip(self, media_id: str, track_id: str | None = None, start: float | None = None,
-                 in_: float = 0.0, duration: float | None = None, name: str | None = None) -> Clip:
+                 in_: float = 0.0, duration: float | None = None, name: str | None = None,
+                 audio_collegato: bool = False) -> Clip:
+        """Mette un media in timeline.
+
+        Con ``audio_collegato`` una ripresa con audio entra come negli editor
+        desktop: il video sulla traccia video, il suo audio su una traccia audio
+        come clip a parte, collegate. Senza, l'audio resta dentro la clip video.
+        """
         m = self.media_or_die(media_id)
+        if audio_collegato and m.kind == "video" and m.has_audio:
+            if track_id is None or self.track_or_die(track_id).kind == "video":
+                with self.batch():
+                    v = self.add_clip(media_id, track_id, start, in_, duration, name)
+                    a = self.add_clip(media_id, self._audio_libera(v.start, v.end),
+                                      v.start, v.in_, v.duration, name)
+                    v.link = a.link = new_id("l")
+                    v.audio.mute = True     # suona la clip audio, non tutte e due
+                    return v
         if track_id is None:
             track_id = self._default_track("audio" if m.kind == "audio" else "video")
         track = self.track_for_edit(track_id)
@@ -616,15 +632,50 @@ class Store:
             t = self.add_track(kind)
         return t.id
 
+    def _audio_libera(self, start: float, end: float) -> str:
+        """Prima traccia audio sbloccata e libera in quel tratto; se non c'e', una nuova."""
+        for t in self.project.tracks:
+            if t.kind == "audio" and not t.locked and all(
+                    c.end <= start + 1e-6 or c.start >= end - 1e-6 for c in t.clips):
+                return t.id
+        return self.add_track("audio").id
+
+    def collegate(self, clip: Clip) -> list[tuple[Track, Clip]]:
+        """Le altre clip dello stesso gruppo (l'audio di un video, il video di un audio)."""
+        if not clip.link:
+            return []
+        return [(t, c) for t in self.project.tracks for c in t.clips
+                if c.link == clip.link and c is not clip]
+
+    def _allinea(self, clip: Clip) -> None:
+        """Porta le collegate sugli stessi tempi della clip appena modificata."""
+        for t, c in self.collegate(clip):
+            c.start, c.in_, c.duration = clip.start, clip.in_, clip.duration
+            c.speed, c.reverse = clip.speed, clip.reverse
+            t.clips.sort(key=lambda x: x.start)
+
+    def unlink_clip(self, clip_id: str) -> list[str]:
+        """Scollega video e audio: da qui si muovono da soli (J/L cut, musica sotto)."""
+        _, clip = self.clip_or_die(clip_id)
+        gruppo = [clip, *(c for _, c in self.collegate(clip))]
+        if len(gruppo) < 2:
+            return []
+        self._touch()
+        for c in gruppo:
+            c.link = ""
+        self._done()
+        return [c.id for c in gruppo]
+
     def remove_clip(self, clip_id: str, ripple: bool = False) -> None:
         track, clip = self.clip_for_edit(clip_id)
         self._touch()
-        gap = clip.duration
-        track.clips.remove(clip)
-        if ripple:
-            for c in track.clips:
-                if c.start >= clip.start:
-                    c.start = max(0.0, c.start - gap)
+        for t, c in [(track, clip), *self.collegate(clip)]:
+            gap = c.duration
+            t.clips.remove(c)
+            if ripple:
+                for altra in t.clips:
+                    if altra.start >= c.start:
+                        altra.start = max(0.0, altra.start - gap)
         self._done()
 
     def move_clip(self, clip_id: str, start: float | None = None, track_id: str | None = None) -> Clip:
@@ -644,6 +695,7 @@ class Store:
             dst.clips.append(clip)
             dst.clips.sort(key=lambda x: x.start)
         track.clips.sort(key=lambda x: x.start)
+        self._allinea(clip)
         self._done()
         return clip
 
@@ -722,17 +774,31 @@ class Store:
                 new_dur = max_dur
         self._touch()
         clip.in_, clip.duration = new_in, new_dur
+        self._allinea(clip)
         self._done()
         return clip
 
     def split_clip(self, clip_id: str, at: float) -> tuple[Clip, Clip]:
-        """Taglia in due al tempo di timeline ``at``."""
+        """Taglia in due al tempo di timeline ``at``. Le clip collegate si tagliano insieme."""
         track, clip = self.clip_for_edit(clip_id)
         if not (clip.start + 1e-4 < at < clip.end - 1e-4):
             raise EditError(
                 f"il punto di taglio {at}s e' fuori dalla clip ({clip.start:.3f}-{clip.end:.3f}s)"
             )
         self._touch()
+        altre = self.collegate(clip)
+        second = self._dividi(track, clip, at)
+        if altre:
+            # le due meta' restano collegate fra loro, ognuna col suo gruppo
+            second.link = new_id("l")
+            for t, c in altre:
+                if c.start + 1e-4 < at < c.end - 1e-4:
+                    self._dividi(t, c, at).link = second.link
+        self._done()
+        return clip, second
+
+    @staticmethod
+    def _dividi(track: Track, clip: Clip, at: float) -> Clip:
         head = at - clip.start
         tail = clip.duration - head
         k = abs(clip.speed or 1.0)
@@ -764,8 +830,7 @@ class Store:
 
         track.clips.append(second)
         track.clips.sort(key=lambda x: x.start)
-        self._done()
-        return clip, second
+        return second
 
     def set_speed(self, clip_id: str, speed: float, keep_duration: bool = False) -> Clip:
         """Cambia velocita'. Di default la durata in timeline si accorcia/allunga."""
@@ -788,6 +853,7 @@ class Store:
             max_dur = (media.duration - clip.in_) / clip.speed
             if clip.duration > max_dur + 1e-3:
                 clip.duration = max(1.0 / 60, max_dur)
+        self._allinea(clip)
         self._done()
         return clip
 
@@ -795,6 +861,7 @@ class Store:
         track, clip = self.clip_for_edit(clip_id)
         self._touch()
         clip.reverse = bool(reverse)
+        self._allinea(clip)
         self._done()
         return clip
 
@@ -888,6 +955,7 @@ class Store:
             if clip.duration > max_dur + 1e-3:
                 clip.duration = max(1.0 / 60, max_dur)
         track.clips.sort(key=lambda x: x.start)
+        self._allinea(clip)
         self._done()
         return clip
 
@@ -1206,9 +1274,11 @@ class Store:
         self._touch()
         # B (e tutto cio' che segue) risale fino a sovrapporsi ad A di d secondi
         delta = b.start - (a.end - d)
-        for c in sorted(tb.clips, key=lambda x: x.start):
-            if c.start >= b.start - 1e-6:
-                c.start = max(0.0, c.start - delta)
+        spostate = [c for c in tb.clips if c.start >= b.start - 1e-6]
+        for c in spostate:
+            c.start = max(0.0, c.start - delta)
+        for c in spostate:
+            self._allinea(c)
         self._apply_transition(a, type, d)
         # l'audio si incrocia sempre in dissolvenza, qualunque sia l'effetto video
         a.audio.fade_out = d
@@ -1259,6 +1329,8 @@ class Store:
         self._touch()
         for c, s in zip(ordered, starts):
             c.start = s
+        for c in ordered:
+            self._allinea(c)
         self._done()
         return moved
 
@@ -1333,6 +1405,8 @@ class Store:
                 if c.type == "media":
                     item["media"] = c.media
                     item["in"] = round(c.in_, 3)
+                if c.link:
+                    item["link"] = c.link
                 if abs(c.speed - 1.0) > 1e-6:
                     item["speed"] = c.speed
                 if c.reverse:

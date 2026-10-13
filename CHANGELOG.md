@@ -5,6 +5,16 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Una clip con audio entra in timeline come negli editor desktop.** Trascinata dal
+  pannello, inserita dal monitor sorgente o con doppio clic, il video va sulla traccia
+  video e il suo audio su una traccia audio, come clip a parte con la sua forma d'onda.
+  Le due metà sono collegate (`Clip.link`): spostarle, tagliarle, dividerle, cambiarne la
+  velocità o cancellarle agisce su tutte e due, e la metà collegata si vede tratteggiata
+  quando l'altra è selezionata. *scollega audio e video* nelle proprietà
+  (`Store.unlink_clip`) le separa per un J/L cut; `jl_cut` e `detach_audio` lo fanno da
+  soli. Se A1 è occupata in quel tratto l'audio va sulla prima traccia libera o su una
+  nuova. Via MCP `add_clip` resta com'era, con l'audio dentro la clip video, salvo
+  `audio_collegato=True`.
 - **Importare tanti file senza bloccare l'editor.** Centinaia di file o decine di GB
   fermavano tutto. Quattro cause, sistemate come fanno gli editor desktop:
   - *trascinati*: partiva una sola richiesta multipart con tutti i file, senza progresso,

@@ -203,7 +203,7 @@ export default function MediaBin({
   }
   const accoda = (m) => {
     clearTimeout(clicSingolo.current)
-    run('add_clip', { media_id: m.id }).catch((e) => setError(e.message))
+    run('add_clip', { media_id: m.id, audio_collegato: true }).catch((e) => setError(e.message))
   }
 
   // una funzione e non un componente: definito qui dentro, React lo vedrebbe

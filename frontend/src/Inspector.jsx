@@ -126,6 +126,15 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
       {clip.type === 'text' && <TextPanel clip={clip} call={call} />}
       {clip.type === 'html' && <HtmlPanel clip={clip} call={call} />}
 
+      {clip.link && (
+      <div className="group">
+        <h4>collegata</h4>
+        <div className="hint">video e audio della stessa ripresa: si spostano, si tagliano e si
+          cancellano insieme. Scollegali per spostare l'audio da solo (J/L cut).</div>
+        <button className="btn" onClick={() => call('unlink_clip', { clip_id: clip.id })}>scollega audio e video</button>
+      </div>
+      )}
+
       {ha.audio && (
       <div className="group">
         <h4>

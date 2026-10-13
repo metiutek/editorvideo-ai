@@ -206,6 +206,11 @@ def detach_audio(store, clip_id: str, track_id: str | None = None) -> dict:
     m = store.media_or_die(clip.media)
     if not m.has_audio:
         raise ValueError(f"{m.name} non ha audio da scollegare")
+    gia = [(t, c) for t, c in store.collegate(clip) if t.kind == "audio"]
+    if gia:
+        # l'audio e' gia' su una traccia sua: basta tagliare il collegamento
+        store.unlink_clip(clip_id)
+        return {"audio_clip": gia[0][1].id, "traccia": gia[0][0].id, "video_clip": clip_id}
 
     with store.batch():
         if track_id is None:
@@ -248,6 +253,8 @@ def jl_cut(store, clip_id: str, seconds: float = 0.5, kind: str = "J") -> dict:
             store.set_audio(clip_id, mute=True)
 
         _, audio = store.clip_or_die(gemella_id)
+        if audio.link:
+            store.unlink_clip(gemella_id)   # se no spostare l'audio muove anche il video
         if kind == "J":
             possibile = min(seconds, audio.in_, audio.start)
             if possibile <= 0:
