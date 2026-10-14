@@ -161,6 +161,20 @@ export const api = {
     }),
   eliminaStile: (id) => req(`/api/stili/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  // timeline per e da altri montaggi (interscambio.py): .edl .fcpxml .otio
+  esportaTimeline: (path, track = null) =>
+    req('/api/timeline/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, track }),
+    }),
+  importaTimeline: (path, testo = null) =>
+    req('/api/timeline/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, testo }),
+    }),
+
   // particelle su misura: cosa si puo' scegliere, anteprima, quelle salvate
   particelle: () => req('/api/particelle'),
   anteprimaParticelle: (spec, signal) =>

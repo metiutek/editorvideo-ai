@@ -431,6 +431,15 @@ sono **ProRes** e **DNxHR** (ogni fotogramma a sé, 10 bit, in `.mov` o `.mxf`, 
 il contenitore: `.mp4` `.mov` `.mkv` `.mxf` `.webm` `.gif` `.mp3` `.wav`. La barra mostra
 l'avanzamento reale di ffmpeg.
 
+Dalla stessa finestra esce la **timeline** per un altro montaggio, senza ricodificare niente:
+**FCPXML** (Final Cut, Resolve), **OTIO** (OpenTimelineIO: Resolve, Premiere col plugin, Avid,
+pipeline degli studi) con tutte le tracce, oppure un **EDL** CMX3600 per una traccia sola.
+Escono tagli, posizioni, velocità (non in FCPXML) e dissolvenze, con i file originali dove
+sono; effetti, colore, testi e grafica html restano a vedit, e gli avvisi dicono cosa non è
+uscito. Al contrario, scegliendo o trascinando un `.fcpxml`, `.otio` o `.edl` in *importa*,
+quella timeline si accoda al progetto con le dissolvenze ricostruite, in un solo passo di undo
+(`export_timeline`, `import_timeline` per l'agente).
+
 Il render finale usa **sempre gli originali**, mai i proxy.
 
 ---
@@ -471,6 +480,9 @@ vedit proxy progetto.json                # proxy 540p: anteprime molto più rapi
 vedit frame progetto.json 12.5 controllo.jpg
 vedit normalize progetto.json --lufs -14
 vedit render progetto.json finale.mp4 --quality high
+vedit render progetto.json master.mov --codec prores   # per finire altrove
+vedit export-timeline progetto.json montaggio.fcpxml   # .fcpxml .otio .edl
+vedit import-timeline progetto.json da_resolve.otio    # accodata alla timeline
 vedit effects video                      # catalogo effetti e parametri
 vedit doctor                             # ffmpeg, encoder, filtri
 vedit ui                                 # interfaccia web

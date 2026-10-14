@@ -5,6 +5,16 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Timeline per e da altri montaggi: FCPXML, OTIO, EDL.** Nuovo `interscambio.py`. Export
+  dal dialogo *esporta*, da `export_timeline` e da `vedit export-timeline`: FCPXML 1.9 e OTIO
+  con tutte le tracce e i percorsi dei file, EDL CMX3600 per una traccia. Escono tagli,
+  posizioni, velocità (non in FCPXML) e dissolvenze: la sovrapposizione di vedit diventa un
+  taglio a metà con la transizione sopra. Gli avvisi elencano cosa resta a vedit (effetti,
+  testi, grafica, movimento). Import scegliendo o trascinando il file in *importa*, da
+  `import_timeline` e da `vedit import-timeline`: la timeline si accoda, le tracce si creano,
+  le dissolvenze tornano sovrapposizioni, tutto in un `batch` (un undo; se manca un file non
+  entra niente). L'EDL ritrova i file per nome. Andata e ritorno verificati anche con la
+  libreria ufficiale OpenTimelineIO.
 - **Trim da montatore: ripple, roll, slip, slide, e J/K/L.** In `Store` (`ripple_trim`,
   `roll_edit`, `slip_clip`, `slide_clip`), che tengono conto di velocità, reverse e lunghezza
   della sorgente, portano con sé le clip collegate e, se un passo è impossibile, non lasciano

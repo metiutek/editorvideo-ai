@@ -403,6 +403,15 @@ Resolve, Avid or Final Cut there are **ProRes** and **DNxHR** (intra-frame, 10 b
 or `.mxf`, with 24-bit PCM audio): quality picks the profile — Proxy/LB, 422/SQ, HQ,
 4444/HQX. The extension picks the container: `.mp4` `.mov` `.mkv` `.mxf` `.webm` `.gif`
 `.mp3` `.wav`. The progress bar is ffmpeg's real progress.
+
+The same window exports the **timeline** for another editor, with no re-encoding: **FCPXML**
+(Final Cut, Resolve), **OTIO** (OpenTimelineIO: Resolve, Premiere with the plugin, Avid,
+studio pipelines) with every track, or a CMX3600 **EDL** for a single track. Out go cuts,
+positions, speed (not in FCPXML) and dissolves, with the original files where they are;
+effects, colour, titles and HTML graphics stay in vedit, and the warnings list what did not go.
+The other way round, picking or dropping an `.fcpxml`, `.otio` or `.edl` in *import* appends
+that timeline to the project, dissolves rebuilt, in one undo step (`export_timeline`,
+`import_timeline` for the agent).
 The final render **always uses the originals**, never the proxies.
 
 ---
@@ -444,6 +453,9 @@ vedit proxy project.json                 # 540p proxies: much faster previews
 vedit frame project.json 12.5 check.jpg
 vedit normalize project.json --lufs -14
 vedit render project.json final.mp4 --quality high
+vedit render project.json master.mov --codec prores   # for finishing elsewhere
+vedit export-timeline project.json edit.fcpxml        # .fcpxml .otio .edl
+vedit import-timeline project.json from_resolve.otio  # appended to the timeline
 vedit effects video                      # effect catalogue with parameters
 vedit doctor                             # ffmpeg, encoders, filters
 vedit install-ffmpeg                     # download ffmpeg + ffprobe into ~/.vedit/bin

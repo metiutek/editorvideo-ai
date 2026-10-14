@@ -273,7 +273,7 @@ const PROFILI = {
  * Esporta. Il file di uscita viene proposto accanto al progetto, con il suo
  * nome: si preme "esporta" e basta, il percorso si cambia solo se si vuole.
  */
-export function RenderDialog({ project, path, job, onStart, onClose }) {
+export function RenderDialog({ project, path, job, onStart, onClose, onTimeline }) {
   const proposto = (codec) => {
     if (!path) return ''
     const base = path.replace(/\.json$/i, '')
@@ -350,10 +350,30 @@ export function RenderDialog({ project, path, job, onStart, onClose }) {
           </div><span /></div>
       )}
       <div className="hint" style={{ marginTop: 10 }}>
-        L'estensione decide il contenitore: .mp4 .mov .mkv .webm .gif .mp3 .wav<br />
+        L'estensione decide il contenitore: .mp4 .mov .mkv .mxf .webm .gif .mp3 .wav<br />
         Esportando in un formato diverso da quello del progetto ({project?.settings?.resolution}),
         le clip con <b>inquadra: cover</b> riempiono tagliando ai lati; con <b>contain</b> restano le bande.
       </div>
+
+      {onTimeline && (
+        <div className="timeline-scambio">
+          <div className="row"><label>timeline</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[['.fcpxml', 'FCPXML', 'Final Cut e DaVinci Resolve, tutte le tracce'],
+                ['.otio', 'OTIO', 'OpenTimelineIO: Resolve, Premiere, Avid, tutte le tracce'],
+                ['.edl', 'EDL', 'CMX3600: lo legge qualunque montaggio, una traccia']].map(([ext, nome, t]) => (
+                <button key={ext} title={t} disabled={!output.trim() && !path}
+                  onClick={() => onTimeline((output.trim() || path).replace(/\.[^./\\]+$/, '') + ext)}>
+                  {nome}</button>
+              ))}
+            </div><span /></div>
+          <div className="hint">
+            Senza ricodificare niente: il montaggio (tratti, posizioni, dissolvenze) da aprire in
+            un altro programma con i file originali, accanto al file qui sopra. Effetti, colore e
+            testi restano a vedit; per portarli con sé esporta prima in ProRes o DNxHR.
+          </div>
+        </div>
+      )}
 
       {job && (
         <div style={{ marginTop: 16 }}>

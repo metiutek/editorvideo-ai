@@ -17,6 +17,8 @@ import { clamp, findClip, fmt } from './util.js'
 
 const round3 = (v) => Math.round(v * 1000) / 1000
 
+// timeline di un altro montaggio: si accodano a quella del progetto (interscambio.py)
+const TIMELINE_EXT = /\.(edl|fcpxml|otio)$/i
 const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|flac|ogg|opus|wma|aiff?|png|jpe?g|webp|bmp|tiff?|gif)$/i
 
 // Le misure dei pannelli restano tra una sessione e l'altra. Vengono rilette
@@ -244,8 +246,20 @@ export default function App() {
   }
 
   // dal disco: per riferimento, i file restano dove sono
-  const importPaths = (paths) =>
-    lavoraImport((o) => importaPercorsi(apiImport, paths.map((path) => ({ path, cartella: '' })), o))
+  const timelineImportata = (r) => {
+    applyState(r)
+    const msg = `timeline ${r.formato}: ${r.clip} clip${r.transizioni ? `, ${r.transizioni} transizioni` : ''} da ${fmt(r.da)}`
+    if (r.avvisi?.length) setError(`${msg}. ${r.avvisi.join(' · ')}`)
+    else flash(msg, 4000)
+  }
+  const importPaths = (paths) => {
+    const tl = paths.filter((p) => TIMELINE_EXT.test(p))
+    for (const p of tl) api.importaTimeline(p).then(timelineImportata).catch((e) => setError(e.message))
+    const media = paths.filter((p) => !TIMELINE_EXT.test(p))
+    if (media.length) {
+      lavoraImport((o) => importaPercorsi(apiImport, media.map((path) => ({ path, cartella: '' })), o))
+    }
+  }
 
   // una cartella intera, sottocartelle comprese: nel bin diventa una cartella col suo nome
   const importFolder = (path) => lavoraImport(async (o) => {
@@ -258,11 +272,20 @@ export default function App() {
   // fileList: FileList, oppure la promessa di leggiTrascinati (cartelle comprese)
   const importFiles = async (fileList, folder = '') => {
     if (!fileList) { setDialog('import'); return }
-    const voci = (fileList.then ? await fileList : [...fileList].map((file) => ({ file, cartella: '' })))
+    const tutte = fileList.then ? await fileList : [...fileList].map((file) => ({ file, cartella: '' }))
+    // un .fcpxml / .otio / .edl trascinato e' una timeline, non un media
+    const timeline = tutte.filter((v) => TIMELINE_EXT.test(v.file.name))
+    if (timeline.length && project) {
+      for (const v of timeline) {
+        v.file.text().then((testo) => api.importaTimeline(v.file.name, testo))
+          .then(timelineImportata).catch((e) => setError(e.message))
+      }
+    } else if (timeline.length) setError('apri o crea un progetto prima di importare una timeline')
+    const voci = tutte
       .filter((v) => MEDIA_EXT.test(v.file.name))
       // ogni sottocartella trascinata resta tale nel bin, dentro quella su cui si e' lasciato
       .map((v) => ({ file: v.file, cartella: [folder, v.cartella].filter(Boolean).join('/') }))
-    if (!voci.length) { setError('nessun file multimediale riconosciuto'); return }
+    if (!voci.length) { if (!timeline.length) setError('nessun file multimediale riconosciuto'); return }
     if (!project) {
       // trascinare dei file e' il primo gesto naturale: senza progetto se ne
       // crea uno nella cartella proposta, col nome del primo file
@@ -650,10 +673,15 @@ export default function App() {
       )}
       {dialog === 'import' && (
         <FileBrowser title="Importa file" onClose={() => setDialog(null)} memoria="media"
-          filter={(n) => MEDIA_EXT.test(n)} onPick={importPaths} onPickFolder={importFolder} />
+          filter={(n) => MEDIA_EXT.test(n) || TIMELINE_EXT.test(n)} onPick={importPaths} onPickFolder={importFolder} />
       )}
       {dialog === 'render' && (
         <RenderDialog project={project} path={path} job={job} onStart={startRender}
+          onTimeline={(out) => api.esportaTimeline(out).then((r) => {
+            const msg = `${r.formato}: ${r.clip} clip in ${r.file}`
+            if (r.avvisi.length) setError(`${msg}. ${r.avvisi.join(' · ')}`)
+            else flash(msg, 4000)
+          }).catch((e) => setError(e.message))}
           onClose={() => setDialog(null)} />
       )}
 

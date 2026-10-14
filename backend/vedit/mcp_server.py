@@ -315,6 +315,35 @@ def project_save(path: str | None = None, project: str | None = None) -> dict:
 
 
 @_strumento()
+def export_timeline(path: str, track: str | None = None, project: str | None = None) -> dict:
+    """Scrive la timeline per un altro montaggio; l'estensione sceglie il formato.
+
+    .fcpxml (Final Cut, Resolve) e .otio (OpenTimelineIO: Resolve, Premiere con
+    plugin, Avid, pipeline) portano tutte le tracce con i percorsi dei file;
+    .edl (CMX3600, lo leggono tutti) una traccia sola, ``track``. Esce il
+    montaggio: tratti, posizioni, velocita' (non in FCPXML), dissolvenze. Effetti,
+    colore, testi e grafica restano qui: gli avvisi dicono cosa non e' uscito.
+    Per passare anche le immagini, renderizza prima in prores o dnxhr.
+    """
+    from . import interscambio
+    return interscambio.esporta(_store(project).project, path, track)
+
+
+@_strumento()
+def import_timeline(path: str, media_folder: str | None = None,
+                    project: str | None = None) -> dict:
+    """Accoda al progetto una timeline .edl, .fcpxml o .otio di un altro montaggio.
+
+    I file vengono importati come media, le tracce create se servono, le
+    dissolvenze ricostruite come sovrapposizioni. L'EDL non porta percorsi:
+    ``media_folder`` dice dove cercare i file per nome (predefinita la sua
+    cartella). Un solo passo di undo; se manca un file non entra niente.
+    """
+    from . import interscambio
+    return interscambio.importa(_store(project), path, media_folder)
+
+
+@_strumento()
 def project_settings(width: int | None = None, height: int | None = None, fps: float | None = None,
                      background: str | None = None, sample_rate: int | None = None,
                      project: str | None = None) -> dict:

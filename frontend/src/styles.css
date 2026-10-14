@@ -1130,3 +1130,6 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
   font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 4px;
   background: var(--accent); color: #111;
 }
+
+/* esporta la timeline per un altro montaggio */
+.timeline-scambio { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }

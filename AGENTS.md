@@ -108,6 +108,7 @@ backend/vedit/
   presets.py     look, catene audio, transizioni gia' tarate
   graph.py       timeline -> filter_complex
   render.py      esecuzione ffmpeg, progresso, analisi (loudness, stabilizzazione)
+  interscambio.py timeline per e da altri montaggi: EDL, FCPXML, OTIO
   proxy.py       proxy, forme d'onda, miniature
   chat.py        assistente: i suoi strumenti sono i metodi di Store
   mcp_server.py  strumenti MCP

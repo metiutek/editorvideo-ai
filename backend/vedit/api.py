@@ -40,7 +40,8 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import domande, ffmpeg, figli, htmlclip, hw, llm, particelle, presets, proxy, render, review, stili
+from . import (domande, ffmpeg, figli, htmlclip, hw, interscambio, llm, particelle, presets, proxy,
+               render, review, stili)
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
 from .store import PRESETS, EditError, Store
@@ -1480,6 +1481,35 @@ def stili_elimina(stile_id: str) -> dict:
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"stili": stili.descrivi()}
+
+
+class TimelineBody(BaseModel):
+    path: str
+    track: str | None = None
+    media_folder: str | None = None
+    testo: str | None = None      # file trascinato nel browser: il contenuto, path e' il nome
+
+
+@app.post("/api/timeline/export")
+def timeline_export(body: TimelineBody) -> dict:
+    """EDL, FCPXML o OTIO per un altro montaggio (interscambio.esporta)."""
+    S.need()
+    try:
+        return interscambio.esporta(_snapshot(), body.path, body.track)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/timeline/import")
+def timeline_import(body: TimelineBody) -> dict:
+    """Accoda una timeline di un altro montaggio, in un solo passo di undo."""
+    store = S.need()
+    try:
+        with S.lock:
+            r = interscambio.importa(store, body.path, body.media_folder, body.testo)
+    except (ValueError, OSError, EditError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {**r, **S.state_of_project()}
 
 
 class ParticelleBody(BaseModel):

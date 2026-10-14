@@ -75,6 +75,24 @@ def cmd_add(a) -> int:
     return 0
 
 
+def cmd_export_timeline(a) -> int:
+    from . import interscambio
+    r = interscambio.esporta(Store.open(a.project).project, a.output, a.track)
+    print(f"{r['formato']}: {r['clip']} clip -> {r['file']}")
+    for w in r["avvisi"]:
+        print(f"  avviso: {w}")
+    return 0
+
+
+def cmd_import_timeline(a) -> int:
+    from . import interscambio
+    r = interscambio.importa(Store.open(a.project), a.file, a.media_folder)
+    print(f"{r['formato']}: {r['clip']} clip, {r['transizioni']} transizioni, da {r['da']}s")
+    for w in r["avvisi"]:
+        print(f"  avviso: {w}")
+    return 0
+
+
 def cmd_render(a) -> int:
     s = Store.open(a.project)
     opts = render.RenderOptions(
@@ -256,6 +274,19 @@ def build_parser() -> argparse.ArgumentParser:
     e = sub.add_parser("effects", help="elenco effetti disponibili")
     e.add_argument("kind", nargs="?", choices=["video", "audio"])
     e.set_defaults(func=cmd_effects)
+
+    et = sub.add_parser("export-timeline",
+                        help="timeline per Premiere, Resolve, Avid, Final Cut (.edl .fcpxml .otio)")
+    et.add_argument("project")
+    et.add_argument("output", help="l'estensione sceglie il formato")
+    et.add_argument("--track", help="per l'EDL: quale traccia (predefinita la prima video)")
+    et.set_defaults(func=cmd_export_timeline)
+
+    it = sub.add_parser("import-timeline", help="accoda una timeline .edl .fcpxml .otio al progetto")
+    it.add_argument("project")
+    it.add_argument("file")
+    it.add_argument("--media-folder", help="per l'EDL: dove cercare i file per nome")
+    it.set_defaults(func=cmd_import_timeline)
 
     pr = sub.add_parser("probe", help="metadati di un file")
     pr.add_argument("file")
