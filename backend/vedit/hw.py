@@ -57,6 +57,9 @@ class HWInfo:
     hwaccel: str = ""
 
     def encoder_for(self, codec: str, prefer_hw: bool = True) -> str:
+        # i mezzanine non hanno una versione GPU: sono intra-frame, li fa la CPU
+        if codec in MEZZANINE:
+            return MEZZANINE[codec]
         if not prefer_hw:
             return {"h264": "libx264", "hevc": "libx265", "av1": "libsvtav1"}.get(codec, "libx264")
         return self.encoders.get(codec, "libx264")
@@ -175,6 +178,25 @@ def detect(force: bool = False) -> HWInfo:
     return info
 
 
+# codec da montaggio/consegna: ogni fotogramma a se', 10 bit, si scambiano con
+# Premiere, Resolve, Avid e Final Cut senza perdere qualita'
+MEZZANINE = {"prores": "prores_ks", "dnxhr": "dnxhd"}
+# livello di qualita' -> profilo; "max" e' 4444 per ProRes, HQX (10 bit) per DNxHR
+PRORES_PROFILI = ["proxy", "standard", "hq", "4444"]
+DNXHR_PROFILI = ["dnxhr_lb", "dnxhr_sq", "dnxhr_hq", "dnxhr_hqx"]
+_PRORES_NUM = {"proxy": 0, "lt": 1, "standard": 2, "hq": 3, "4444": 4}
+
+
+def pix_fmt(enc: str, quality: str = "high") -> str:
+    """Formato dei pixel in uscita: 4:2:0 a 8 bit per la consegna, 10 bit per i mezzanine."""
+    q = {"draft": 0, "medium": 1, "high": 2, "max": 3}.get(quality, 2)
+    if enc == "prores_ks":
+        return "yuv444p10le" if q == 3 else "yuv422p10le"
+    if enc == "dnxhd":
+        return "yuv422p10le" if q == 3 else "yuv422p"
+    return "yuv420p"
+
+
 def encoder_args(enc: str, quality: str = "high", bitrate: str | None = None) -> list[str]:
     """Argomenti di codifica tarati per encoder e livello qualita'.
 
@@ -187,6 +209,11 @@ def encoder_args(enc: str, quality: str = "high", bitrate: str | None = None) ->
     """
     q = {"draft": 0, "medium": 1, "high": 2, "max": 3}.get(quality, 2)
 
+    # intra-frame a profilo fisso: il bitrate lo decide il profilo, non si chiede
+    if enc == "prores_ks":
+        return ["-c:v", enc, "-profile:v", str(_PRORES_NUM[PRORES_PROFILI[q]]), "-vendor", "apl0"]
+    if enc == "dnxhd":
+        return ["-c:v", enc, "-profile:v", DNXHR_PROFILI[q]]
     if "nvenc" in enc:
         preset = ["p1", "p4", "p5", "p7"][q]
         if bitrate:

@@ -228,7 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("project")
     r.add_argument("output")
     r.add_argument("--quality", default="high", choices=["draft", "medium", "high", "max"])
-    r.add_argument("--codec", default="h264", choices=["h264", "hevc", "av1", "vp9"])
+    r.add_argument("--codec", default="h264", choices=["h264", "hevc", "av1", "vp9", "prores", "dnxhr"])
     r.add_argument("--bitrate")
     r.add_argument("--width", type=int)
     r.add_argument("--start", type=float)

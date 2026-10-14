@@ -1707,10 +1707,14 @@ async def render_video(output: str, quality: str = "high", codec: str = "h264",
 
     quality: draft (velocissimo, per controllare) | medium | high | max.
     codec: h264 (compatibile) | hevc | av1 | vp9. Usa l'accelerazione GPU se c'e'.
+    Per consegnare a chi monta o finisce altrove (Premiere, Resolve, Avid, Final
+    Cut): prores o dnxhr in .mov o .mxf, audio PCM 24 bit. Con questi quality
+    sceglie il profilo: draft=Proxy/LB, medium=422/SQ, high=HQ, max=4444/HQX.
     preview=True rende a 960px con i proxy: utile per una verifica rapida.
     start/end limitano la porzione di timeline da rendere.
-    L'estensione decide il contenitore: .mp4 .mov .mkv .webm .gif .mp3 .wav .m4a.
+    L'estensione decide il contenitore: .mp4 .mov .mkv .mxf .webm .gif .mp3 .wav .m4a.
     """
+    render.controlla_codec(codec, output)
     s = _store(project)
     # Dentro l'editor l'export e' una decisione dell'utente: magari il video non
     # gli va ancora bene. Gliela si chiede, e senza un si' non si scrive niente.

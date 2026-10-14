@@ -425,8 +425,11 @@ scelta: ritmo dei tagli, transizioni, colore, titoli, musica.
 
 **esporta** apre la finestra di render: file di destinazione, qualità
 (`bozza` / `media` / `alta` / `massima`), codec (H.264, HEVC, AV1, VP9) ed eventualmente solo
-una porzione della timeline. L'estensione decide il contenitore: `.mp4` `.mov` `.mkv`
-`.webm` `.gif` `.mp3` `.wav`. La barra mostra l'avanzamento reale di ffmpeg.
+una porzione della timeline. Per passare il montaggio a Premiere, Resolve, Avid o Final Cut ci
+sono **ProRes** e **DNxHR** (ogni fotogramma a sé, 10 bit, in `.mov` o `.mxf`, audio PCM a
+24 bit): la qualità sceglie il profilo — Proxy/LB, 422/SQ, HQ, 4444/HQX. L'estensione decide
+il contenitore: `.mp4` `.mov` `.mkv` `.mxf` `.webm` `.gif` `.mp3` `.wav`. La barra mostra
+l'avanzamento reale di ffmpeg.
 
 Il render finale usa **sempre gli originali**, mai i proxy.
 

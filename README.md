@@ -398,8 +398,11 @@ documentary, vlog, trailer, music video, minimal, retro/VHS — and it guides ev
 cut rhythm, transitions, colour, titles, music.
 
 **7. Export.** Destination file, quality (`draft` / `medium` / `high` / `max`), codec (H.264,
-HEVC, AV1, VP9), optionally just a portion of the timeline. The extension picks the container:
-`.mp4` `.mov` `.mkv` `.webm` `.gif` `.mp3` `.wav`. The progress bar is ffmpeg's real progress.
+HEVC, AV1, VP9), optionally just a portion of the timeline. To hand the edit over to Premiere,
+Resolve, Avid or Final Cut there are **ProRes** and **DNxHR** (intra-frame, 10 bit, in `.mov`
+or `.mxf`, with 24-bit PCM audio): quality picks the profile — Proxy/LB, 422/SQ, HQ,
+4444/HQX. The extension picks the container: `.mp4` `.mov` `.mkv` `.mxf` `.webm` `.gif`
+`.mp3` `.wav`. The progress bar is ffmpeg's real progress.
 The final render **always uses the originals**, never the proxies.
 
 ---

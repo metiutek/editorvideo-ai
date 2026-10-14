@@ -39,6 +39,7 @@ CONTAINER_DEFAULTS = {
     ".mp4": ("h264", "aac"),
     ".mov": ("h264", "aac"),
     ".mkv": ("h264", "aac"),
+    ".mxf": ("dnxhr", "pcm_s24le"),
     ".webm": ("vp9", "libopus"),
     ".gif": ("gif", None),
     ".mp3": (None, "libmp3lame"),
@@ -51,7 +52,7 @@ CONTAINER_DEFAULTS = {
 @dataclass
 class RenderOptions:
     output: str = ""
-    codec: str = "h264"  # h264 | hevc | av1 | vp9
+    codec: str = "h264"  # h264 | hevc | av1 | vp9 | prores | dnxhr
     quality: str = "high"  # draft | medium | high | max
     bitrate: str | None = None
     audio_codec: str = "aac"
@@ -198,6 +199,43 @@ def _preparativi(project: Project, opts: RenderOptions, want_video: bool, want_a
     }
 
 
+# dove stanno i codec da montaggio: MXF e' il contenitore di Avid e del broadcast
+CONTENITORI_MEZZANINE = (".mov", ".mxf", ".mkv")
+CODEC = ("h264", "hevc", "av1", "vp9", "prores", "dnxhr")
+
+
+def controlla_codec(codec: str, output: str) -> None:
+    """Rifiuta prima di partire le coppie codec/contenitore che ffmpeg non scrive.
+
+    Un .mxf con un codec di consegna non e' un errore: come .webm impone VP9,
+    .mxf impone DNxHR.
+    """
+    ext = Path(output).suffix.lower()
+    if codec not in CODEC and codec != "gif":
+        raise ValueError(f"codec sconosciuto {codec!r}; ammessi: {', '.join(CODEC)}")
+    def_v = CONTAINER_DEFAULTS.get(ext, ("h264", "aac"))[0]
+    if codec in hw.MEZZANINE and def_v is not None and ext not in CONTENITORI_MEZZANINE:
+        raise ValueError(f"{codec} va in un file .mov, .mxf o .mkv, non {ext or 'senza estensione'}")
+
+
+def _codec_video(opts: RenderOptions, def_v: str | None) -> str:
+    """Il codec che si usa davvero: il contenitore lo impone per webm, gif e mxf."""
+    if def_v in ("vp9", "gif"):
+        return def_v
+    if def_v == "dnxhr" and opts.codec not in hw.MEZZANINE:
+        return def_v
+    return opts.codec
+
+
+def _codec_audio(opts: RenderOptions, ext: str, def_a: str) -> str:
+    if ext in (".wav", ".flac"):
+        return def_a
+    # accanto a un mezzanine l'audio resta non compresso, come se lo aspetta chi lo riceve
+    if opts.codec in hw.MEZZANINE or ext == ".mxf":
+        return "pcm_s24le"
+    return opts.audio_codec or def_a
+
+
 def build_command(project: Project, opts: RenderOptions, workdir: Path,
                   pre: dict | None = None) -> tuple[list[str], float, list[str], str]:
     out_path = Path(opts.output)
@@ -209,10 +247,11 @@ def build_command(project: Project, opts: RenderOptions, workdir: Path,
     info = hw.detect()
     enc = "libx264"
     if want_video:
-        if opts.codec in ("vp9", "gif") or def_v in ("vp9", "gif"):
-            enc = {"vp9": "libvpx-vp9", "gif": "gif"}.get(opts.codec if opts.codec in ("vp9", "gif") else def_v, "libvpx-vp9")
+        codec = _codec_video(opts, def_v)
+        if opts.codec in ("vp9", "gif") or codec in ("vp9", "gif"):
+            enc = {"vp9": "libvpx-vp9", "gif": "gif"}.get(opts.codec if opts.codec in ("vp9", "gif") else codec, "libvpx-vp9")
         else:
-            enc = info.encoder_for(opts.codec, opts.prefer_hw)
+            enc = info.encoder_for(codec, opts.prefer_hw)
 
     pre = pre if pre is not None else _preparativi(project, opts, want_video, want_audio)
     stab, html, suoni = pre["stab"], pre["html"], pre["suoni"]
@@ -245,13 +284,12 @@ def build_command(project: Project, opts: RenderOptions, workdir: Path,
             args += ["-loop", "0"]
         else:
             args += hw.encoder_args(enc, opts.quality, opts.bitrate)
-            args += ["-pix_fmt", "yuv420p", "-fps_mode", "cfr", "-r", str(opts.fps or project.settings.fps)]
+            args += ["-pix_fmt", hw.pix_fmt(enc, opts.quality), "-fps_mode", "cfr",
+                     "-r", str(opts.fps or project.settings.fps)]
     if c.audio_label:
-        acodec = opts.audio_codec if opts.audio_codec else def_a
-        if ext in (".wav", ".flac"):
-            acodec = def_a
+        acodec = _codec_audio(opts, ext, def_a)
         args += ["-c:a", acodec]
-        if acodec not in ("pcm_s16le", "flac"):
+        if not acodec.startswith("pcm_") and acodec != "flac":
             args += ["-b:a", opts.audio_bitrate]
         args += ["-ar", str(project.settings.sample_rate)]
 
@@ -354,6 +392,7 @@ def _passaggio(project: Project, opts: RenderOptions, workdir: Path, on_progress
 def render(project: Project, opts: RenderOptions, on_progress: Progress | None = None) -> RenderResult:
     if not opts.output:
         raise ValueError("percorso di output mancante")
+    controlla_codec(opts.codec, opts.output)
     out_path = Path(opts.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -398,7 +437,7 @@ SOGLIA_PEZZI_S = 20.0
 _CON_MEMORIA = {"stabilize", "motionblur", "denoise"}
 # contenitore dei pezzi per codec: TS ha il tempo a 90 kHz e si incolla senza
 # edit list; vp9 e av1 non ci stanno e vanno in matroska
-_PEZZO_EXT = {"h264": ".ts", "hevc": ".ts"}
+_PEZZO_EXT = {"h264": ".ts", "hevc": ".ts", "prores": ".mov", "dnxhr": ".mov"}
 
 
 def _pezzi_paralleli(opts: RenderOptions) -> int:
@@ -624,7 +663,7 @@ def render_a_pezzi(project: Project, opts: RenderOptions, confini: list[float], 
                              "elapsed": round(time.time() - t0, 2)})
         return cb
 
-    codec = opts.codec if opts.codec in ("h264", "hevc", "av1", "vp9") else def_v
+    codec = _codec_video(opts, def_v) if opts.codec in CODEC else def_v
     pext = _PEZZO_EXT.get(codec, ".mkv") if def_v != "vp9" else ".mkv"
     pezzi = [(i, a, b, workdir / f"pezzo_{i:04d}{pext}")
              for i, (a, b) in enumerate(zip(confini, confini[1:]))]
@@ -716,7 +755,8 @@ def render_a_pezzi(project: Project, opts: RenderOptions, confini: list[float], 
     if want_audio and compile_project(project, CompileOptions(
             video=False, audio=True, start=confini[0], end=confini[-1],
             audio_files=pre["suoni"], workdir=str(workdir))).audio_label:
-        audio = workdir / f"audio{ext}"
+        # un .mxf di solo audio non serve a nessuno: l'audio dei mezzanine passa da un .mov
+        audio = workdir / f"audio{'.mov' if codec in hw.MEZZANINE else ext}"
         lavoro_audio = sfondo.submit(
             _passaggio, project, replace(opts, output=str(audio), video=False, jobs=1),
             workdir, None, t0, pre)

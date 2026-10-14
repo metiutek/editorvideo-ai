@@ -5,6 +5,13 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Export ProRes e DNxHR, anche in MXF.** Nel dialogo *esporta*, da `render_video` e da
+  `vedit render --codec`: `prores` e `dnxhr` in `.mov`, `.mxf` o `.mkv`, con audio PCM
+  24 bit a 48 kHz. La qualità sceglie il profilo (ProRes Proxy/422/HQ/4444, DNxHR
+  LB/SQ/HQ/HQX 10 bit). Sono i file per passare il lavoro a Premiere, Resolve, Avid o Final
+  Cut. Un `.mxf` impone DNxHR come `.webm` impone VP9; codec e contenitore incompatibili
+  (`prores` in `.mp4`) vengono rifiutati prima di partire (`render.controlla_codec`). Anche
+  il render a pezzi paralleli li incolla senza ricodifica.
 - **Firma nell'editor.** In fondo al pannello di sinistra c'è *made by metiu.xyz*, con il
   link al sito; la stessa riga chiude `README.md` e `README.it.md`.
 - **Particelle su misura.** Oltre ai tipi pronti, `add_particles(kind="custom")` prende una

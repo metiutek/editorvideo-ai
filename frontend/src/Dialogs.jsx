@@ -259,8 +259,15 @@ const FORMATI = [
   { id: '9:16 720', nome: 'verticale · 720x1280', w: 720, h: 1280 },
 ]
 
-/** Estensione adatta al codec: .webm per VP9, .mp4 per il resto. */
-const estensione = (codec) => (codec === 'vp9' ? '.webm' : '.mp4')
+/** Estensione adatta al codec: .webm per VP9, .mov per i mezzanine, .mp4 per il resto. */
+const estensione = (codec) => (
+  codec === 'vp9' ? '.webm' : codec === 'prores' || codec === 'dnxhr' ? '.mov' : '.mp4')
+
+// profili dei codec da montaggio per livello di qualita' (hw.PRORES_PROFILI, DNXHR_PROFILI)
+const PROFILI = {
+  prores: { draft: 'Proxy', medium: '422', high: '422 HQ', max: '4444' },
+  dnxhr: { draft: 'LB', medium: 'SQ', high: 'HQ', max: 'HQX 10 bit' },
+}
 
 /**
  * Esporta. Il file di uscita viene proposto accanto al progetto, con il suo
@@ -319,7 +326,16 @@ export function RenderDialog({ project, path, job, onStart, onClose }) {
           <option value="hevc">HEVC / H.265</option>
           <option value="av1">AV1</option>
           <option value="vp9">VP9 (webm)</option>
+          <option value="prores">ProRes (mov, per montare altrove)</option>
+          <option value="dnxhr">DNxHR (mov o mxf, per Avid e broadcast)</option>
         </select><span /></div>
+      {PROFILI[codec] && (
+        <div className="hint" style={{ margin: '-2px 0 8px' }}>
+          profilo {codec === 'prores' ? 'ProRes' : 'DNxHR'} {PROFILI[codec][quality]} · audio PCM 24 bit ·
+          file grandi, fatti per passare il lavoro a Premiere, Resolve, Avid o Final Cut.
+          {codec === 'dnxhr' && " Per un .mxf cambia l'estensione del file."}
+        </div>
+      )}
       <div className="row"><label>formato</label>
         <select value={formato} onChange={(e) => setFormato(e.target.value)}>
           {FORMATI.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}

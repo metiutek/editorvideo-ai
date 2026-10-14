@@ -1187,6 +1187,11 @@ class RenderBody(BaseModel):
 @app.post("/api/render")
 def render_start(body: RenderBody) -> dict:
     S.need()
+    # codec e contenitore sbagliati si dicono subito, non dopo minuti di lavoro
+    try:
+        render.controlla_codec(body.codec, body.output)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     job_id = uuid.uuid4().hex[:8]
     S.jobs[job_id] = {"id": job_id, "state": "running", "percent": 0.0,
                       "output": body.output, "started": time.time()}
