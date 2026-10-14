@@ -103,6 +103,8 @@ class Settings:
     fps: float = 30.0
     sample_rate: int = 48000
     background: str = "black"  # colore o "#rrggbb"
+    # stereo | 5.1: in 5.1 ogni traccia va dove dice ``Track.surround``
+    audio_layout: str = "stereo"
 
 
 @dataclass
@@ -249,6 +251,13 @@ class Clip:
         return self.duration * abs(self.speed or 1.0)
 
 
+# instradamento 5.1 di una traccia: front = L/R davanti (musica, ambiente),
+# center = canale centrale (il dialogo), surround = dietro, all = davanti e
+# dietro, lfe = solo i bassi nel subwoofer
+SURROUND = ("front", "center", "surround", "all", "lfe")
+AUDIO_LAYOUTS = ("stereo", "5.1")
+
+
 @dataclass
 class Track:
     id: str = field(default_factory=lambda: new_id("t"))
@@ -261,6 +270,8 @@ class Track:
     locked: bool = False
     # con almeno una traccia in solo, le altre dello stesso tipo tacciono/spariscono
     solo: bool = False
+    # in un progetto 5.1, dove va il suono della traccia (SURROUND)
+    surround: str = "front"
     # compressore sidechain: questa traccia si abbassa quando suona ``source``
     # (la musica sotto la voce). {"source": id, "threshold": dB, "ratio",
     # "attack": ms, "release": ms, "makeup"}; None = spento

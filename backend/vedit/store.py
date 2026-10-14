@@ -23,7 +23,9 @@ from . import particelle
 from . import keyframes as kf
 from . import probe as probe_mod
 from .model import (
+    AUDIO_LAYOUTS,
     BLEND_MODES,
+    SURROUND,
     TRANSITIONS,
     Clip,
     ClipAudio,
@@ -370,13 +372,17 @@ class Store:
 
     def set_track(self, track_id: str, *, hidden: bool | None = None, muted: bool | None = None,
                   volume: Any = None, name: str | None = None, locked: bool | None = None,
-                  solo: bool | None = None) -> Track:
+                  solo: bool | None = None, surround: str | None = None) -> Track:
         # volutamente non passa da track_for_edit: e' anche il modo di sbloccare
         t = self.track_or_die(track_id)
         if volume is not None:
             kf.validate(volume)
             volume = kf.coerce(volume)
+        if surround is not None and surround not in SURROUND:
+            raise EditError(f"instradamento {surround!r} sconosciuto; ammessi: {', '.join(SURROUND)}")
         self._touch()
+        if surround is not None:
+            t.surround = surround
         if hidden is not None:
             t.hidden = bool(hidden)
         if muted is not None:
@@ -1622,11 +1628,25 @@ class Store:
         return {"enabled": ln.enabled, "target_lufs": ln.i, "true_peak": ln.tp,
                 "lra": ln.lra, "measured": bool(ln.measured)}
 
+    def set_master_volume(self, volume: Any) -> Any:
+        """Volume del master (1 = invariato), anche a keyframe: e' il fader generale."""
+        kf.validate(volume)
+        volume = kf.coerce(volume)
+        if not kf.is_kf(volume) and not 0 <= float(volume) <= 4:
+            raise EditError("il volume del master sta fra 0 e 4 (1 = invariato)")
+        self._touch()
+        self.project.master.volume = volume
+        self._done()
+        return volume
+
     def set_settings(self, **values: Any) -> Settings:
         allowed = set(vars(Settings()))
         bad = set(values) - allowed
         if bad:
             raise EditError(f"impostazioni sconosciute {sorted(bad)}; ammesse: {sorted(allowed)}")
+        if values.get("audio_layout") is not None and values["audio_layout"] not in AUDIO_LAYOUTS:
+            raise EditError(f"audio {values['audio_layout']!r} sconosciuto; ammessi: "
+                            f"{', '.join(AUDIO_LAYOUTS)}")
         self._touch()
         for k, v in values.items():
             if v is not None:
@@ -1645,6 +1665,7 @@ class Store:
                 "fps": p.settings.fps,
                 "sample_rate": p.settings.sample_rate,
                 "background": p.settings.background,
+                "audio_layout": p.settings.audio_layout,
             },
             "duration": p.duration(),
             "media": [
@@ -1668,6 +1689,7 @@ class Store:
                 "id": t.id, "kind": t.kind, "name": t.name,
                 "hidden": t.hidden, "muted": t.muted, "volume": t.volume,
                 "locked": t.locked, "solo": t.solo, "sidechain": t.sidechain,
+                "surround": t.surround,
                 "clips": [],
             }
             for c in sorted(t.clips, key=lambda x: x.start):

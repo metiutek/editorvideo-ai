@@ -234,16 +234,26 @@ def _codec_video(opts: RenderOptions, def_v: str | None) -> str:
     return opts.codec
 
 
+# contenitori che accettano solo certi codec audio. L'AAC predefinito di
+# RenderOptions faceva fallire ogni .webm con audio e ogni .mp3
+_AUDIO_AMMESSI = {".webm": ("libopus", "libvorbis"), ".mp3": ("libmp3lame",),
+                  ".wav": ("pcm_s16le", "pcm_s24le"), ".flac": ("flac",)}
+
+
 def _codec_audio(opts: RenderOptions, ext: str, def_a: str) -> str:
-    if ext in (".wav", ".flac"):
-        return def_a
     # accanto a un mezzanine l'audio resta non compresso, come se lo aspetta chi lo riceve
     if opts.codec in hw.MEZZANINE or ext == ".mxf":
         return "pcm_s24le"
-    # WebM accetta solo Opus o Vorbis: l'AAC predefinito faceva fallire ogni .webm con audio
-    if ext == ".webm" and opts.audio_codec not in ("libopus", "libvorbis"):
+    if ext in _AUDIO_AMMESSI and opts.audio_codec not in _AUDIO_AMMESSI[ext]:
         return def_a
     return opts.audio_codec or def_a
+
+
+def _bitrate_audio(b: str, k: float) -> str:
+    try:
+        return f"{int(float(b.rstrip('kK')) * k)}k" if b.lower().endswith("k") else b
+    except ValueError:
+        return b
 
 
 def build_command(project: Project, opts: RenderOptions, workdir: Path,
@@ -299,8 +309,16 @@ def build_command(project: Project, opts: RenderOptions, workdir: Path,
     if c.audio_label:
         acodec = _codec_audio(opts, ext, def_a)
         args += ["-c:a", acodec]
+        surround = getattr(project.settings, "audio_layout", "stereo") == "5.1"
+        if surround and acodec == "libmp3lame":
+            # l'mp3 non ha il 5.1: si ripiega in stereo invece di fallire
+            args += ["-ac", "2"]
+            surround = False
         if not acodec.startswith("pcm_") and acodec != "flac":
-            args += ["-b:a", opts.audio_bitrate]
+            # sei canali a 192k suonerebbero peggio dello stereo: il doppio
+            args += ["-b:a", _bitrate_audio(opts.audio_bitrate, 2.0 if surround else 1.0)]
+        if surround and acodec == "libopus":
+            args += ["-mapping_family", "1"]
         args += ["-ar", str(project.settings.sample_rate)]
 
     args += ["-t", f"{c.duration:.6f}"]

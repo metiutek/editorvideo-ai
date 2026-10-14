@@ -1133,3 +1133,41 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 
 /* esporta la timeline per un altro montaggio */
 .timeline-scambio { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* mixer: un canale per traccia, misuratore e fader in dB */
+.mixer { padding: 10px 12px; overflow-y: auto; flex: 1; min-height: 0; }
+.mixer-testa { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.mixer-canali { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 6px; }
+.canale {
+  flex: none; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 6px 4px; border: 1px solid var(--line); border-radius: var(--r); background: #0b0d11;
+}
+.canale.master { border-color: var(--accent); }
+.canale.muto { opacity: .55; }
+.canale-nome { font-size: 10px; color: var(--dim); max-width: 100%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.canale-corpo { display: flex; gap: 4px; height: 170px; align-items: stretch; }
+.misuratore { position: relative; width: 10px; background: #050608; border-radius: 2px; overflow: hidden; }
+.misuratore-rms {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to top, #3ccf6e 0%, #3ccf6e 70%, #e8c94a 86%, #ff5d5d 100%);
+  background-size: 100% 170px; background-position: bottom;
+}
+.misuratore-picco { position: absolute; left: 0; right: 0; height: 1px; background: #fff; opacity: .8; }
+.misuratore-tenuta { position: absolute; left: 0; right: 0; height: 2px; background: #e8c94a; }
+.misuratore-tenuta.rosso { background: #ff5d5d; }
+.misuratore .tacca { position: absolute; left: 0; width: 3px; height: 1px; background: rgba(255,255,255,.25); }
+.fader { writing-mode: vertical-lr; direction: rtl; width: 18px; height: 100%; margin: 0; }
+.canale-db { font-size: 11px; font-variant-numeric: tabular-nums; }
+.canale-max { font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.canale-tasti { display: flex; gap: 3px; }
+.canale-tasti button { width: 22px; height: 20px; padding: 0; font-size: 10px; }
+.canale-tasti button.on { background: var(--accent); color: #111; border-color: var(--accent); }
+.canale-instrada { width: 100%; font-size: 10px; height: 20px; padding: 0 2px; }
+
+/* pannello di destra: quattro schede in poco spazio, sotto una certa larghezza senza icone */
+.tabs.destra { container-type: inline-size; overflow-x: auto; scrollbar-width: none; }
+.tabs.destra button { padding: 0 9px; gap: 5px; flex: none; }
+@container (max-width: 400px) {
+  .tabs.destra button svg { display: none; }
+}

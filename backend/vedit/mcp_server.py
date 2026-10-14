@@ -367,12 +367,22 @@ def export_subtitles(track: str, path: str, project: str | None = None) -> dict:
 @_strumento()
 def project_settings(width: int | None = None, height: int | None = None, fps: float | None = None,
                      background: str | None = None, sample_rate: int | None = None,
+                     audio_layout: str | None = None, master_volume: Any = None,
                      project: str | None = None) -> dict:
-    """Cambia risoluzione, fps, colore di sfondo o sample rate del progetto."""
+    """Cambia risoluzione, fps, colore di sfondo, sample rate o audio del progetto.
+
+    audio_layout: stereo | 5.1. In 5.1 ogni traccia va dove dice il suo
+    surround (set_track): il dialogo al centro, la musica davanti, l'ambiente
+    dietro. master_volume e' il fader generale (1 = invariato), animabile.
+    """
     s = _store(project)
-    st = s.set_settings(width=width, height=height, fps=fps, background=background,
-                        sample_rate=sample_rate)
-    return {"width": st.width, "height": st.height, "fps": st.fps, "background": st.background}
+    with s.batch():
+        st = s.set_settings(width=width, height=height, fps=fps, background=background,
+                            sample_rate=sample_rate, audio_layout=audio_layout)
+        if master_volume is not None:
+            s.set_master_volume(master_volume)
+    return {"width": st.width, "height": st.height, "fps": st.fps, "background": st.background,
+            "audio_layout": st.audio_layout, "master_volume": s.project.master.volume}
 
 
 @_strumento()
@@ -444,17 +454,19 @@ def add_track(kind: str = "video", name: str | None = None, project: str | None 
 @_strumento()
 def set_track(track: str, hidden: bool | None = None, muted: bool | None = None,
               volume: Any = None, name: str | None = None, locked: bool | None = None,
-              solo: bool | None = None, project: str | None = None) -> dict:
+              solo: bool | None = None, surround: str | None = None,
+              project: str | None = None) -> dict:
     """Stato di una traccia.
 
     hidden nasconde il video, muted la silenzia, solo isola (le altre tacciono),
     locked la protegge dalle modifiche, volume 0..N e' animabile.
+    surround (progetti 5.1): front | center | surround | all | lfe.
     E' anche l'unico modo di sbloccare una traccia bloccata.
     """
     t = _store(project).set_track(track, hidden=hidden, muted=muted, volume=volume,
-                                  name=name, locked=locked, solo=solo)
+                                  name=name, locked=locked, solo=solo, surround=surround)
     return {"id": t.id, "hidden": t.hidden, "muted": t.muted, "solo": t.solo,
-            "locked": t.locked, "volume": t.volume}
+            "locked": t.locked, "volume": t.volume, "surround": t.surround}
 
 
 @_strumento()

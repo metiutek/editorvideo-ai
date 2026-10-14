@@ -5,6 +5,16 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Mixer e audio 5.1.** Nuova scheda *mixer*: un canale per traccia che suona e il master,
+  con fader in dB (doppio clic: 0 dB), muto/solo e misuratori di picco, RMS e tenuta del
+  picco. I livelli li misura il server renderizzando ogni traccia da sola, con effetti e fader
+  ma senza la catena del master (`review.livelli`, `GET /api/mixer/levels`, in cache per
+  revisione): sono quelli che usciranno nel file, e si leggono anche a riproduzione ferma. Il
+  volume del master ora si cambia (`Store.set_master_volume`, `project_settings(master_volume)`).
+  Progetti **5.1** (`Settings.audio_layout`): ogni traccia va dove dice `Track.surround`
+  (davanti, centro, dietro, tutto, LFE con passa-basso a 120 Hz), il mix e il loudnorm restano
+  a sei canali, il file esce 5.1 in AAC (bitrate doppio), Opus, PCM; un `.mp3` ripiega in
+  stereo.
 - **Sottotitoli: import e traccia nel file.** Un `.srt`, `.vtt` o `.ass` (scelto o trascinato
   in *importa*, `import_subtitles`) diventa una traccia *sottotitoli* di clip di testo
   modificabili, in basso su riquadro, in un solo passo di undo (`captions.leggi`,
@@ -101,6 +111,8 @@ Le voci più recenti stanno in cima.
   `.wma`, `.aiff` e `.gif` trascinati.
 
 ### Corretto
+- **Export `.mp3`.** Come per il `.webm`, prendeva l'AAC predefinito e ffmpeg rifiutava il
+  file: ora ogni contenitore che accetta solo certi codec audio usa il suo.
 - **Export `.webm` con audio.** Prendeva l'AAC predefinito, che WebM non accetta, e ffmpeg
   falliva: ora l'audio di un `.webm` è Opus.
 - **Un progetto nuovo parte senza stile di montaggio.** Lo stile scelto nella chat restava

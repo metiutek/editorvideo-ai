@@ -602,7 +602,12 @@ notch — con la curva da trascinare), compressore, **compressore sidechain** (l
 abbassa da sola quando parla la voce), limiter, riduzione rumore, gate, **de-esser**, riverbero,
 eco, pitch shift, normalizzazione dinamica, normalizzazione EBU R128 a due passaggi sul mix e
 **plugin VST3/AU** tramite pedalboard (scegli un plugin installato e regoli i suoi parametri nel
-pannello).
+pannello). Una scheda **mixer** con un canale per traccia più il master: fader in dB,
+muto/solo e misuratori (picco, RMS, tenuta del picco) letti sotto la testina dai livelli che il
+server misura renderizzando ogni traccia da sola — i livelli che finiranno nel file. **5.1
+surround**: si passa il progetto a 5.1 e si instrada ogni traccia (davanti, centro per il
+dialogo, dietro, tutto, LFE); il file esce a sei canali (AAC a bitrate doppio, Opus, PCM), un
+`.mp3` ripiega in stereo (`project_settings(audio_layout=...)`, `set_track(surround=...)`).
 
 ---
 

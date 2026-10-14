@@ -6,6 +6,7 @@ import Icon from './Icons.jsx'
 import Inspector from './Inspector.jsx'
 import Library from './Library.jsx'
 import MediaBin from './MediaBin.jsx'
+import Mixer from './Mixer.jsx'
 import { EditorParticelle, MenuParticelle } from './Particelle.jsx'
 import Preview from './Preview.jsx'
 import Scopes from './Scopes.jsx'
@@ -67,7 +68,7 @@ export default function App() {
   const [rightTab, setRightTabState] = useState(() => {
     try {
       const t = localStorage.getItem('vedit.destra')
-      return t === 'props' || t === 'scope' ? t : 'chat'
+      return t === 'props' || t === 'scope' || t === 'mixer' ? t : 'chat'
     } catch { return 'chat' }
   })
   const setRightTab = useCallback((t) => {
@@ -634,15 +635,19 @@ export default function App() {
         <Divider onDrag={(dx) => setSizes((s) => ({ ...s, inspector: clamp(s.inspector - dx, 240, 600) }))} />
         <div style={{ width: sizes.inspector, flex: 'none', display: 'flex', minWidth: 0 }}>
           <div className="panel">
-            <div className="tabs">
+            <div className="tabs destra">
               <button className={rightTab === 'chat' ? 'on' : ''}
                 onClick={() => setRightTab('chat')}><Icon name="assistente" />assistente</button>
               <button className={rightTab === 'props' ? 'on' : ''}
                 onClick={() => setRightTab('props')}><Icon name="proprieta" />proprieta'</button>
               <button className={rightTab === 'scope' ? 'on' : ''} title="Waveform, parade, vettorscopio, istogramma"
                 onClick={() => setRightTab('scope')}><Icon name="color" />scope</button>
+              <button className={rightTab === 'mixer' ? 'on' : ''} title="Fader, muto/solo, misuratori, stereo o 5.1"
+                onClick={() => setRightTab('mixer')}><Icon name="altoparlante" />mixer</button>
             </div>
-            {rightTab === 'scope' ? (
+            {rightTab === 'mixer' ? (
+              <Mixer project={project} playhead={playhead} revision={revision} run={run} setError={setError} />
+            ) : rightTab === 'scope' ? (
               <Scopes project={project} playhead={playhead} playing={playing} revision={revision} />
             ) : rightTab === 'props' ? (
               <Inspector project={project} effects={sys?.effects || []}

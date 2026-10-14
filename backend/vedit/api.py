@@ -67,7 +67,8 @@ OPS = {
     "import_media", "set_media", "remove_media", "rename_folder",
     "add_track", "set_track", "set_sidechain", "remove_track", "move_track",
     "add_clip", "add_text", "add_color", "add_html", "add_particles", "set_particles", "set_html", "remove_clip", "unlink_clip", "move_clip",
-    "ripple_trim", "roll_edit", "slip_clip", "slide_clip", "import_subtitles", "move_layer", "trim_clip",
+    "ripple_trim", "roll_edit", "slip_clip", "slide_clip", "import_subtitles",
+    "set_master_volume", "move_layer", "trim_clip",
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
@@ -1069,6 +1070,24 @@ def frame(t: float = 0.0, width: int = 960,
                     raise HTTPException(500, f"anteprima fallita: {exc}") from exc
     return FileResponse(out, media_type="image/jpeg",
                         headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/mixer/levels")
+def mixer_levels():
+    """Inviluppo dei livelli di ogni traccia e del master (review.livelli), per revisione."""
+    S.need()
+    key = f"lv_{S.revision()}"
+    out = _preview_dir() / f"{key}.json"
+    if not _ready(out):
+        with _key_lock(key):
+            if not _ready(out):
+                snap = _snapshot()
+                try:
+                    _produce(out, lambda tmp: Path(tmp).write_text(
+                        json.dumps(review.livelli(snap)), encoding="utf-8"))
+                except Exception as exc:
+                    raise HTTPException(500, f"misura dei livelli fallita: {exc}") from exc
+    return FileResponse(out, media_type="application/json")
 
 
 @app.get("/api/scope")

@@ -271,6 +271,93 @@ def scopes(project, t: float, width: int = 480) -> dict:
     }
 
 
+# --------------------------------------------------------------------------
+# livelli per traccia: i misuratori del mixer
+# --------------------------------------------------------------------------
+
+LIVELLI_PASSO = 0.05          # una misura ogni 50 ms: abbastanza per un misuratore
+LIVELLI_SR = 16000            # i livelli non hanno bisogno di 48 kHz
+PAVIMENTO_DB = -90.0
+
+
+def _db(v):
+    import numpy as np
+    return np.maximum(PAVIMENTO_DB, 20 * np.log10(np.maximum(v, 1e-9)))
+
+
+def _inviluppo(wav: Path, passo: float) -> dict:
+    """Picco e RMS (dBFS, sul canale piu' forte) per finestre di ``passo`` secondi."""
+    import wave
+
+    import numpy as np
+    with wave.open(str(wav), "rb") as w:
+        ch, sr = w.getnchannels(), w.getframerate()
+        x = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32768.0
+    x = x.reshape(-1, ch)
+    n = max(1, int(round(sr * passo)))
+    finestre = len(x) // n
+    if finestre == 0:
+        return {"picco": [], "rms": [], "max_db": PAVIMENTO_DB}
+    blocchi = x[: finestre * n].reshape(finestre, n, ch)
+    picco = np.abs(blocchi).max(axis=(1, 2))
+    rms = np.sqrt((blocchi ** 2).mean(axis=1)).max(axis=1)
+    return {"picco": [round(float(v), 1) for v in _db(picco)],
+            "rms": [round(float(v), 1) for v in _db(rms)],
+            "max_db": round(float(_db(np.array([picco.max()]))[0]), 1)}
+
+
+def livelli(project, passo: float = LIVELLI_PASSO) -> dict:
+    """Inviluppo dei livelli di ogni traccia e del master, per i misuratori del mixer.
+
+    Ogni traccia si renderizza da sola, con i suoi effetti e il suo fader ma
+    senza la catena del master: e' quello che si vedrebbe sul canale di un
+    banco. Il master e' il mix vero, loudnorm e limiter compresi. Muto e solo
+    non contano: il misuratore dice quanto suonerebbe la traccia.
+    """
+    import copy
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .graph import CompileOptions, compile_project
+
+    durata = project.duration()
+    if durata <= 0:
+        return {"passo": passo, "durata": 0.0, "tracce": {}, "master": None}
+    base = copy.deepcopy(project)
+    base.settings.sample_rate = LIVELLI_SR
+    for t in base.tracks:
+        t.solo = False
+
+    def da_sola(tid: str | None):
+        p = copy.deepcopy(base)
+        for t in p.tracks:
+            t.muted = tid is not None and t.id != tid
+        if tid is not None:
+            # il canale prima del master: niente effetti, loudnorm o fader generale
+            p.master.effects, p.master.volume = [], 1.0
+            p.master.loudnorm.enabled = False
+        return p
+
+    def misura(tid: str | None):
+        p = da_sola(tid)
+        if compile_project(p, CompileOptions(video=False, audio=True)).audio_label is None:
+            return tid, None
+        cartella = Path(tempfile.mkdtemp(prefix="vedit_livelli_"))
+        try:
+            out = cartella / "a.wav"
+            render.render(p, render.RenderOptions(output=str(out), video=False, jobs=1))
+            return tid, _inviluppo(out, passo)
+        finally:
+            import shutil
+            shutil.rmtree(cartella, ignore_errors=True)
+
+    voci = [None] + [t.id for t in base.tracks if t.clips]
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        esiti = dict(ex.map(misura, voci))
+    return {"passo": passo, "durata": round(durata, 3),
+            "tracce": {k: v for k, v in esiti.items() if k is not None and v is not None},
+            "master": esiti.get(None)}
+
+
 # scope -> filtro ffmpeg applicato al fotogramma (gia' ridotto a SCOPE_W). Il
 # fotogramma si stringe prima del filtro: la waveform e' larga quanto l'immagine
 # e la parade il triplo, senza riduzione uscivano nastri alti un dito

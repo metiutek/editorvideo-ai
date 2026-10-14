@@ -219,6 +219,8 @@ class _Builder:
         # (posizioni, corpo del testo, raggi di sfocatura) va riscalato
         self.scale = self.w / float(s.width or self.w)
         self.sr = int(s.sample_rate)
+        # layout del mix: stereo, oppure 5.1 con le tracce instradate (Track.surround)
+        self.layout = "5.1" if getattr(s, "audio_layout", "stereo") == "5.1" else "stereo"
         self.inputs: list[str] = []
         self.chains: list[str] = []
         self.warnings: list[str] = []
@@ -765,6 +767,9 @@ class _Builder:
         ctx = fx.Ctx(width=self.w, height=self.h, fps=self.fps, sample_rate=self.sr,
                      tvar="t", duration=clip.duration, scale=self.scale)
         f.extend(fx.build_chain(clip.effects, ctx, "audio"))
+        if self.layout == "5.1":
+            # effetti e pan lavorano in stereo come sempre; poi la traccia va al suo posto
+            f.extend(_instrada_51(getattr(track, "surround", "front")))
 
         # Dissolvenze prima del trim, sul tempo locale che nei segmenti di
         # anteprima parte dall'offset: come per il video, una clip presa a meta'
@@ -896,7 +901,7 @@ class _Builder:
                 if m.get("target_offset") is not None:
                     args.append(f"offset={m['target_offset']}")
             tail.append("loudnorm=" + ":".join(args))
-            tail.append(f"aformat=sample_fmts=fltp:sample_rates={self.sr}:channel_layouts=stereo")
+            tail.append(f"aformat=sample_fmts=fltp:sample_rates={self.sr}:channel_layouts={self.layout}")
 
         tail.append("alimiter=limit=0.98:level=false")
         # durata esatta del progetto, anche se l'ultima clip finisce prima
@@ -907,6 +912,24 @@ class _Builder:
         out = self.label("aout")
         self.chain(mixed, tail, out)
         return out
+
+
+def _instrada_51(dove: str) -> list[str]:
+    """Da stereo a 5.1 (FL FR FC LFE BL BR) secondo l'instradamento della traccia.
+
+    Il centro e il subwoofer prendono la somma dei due canali a meta': un suono
+    in fase non sale di livello passando da due altoparlanti a uno. Il
+    subwoofer riceve solo i bassi, come si fa in sala.
+    """
+    if dove == "center":
+        return ["pan=5.1|FC=0.5*c0+0.5*c1"]
+    if dove == "surround":
+        return ["pan=5.1|BL=c0|BR=c1"]
+    if dove == "all":
+        return ["pan=5.1|FL=c0|FR=c1|BL=0.7*c0|BR=0.7*c1"]
+    if dove == "lfe":
+        return ["lowpass=f=120", "pan=5.1|LFE=0.5*c0+0.5*c1"]
+    return ["pan=5.1|FL=c0|FR=c1"]
 
 
 def compile_project(project: Project, opts: CompileOptions | None = None) -> Compiled:

@@ -538,6 +538,12 @@ bands — bell, shelves, high/low pass, notch — with a draggable response curv
 noise reduction, gate, **de-esser**, reverb, echo, pitch shift, dynamic normalisation, two-pass
 EBU R128 normalisation of the mix, and **VST3/AU plugins** through pedalboard (pick an installed
 plugin, tweak its parameters in the panel); `duck_music`, `jl_cut`, `detach_audio`.
+A **mixer** tab with one strip per track plus the master: fader in dB, mute/solo, and meters
+(peak, RMS, peak hold) read under the playhead from levels the server measures by rendering
+each track on its own — the levels that will end up in the file. **5.1 surround**: switch the
+project to 5.1 and route each track (front, centre for dialogue, surround, all, LFE); the file
+comes out with six channels (AAC at double bitrate, Opus, PCM), an `.mp3` folds back to stereo
+(`project_settings(audio_layout=...)`, `set_track(surround=...)`).
 
 **Footage and rhythm** — `plan_edit` (segment and score the takes), `inspect_footage`,
 `preview_media` (look at imported footage without putting it on the timeline),
