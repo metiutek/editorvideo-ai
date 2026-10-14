@@ -343,7 +343,7 @@ class Project:
     def clip(self, cid: str) -> Clip:
         found = self.find_clip(cid)
         if not found:
-            raise KeyError(f"clip {cid!r} inesistente")
+            raise KeyError(f"clip {cid!r} does not exist")
         return found[1]
 
     def video_tracks(self) -> list[Track]:

@@ -245,7 +245,7 @@ def _store(project: str | None = None) -> Store:
         _ui_attach(_stores[key])
         return _stores[key]
     if _current[0] is None:
-        raise EditError("nessun progetto aperto: usa project_create o project_open")
+        raise EditError("no project open: use project_create or project_open")
     return _stores[_current[0]]
 
 
@@ -360,7 +360,7 @@ def export_subtitles(track: str, path: str, project: str | None = None) -> dict:
     righe = captions.da_traccia(_store(project).project, track)
     fmt = Path(path).suffix.lower().lstrip(".")
     if fmt not in ("srt", "vtt"):
-        raise EditError("export_subtitles scrive .srt o .vtt")
+        raise EditError("export_subtitles writes .srt or .vtt")
     return {"file": captions.write(path, righe, fmt), "righe": len(righe)}
 
 
@@ -411,7 +411,7 @@ async def import_media(paths: list[str] | None = None, files: list[str] | None =
     """
     lista = paths if paths is not None else files
     if not lista:
-        raise EditError("serve paths (o files): la lista dei file da importare")
+        raise EditError("paths (or files) is needed: the list of files to import")
     s = _store(project)
     media = await _off(s.import_media, lista)
     return [{"id": m.id, "name": m.name, "kind": m.kind, "duration": m.duration,
@@ -668,7 +668,7 @@ def trim_edit(clip: str, mode: str, delta: float, edge: str = "end",
     elif mode == "slide":
         c = s.slide_clip(clip, delta)
     else:
-        raise EditError("mode deve essere ripple, roll, slip o slide")
+        raise EditError("mode must be ripple, roll, slip or slide")
     return _clip_view(c)
 
 
@@ -928,21 +928,21 @@ def _source(path: str | None, clip: str | None, project: str | None,
     if path:
         p = Path(path)
         if not p.exists():
-            raise EditError(f"file non trovato: {path}")
+            raise EditError(f"file not found: {path}")
         if _e_un_progetto(p):
             raise EditError(
-                f"{p.name} e' un progetto, non del girato: qui 'path' vuole il file "
-                "sorgente. Indica il materiale con media='<id>' oppure clip='<id>' "
-                "e passa il progetto in 'project'.")
+                f"{p.name} is a project, not footage: here 'path' wants the source "
+                "file. Point at the footage with media='<id>' or clip='<id>' "
+                "and pass the project in 'project'.")
         return str(p.resolve())
     if media:
         return _store(project).media_or_die(media).path
     if not clip:
-        raise EditError("serve path (file sorgente), media oppure clip")
+        raise EditError("path (source file), media or clip is needed")
     s = _store(project)
     _, c = s.clip_or_die(clip)
     if not c.media:
-        raise EditError(f"la clip {clip} non ha un file sorgente")
+        raise EditError(f"clip {clip} has no source file")
     return s.media_or_die(c.media).path
 
 
@@ -1057,7 +1057,7 @@ async def plan_edit(folder: str | None = None, files: list[str] | None = None,
     """
     src = files if files else folder
     if not src:
-        raise EditError("serve folder oppure files")
+        raise EditError("folder or files is needed")
     p = await _off(story.plan, src, style, target_duration, deep, True, order, segment)
     if apply:
         p["applicato"] = story.apply_plan(_store(project), p)
@@ -1214,7 +1214,7 @@ async def preview_frame(t: float | None = None, width: int = 640, path: str | No
     """
     quando = t if t is not None else time
     if quando is None:
-        raise EditError("serve t: il tempo in secondi sulla timeline")
+        raise EditError("t is needed: the time in seconds on the timeline")
     s = _store(project)
     out = path or str(Path(tempfile.gettempdir()) / f"vedit_preview_{os.getpid()}.jpg")
     p = await _off(render.render_frame, s.project, float(quando), out, width, True)
@@ -1336,7 +1336,7 @@ async def track_mask(clip: str, kind: str = "mask_blur", padding: float = 1.25,
     sorgente ha un'altra risoluzione o un altro formato del progetto.
     """
     if kind not in MASCHERE:
-        raise EditError(f"kind deve essere {' | '.join(MASCHERE)}")
+        raise EditError(f"kind must be {' | '.join(MASCHERE)}")
     s = _store(project)
     _, c = s.clip_or_die(clip)
     res = await _segui(s, clip, project, classes, fps, box, box_t)
@@ -1371,7 +1371,7 @@ async def highlight_subject(clip: str, mode: str = "glow", color: str = "#ffcc00
     s = _store(project)
     _, c = s.clip_or_die(clip)
     if c.type != "media" or not c.media:
-        raise EditError("l'evidenziazione si applica a una clip con un video")
+        raise EditError("highlighting applies to a clip with video")
     src = s.media_or_die(c.media).path
     t0 = max(0.0, c.in_ - 0.1)
     t1 = c.in_ + c.source_duration() + 0.1
@@ -1420,7 +1420,7 @@ async def remove_background(clip: str, classes: list[str] | None = None, feather
     s = _store(project)
     _, c = s.clip_or_die(clip)
     if c.type != "media" or not c.media:
-        raise EditError("lo scontorno si applica a una clip con un video")
+        raise EditError("the cut-out applies to a clip with video")
     src = s.media_or_die(c.media).path
     t0 = max(0.0, c.in_ - 0.1)
     t1 = c.in_ + c.source_duration() + 0.1

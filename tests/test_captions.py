@@ -124,7 +124,7 @@ def test_ass_escape_delle_graffe():
 
 
 def test_write_rifiuta_formato_sconosciuto(tmp_path):
-    with pytest.raises(ValueError, match="sconosciuto"):
+    with pytest.raises(ValueError, match="unknown"):
         captions.write(str(tmp_path / "x.foo"), [], "foo")
 
 

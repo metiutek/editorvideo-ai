@@ -99,7 +99,7 @@ def quoted(expr: str) -> str:
 
 def _spec(effect: str) -> EffectDef:
     if effect not in EFFECTS:
-        raise KeyError(f"effetto sconosciuto: {effect!r}")
+        raise KeyError(f"unknown effect: {effect!r}")
     return EFFECTS[effect]
 
 
@@ -450,7 +450,7 @@ def _rgb(color: str) -> tuple[float, float, float]:
     try:
         return tuple(int(s[i:i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
     except ValueError:
-        raise ValueError(f"colore non riconosciuto: {color!r} (usa un nome o #rrggbb)") from None
+        raise ValueError(f"colour not recognised: {color!r} (use a name or #rrggbb)") from None
 
 
 def _f_tint(p: dict, c: Ctx) -> list[str]:
@@ -1077,25 +1077,25 @@ def bande_valide(bands) -> list[dict]:
 
         bands = json.loads(bands or "[]")
     if not isinstance(bands, list):
-        raise ValueError("bands dev'essere una lista di bande")
+        raise ValueError("bands must be a list of bands")
     if len(bands) > MAX_BANDE:
-        raise ValueError(f"al massimo {MAX_BANDE} bande")
+        raise ValueError(f"at most {MAX_BANDE} bands")
     out = []
     for b in bands:
         if not isinstance(b, dict):
-            raise ValueError("ogni banda e' un oggetto {type, freq, gain, q}")
+            raise ValueError("each band is an object {type, freq, gain, q}")
         tipo = str(b.get("type", "peak"))
         if tipo not in TIPI_BANDA:
-            raise ValueError(f"tipo di banda {tipo!r} non ammesso: {list(TIPI_BANDA)}")
+            raise ValueError(f"band type {tipo!r} not allowed: {list(TIPI_BANDA)}")
         freq = float(b.get("freq", 1000))
         gain = float(b.get("gain", 0))
         q = float(b.get("q", 1.0))
         if not 20 <= freq <= 20000:
-            raise ValueError(f"frequenza {freq} fuori da 20-20000 Hz")
+            raise ValueError(f"frequency {freq} outside 20-20000 Hz")
         if not -24 <= gain <= 24:
-            raise ValueError(f"guadagno {gain} fuori da -24..24 dB")
+            raise ValueError(f"gain {gain} outside -24..24 dB")
         if not 0.1 <= q <= 18:
-            raise ValueError(f"Q {q} fuori da 0.1-18")
+            raise ValueError(f"Q {q} outside 0.1-18")
         out.append({"type": tipo, "freq": freq, "gain": gain, "q": q,
                     "on": bool(b.get("on", True))})
     return out
@@ -1139,73 +1139,74 @@ def _a_dynnorm(p: dict, c: Ctx) -> list[str]:
 
 _DEFS: tuple[EffectDef, ...] = (
     EffectDef(
-        "color", "video", "Correzione colore",
+        "color", "video", "Colour correction",
         (
             Param("brightness", 0.0, min=-1, max=1, anim=True, desc="-1..1"),
             Param("contrast", 1.0, min=0, max=4, anim=True),
-            Param("saturation", 1.0, min=0, max=3, anim=True, desc="0 = bianco e nero"),
+            Param("saturation", 1.0, min=0, max=3, anim=True, desc="0 = black and white"),
             Param("gamma", 1.0, min=0.1, max=10, anim=True),
         ),
-        _f_color, "Luminosita', contrasto, saturazione, gamma. Tutti animabili.",
+        _f_color, "Brightness, contrast, saturation, gamma. All animatable.",
     ),
     EffectDef(
-        "colorbalance", "video", "Bilanciamento colore",
+        "colorbalance", "video", "Colour balance",
         tuple(Param(k, 0.0, min=-1, max=1) for k in ("rs", "gs", "bs", "rm", "gm", "bm", "rh", "gh", "bh")),
-        _f_colorbalance, "Ombre (s), mezzitoni (m), alte luci (h) per canale RGB: lift, gamma, gain.",
+        _f_colorbalance, "Shadows (s), midtones (m), highlights (h) per RGB channel: lift, "
+                         "gamma, gain.",
     ),
     EffectDef(
-        "temperature", "video", "Temperatura colore",
+        "temperature", "video", "Colour temperature",
         (Param("temperature", 6500, min=1000, max=40000), Param("mix", 1.0, min=0, max=1)),
-        _f_temperature, "Kelvin: sotto 6500 scalda (arancio), sopra raffredda (blu).",
+        _f_temperature, "Kelvin: below 6500 warms (orange), above cools (blue).",
     ),
     EffectDef(
-        "curves", "video", "Curve",
+        "curves", "video", "Curves",
         (
             Param("preset", "none", kind="enum",
                   choices=("none", "color_negative", "cross_process", "darker", "increase_contrast",
                            "lighter", "linear_contrast", "medium_contrast", "negative",
                            "strong_contrast", "vintage")),
-            Param("master", "", kind="string", desc="punti 'x0/y0 x1/y1' se preset=none"),
+            Param("master", "", kind="string", desc="points 'x0/y0 x1/y1' when preset=none"),
         ),
         _f_curves,
     ),
     EffectDef(
         "lut", "video", "LUT 3D",
-        (Param("file", "", kind="file", desc="file .cube"),
+        (Param("file", "", kind="file", desc=".cube file"),
          Param("interp", "tetrahedral", kind="enum", choices=("nearest", "trilinear", "tetrahedral"))),
-        _f_lut, "Applica una look-up table .cube.",
+        _f_lut, "Applies a .cube look-up table.",
     ),
     EffectDef(
-        "colormatch", "video", "Uniforma colore",
+        "colormatch", "video", "Colour match",
         tuple(Param(f"{ch}_{k}", 1.0 if k == "gain" else 0.0, min=-1, max=3)
               for ch in ("r", "g", "b") for k in ("gain", "off")),
         _f_colormatch,
-        "Guadagno e offset per canale. Non si impostano a mano: li calcola "
-        "match_color confrontando la clip con quella di riferimento.",
+        "Gain and offset per channel. Not set by hand: match_color computes them by comparing "
+        "the clip with the reference one.",
     ),
     EffectDef(
-        "blur", "video", "Sfocatura",
+        "blur", "video", "Blur",
         (Param("sigma", 8, min=0, max=100), Param("steps", 1, min=1, max=6)),
         _f_blur,
     ),
     EffectDef(
-        "sharpen", "video", "Nitidezza",
+        "sharpen", "video", "Sharpen",
         (Param("amount", 1.0, min=-2, max=5), Param("chroma", 0.0, min=-2, max=2)),
         _f_sharpen,
     ),
     EffectDef(
         "glow", "video", "Glow",
         (Param("sigma", 12, min=1, max=60), Param("amount", 0.5, min=0, max=1)),
-        _f_glow, "Bagliore morbido sulle alte luci.",
+        _f_glow, "Soft glow on the highlights.",
     ),
     EffectDef(
-        "vignette", "video", "Vignettatura",
+        "vignette", "video", "Vignette",
         (Param("angle", 0.8, min=0, max=1.57),
          Param("mode", "forward", kind="enum", choices=("forward", "backward"))),
         _f_vignette,
     ),
-    EffectDef("grain", "video", "Grana", (Param("strength", 12, min=0, max=100),), _f_grain),
-    EffectDef("denoise", "video", "Riduzione rumore", (Param("strength", 4, min=0, max=20),), _f_denoise),
+    EffectDef("grain", "video", "Grain", (Param("strength", 12, min=0, max=100),), _f_grain),
+    EffectDef("denoise", "video", "Noise reduction", (Param("strength", 4, min=0, max=20),), _f_denoise),
     EffectDef(
         "chromakey", "video", "Chroma key",
         (
@@ -1214,41 +1215,41 @@ _DEFS: tuple[EffectDef, ...] = (
             Param("blend", 0.05, min=0, max=1),
             Param("despill", True, kind="bool"),
             Param("despill_amount", 100, min=0, max=100,
-                  desc="quanto riflesso del fondale togliere dai bordi, in %"),
+                  desc="how much screen spill to remove from the edges, in %"),
         ),
-        _f_chromakey, "Rimuove il fondale verde/blu rendendolo trasparente.",
+        _f_chromakey, "Removes the green/blue screen, making it transparent.",
     ),
     EffectDef(
-        "crop", "video", "Ritaglio",
+        "crop", "video", "Crop",
         (Param("w", 1920), Param("h", 1080), Param("x", 0), Param("y", 0)),
-        _f_crop, "Ritaglia un rettangolo, il resto diventa trasparente.",
+        _f_crop, "Crops a rectangle, the rest becomes transparent.",
     ),
     EffectDef("pixelate", "video", "Pixel", (Param("size", 16, min=2, max=200),), _f_pixelate),
     EffectDef(
-        "mask_blur", "video", "Maschera sfocata",
+        "mask_blur", "video", "Blur mask",
         (
-            Param("x", 0, anim=True, desc="px, angolo in alto a sinistra"),
+            Param("x", 0, anim=True, desc="px, top-left corner"),
             Param("y", 0, anim=True),
             Param("w", 300, min=2), Param("h", 300, min=2),
             Param("sigma", 20, min=1, max=100),
-            Param("ranges", "", kind="string", desc="'1.2-1.8;4-4.5' = solo in quegli istanti"),
+            Param("ranges", "", kind="string", desc="'1.2-1.8;4-4.5' = only at those moments"),
         ),
         _f_mask_blur,
-        "Sfoca solo un rettangolo (volto, targa, schermo). x/y animabili: con i "
-        "keyframe la maschera segue il soggetto. ranges vuoto = sempre attiva.",
+        "Blurs only a rectangle (face, number plate, screen). x/y animatable: with keyframes the "
+        "mask follows the subject. Empty ranges = always on.",
     ),
     EffectDef(
-        "mask_pixelate", "video", "Maschera a mosaico",
+        "mask_pixelate", "video", "Mosaic mask",
         (
             Param("x", 0, anim=True), Param("y", 0, anim=True),
             Param("w", 300, min=2), Param("h", 300, min=2),
             Param("size", 16, min=2, max=200),
             Param("ranges", "", kind="string"),
         ),
-        _f_mask_pixelate, "Come mask_blur ma a mosaico: censura evidente.",
+        _f_mask_pixelate, "Like mask_blur but as a mosaic: obvious censoring.",
     ),
     EffectDef(
-        "mask_box", "video", "Barra piena",
+        "mask_box", "video", "Solid bar",
         (
             Param("x", 0, anim=True), Param("y", 0, anim=True),
             Param("w", 300, min=2), Param("h", 120, min=2),
@@ -1256,10 +1257,10 @@ _DEFS: tuple[EffectDef, ...] = (
             Param("opacity", 1.0, min=0, max=1),
             Param("ranges", "", kind="string"),
         ),
-        _f_mask_box, "Rettangolo pieno: censura netta o barra grafica.",
+        _f_mask_box, "Solid rectangle: hard censoring or a graphic bar.",
     ),
     EffectDef(
-        "mask_outline", "video", "Cornice su oggetto",
+        "mask_outline", "video", "Object outline",
         (
             Param("x", 0, anim=True), Param("y", 0, anim=True),
             Param("w", 300, min=2), Param("h", 300, min=2),
@@ -1269,187 +1270,189 @@ _DEFS: tuple[EffectDef, ...] = (
             Param("ranges", "", kind="string"),
         ),
         _f_mask_outline,
-        "Cornice colorata che indica un oggetto. Con track_mask segue l'oggetto.",
+        "Coloured frame pointing at an object. With track_mask it follows the object.",
     ),
     EffectDef(
-        "mask_spotlight", "video", "Spotlight su oggetto",
+        "mask_spotlight", "video", "Object spotlight",
         (
             Param("x", 0, anim=True), Param("y", 0, anim=True),
             Param("w", 300, min=2), Param("h", 300, min=2),
-            Param("amount", 0.6, min=0, max=1, desc="quanto scurire il resto"),
-            Param("saturation", 0.4, min=0, max=3, desc="saturazione del resto"),
+            Param("amount", 0.6, min=0, max=1, desc="how much to darken the rest"),
+            Param("saturation", 0.4, min=0, max=3, desc="saturation of the rest"),
             Param("ranges", "", kind="string"),
         ),
         _f_mask_spotlight,
-        "Scurisce e desatura tutto tranne il rettangolo: l'oggetto resta in luce.",
+        "Darkens and desaturates everything but the rectangle: the object stays in the light.",
     ),
     EffectDef(
-        "tint", "video", "Tinta",
+        "tint", "video", "Tint",
         (Param("color", "#ffcc00", kind="color"), Param("amount", 0.6, min=0, max=1)),
         _f_tint,
-        "Porta l'immagine verso un colore tenendo luci e ombre. Su una clip "
-        "scontornata colora solo il soggetto (highlight_subject).",
+        "Pushes the picture towards a colour keeping highlights and shadows. On a cut-out clip "
+        "it colours only the subject (highlight_subject).",
     ),
     EffectDef(
-        "subtitles", "video", "Sottotitoli",
-        (Param("file", "", kind="file", desc="file .ass (karaoke) o .srt"),
+        "subtitles", "video", "Subtitles",
+        (Param("file", "", kind="file", desc=".ass (karaoke) or .srt file"),
          Param("force_style", "", kind="string",
-               desc="solo per .srt, es. 'Fontsize=48,Bold=1'")),
+               desc="only for .srt, e.g. 'Fontsize=48,Bold=1'")),
         _f_subtitles,
-        "Imprime i sottotitoli nell'immagine. Generali con make_captions: il "
-        "formato .ass porta anche l'evidenziazione parola per parola.",
+        "Burns the subtitles into the picture. Make them with make_captions: the .ass format "
+        "also carries word-by-word highlighting.",
     ),
     EffectDef(
-        "mirror", "video", "Specchia",
+        "mirror", "video", "Mirror",
         (Param("horizontal", True, kind="bool"), Param("vertical", False, kind="bool")),
         _f_mirror,
     ),
     EffectDef(
-        "stabilize", "video", "Stabilizzazione",
+        "stabilize", "video", "Stabilise",
         (Param("smoothing", 15, min=1, max=100), Param("zoom", 0, min=-10, max=10)),
-        _f_stabilize, "Richiede analisi vidstab (fatta in automatico al render); senza analisi usa deshake.",
+        _f_stabilize, "Needs a vidstab analysis (done automatically at render time); without it, "
+                      "deshake is used.",
     ),
     EffectDef(
         "motionblur", "video", "Motion blur",
         (Param("mode", "blend", kind="enum", choices=("blend", "interpolate")), Param("frames", 3, min=2, max=9)),
-        _f_fps_blend, "blend = scia morbida; interpolate = frame interpolati (lento).",
+        _f_fps_blend, "blend = soft trail; interpolate = interpolated frames (slow).",
     ),
     EffectDef(
-        "exposure", "video", "Esposizione",
-        (Param("exposure", 0.0, min=-3, max=3, desc="stop: +1 = il doppio della luce"),
-         Param("black", 0.0, min=-0.1, max=0.1, desc="livello del nero")),
-        _f_exposure, "Schiarisce o scurisce come il diaframma, senza appiattire il contrasto.",
+        "exposure", "video", "Exposure",
+        (Param("exposure", 0.0, min=-3, max=3, desc="stops: +1 = twice the light"),
+         Param("black", 0.0, min=-0.1, max=0.1, desc="black level")),
+        _f_exposure, "Brightens or darkens like the aperture, without flattening the contrast.",
     ),
     EffectDef(
-        "vibrance", "video", "Vividezza",
+        "vibrance", "video", "Vibrance",
         (Param("intensity", 0.3, min=-2, max=2),),
-        _f_vibrance, "Satura i colori spenti e risparmia quelli gia' carichi e la pelle.",
+        _f_vibrance, "Saturates dull colours and spares the already rich ones and skin.",
     ),
     EffectDef(
-        "whitebalance", "video", "Bilanciamento del bianco",
+        "whitebalance", "video", "White balance",
         (Param("temperature", 6500, min=2000, max=12000,
-               desc="K: sotto 6500 scalda (arancio), sopra raffredda (blu)"),
-         Param("tint", 0.0, min=-1, max=1, desc="negativa verso il verde, positiva verso il magenta")),
-        _f_whitebalance, "Temperatura e tinta: toglie la dominante di una luce sbagliata.",
+               desc="K: below 6500 warms (orange), above cools (blue)"),
+         Param("tint", 0.0, min=-1, max=1, desc="negative towards green, positive towards magenta")),
+        _f_whitebalance, "Temperature and tint: removes the cast of the wrong light.",
     ),
     EffectDef(
-        "autowhite", "video", "Bilanciamento automatico", (),
-        _f_autowhite, "Neutralizza da solo la dominante di colore (gray world).",
+        "autowhite", "video", "Auto white balance", (),
+        _f_autowhite, "Neutralises the colour cast on its own (gray world).",
     ),
     EffectDef(
-        "hue", "video", "Tonalita'",
-        (Param("hue", 0.0, min=-180, max=180, anim=True, desc="gradi sulla ruota dei colori"),),
-        _f_hue, "Ruota tutti i colori; animabile.",
+        "hue", "video", "Hue",
+        (Param("hue", 0.0, min=-180, max=180, anim=True, desc="degrees on the colour wheel"),),
+        _f_hue, "Rotates every colour; animatable.",
     ),
     EffectDef(
-        "hsl", "video", "Correzione di un colore",
+        "hsl", "video", "Single-colour correction",
         (Param("colors", "blu", kind="enum", choices=tuple(_COLORI)),
-         Param("hue", 0.0, min=-180, max=180, desc="sposta la tinta di quel colore"),
+         Param("hue", 0.0, min=-180, max=180, desc="shifts the hue of that colour"),
          Param("saturation", 0.0, min=-1, max=1),
          Param("brightness", 0.0, min=-1, max=1),
          Param("softness", 5.0, min=0, max=100,
-               desc="forza della selezione: sotto 5 l'effetto arriva solo a meta'")),
-        _f_hsl, "Tocca solo una famiglia di colori: cielo piu' blu, erba meno gialla, pelle piu' calda.",
+               desc="selection strength: below 5 the effect only goes halfway")),
+        _f_hsl, "Touches one family of colours only: bluer sky, less yellow grass, warmer skin.",
     ),
     EffectDef(
-        "levels", "video", "Livelli",
+        "levels", "video", "Levels",
         (Param("black_in", 0.0, min=0, max=0.5), Param("white_in", 1.0, min=0.5, max=1),
          Param("black_out", 0.0, min=0, max=0.5), Param("white_out", 1.0, min=0.5, max=1)),
-        _f_levels, "Punti del nero e del bianco: recupera un'immagine slavata o schiaccia i neri.",
+        _f_levels, "Black and white points: rescues a washed-out picture or crushes the blacks.",
     ),
     # ---- effetti speciali ----
     EffectDef(
-        "rgb_split", "video", "Aberrazione cromatica",
-        (Param("amount", 6, min=0, max=200, desc="px di separazione tra rosso e blu"),
-         Param("angle", 0, min=-180, max=180, desc="direzione, 0 = orizzontale")),
-        _f_rgb_split, "Rosso e blu separati ai lati: look da obiettivo economico o da glitch.",
+        "rgb_split", "video", "Chromatic aberration",
+        (Param("amount", 6, min=0, max=200, desc="px of separation between red and blue"),
+         Param("angle", 0, min=-180, max=180, desc="direction, 0 = horizontal")),
+        _f_rgb_split, "Red and blue split to the sides: cheap-lens or glitch look.",
     ),
     EffectDef(
         "glitch", "video", "Glitch",
-        (Param("intensity", 0.3, min=0, max=1, desc="quanta parte del tempo e' disturbata"),
-         Param("amount", 40, min=0, max=400, desc="px di scivolamento delle fasce"),
-         Param("rate", 12, min=1, max=60, desc="cambi al secondo"),
-         Param("band", 24, min=2, max=400, desc="altezza delle fasce in px"),
-         Param("seed", 1, min=0, max=1000, desc="altro numero = altre raffiche")),
+        (Param("intensity", 0.3, min=0, max=1, desc="how much of the time is glitched"),
+         Param("amount", 40, min=0, max=400, desc="px the bands slip by"),
+         Param("rate", 12, min=1, max=60, desc="changes per second"),
+         Param("band", 24, min=2, max=400, desc="band height in px"),
+         Param("seed", 1, min=0, max=1000, desc="another number = other bursts")),
         _f_glitch,
-        "Raffiche di disturbo digitale: fasce che scivolano e canali separati. "
-        "Ripetibile: stesso seed, stessi fotogrammi colpiti.",
+        "Bursts of digital noise: slipping bands and split channels. Repeatable: same seed, same "
+        "frames hit.",
     ),
     EffectDef(
-        "warp", "video", "Distorsione",
+        "warp", "video", "Warp",
         (Param("mode", "wave", kind="enum", choices=("wave", "ripple", "swirl", "bulge")),
          Param("amount", 20, min=-720, max=720, anim=True,
-               desc="wave/ripple: px; swirl: gradi; bulge: -100..100"),
-         Param("wavelength", 120, min=2, max=4000, desc="px tra due creste (wave, ripple)"),
-         Param("speed", 1.0, min=-20, max=20, desc="cicli al secondo (wave, ripple)"),
+               desc="wave/ripple: px; swirl: degrees; bulge: -100..100"),
+         Param("wavelength", 120, min=2, max=4000, desc="px between two crests (wave, ripple)"),
+         Param("speed", 1.0, min=-20, max=20, desc="cycles per second (wave, ripple)"),
          Param("cx", 0.5, min=0, max=1), Param("cy", 0.5, min=0, max=1),
-         Param("radius", 0.5, min=0.01, max=2, desc="frazione della diagonale (swirl, bulge)")),
+         Param("radius", 0.5, min=0.01, max=2, desc="fraction of the diagonal (swirl, bulge)")),
         _f_warp,
-        "Onda, increspatura dal centro, vortice, lente che gonfia. amount animabile. "
-        "Calcolato su una mappa ridotta (displace/remap), non pixel per pixel.",
+        "Wave, ripple from the centre, swirl, bulging lens. amount animatable. Computed on a "
+        "reduced map (displace/remap), not pixel by pixel.",
     ),
     EffectDef(
-        "lens", "video", "Obiettivo",
-        (Param("k1", 0.3, min=-1, max=1, desc=">0 barile (fisheye), <0 cuscino"),
+        "lens", "video", "Lens",
+        (Param("k1", 0.3, min=-1, max=1, desc=">0 barrel (fisheye), <0 pincushion"),
          Param("k2", 0.0, min=-1, max=1)),
-        _f_lens, "Distorsione dell'obiettivo: fisheye o cuscino; gli angoli scoperti restano trasparenti.",
+        _f_lens, "Lens distortion: fisheye or pincushion; the uncovered corners stay transparent.",
     ),
     EffectDef(
-        "shake", "video", "Tremolio camera",
-        (Param("amount", 12, min=0, max=200, anim=True, desc="px di ampiezza"),
-         Param("frequency", 6, min=0.1, max=40, desc="oscillazioni al secondo")),
+        "shake", "video", "Camera shake",
+        (Param("amount", 12, min=0, max=200, anim=True, desc="px of amplitude"),
+         Param("frequency", 6, min=0.1, max=40, desc="oscillations per second")),
         _f_shake,
-        "Camera a mano, impatto, terremoto. Mai bordi scoperti: ingrandisce quanto basta. "
-        "amount a keyframe per un colpo che si smorza.",
+        "Handheld, impact, earthquake. Never any uncovered edges: zooms in just enough. Keyframe "
+        "amount for a hit that dies away.",
     ),
     EffectDef(
-        "tilt3d", "video", "Rotazione 3D",
-        (Param("yaw", 25, min=-360, max=360, anim=True, desc="gradi attorno all'asse verticale"),
-         Param("pitch", 0, min=-360, max=360, anim=True, desc="gradi attorno all'asse orizzontale"),
-         Param("depth", 2.0, min=0.3, max=20, desc="distanza della camera: piccola = prospettiva forte")),
+        "tilt3d", "video", "3D rotation",
+        (Param("yaw", 25, min=-360, max=360, anim=True, desc="degrees around the vertical axis"),
+         Param("pitch", 0, min=-360, max=360, anim=True, desc="degrees around the horizontal axis"),
+         Param("depth", 2.0, min=0.3, max=20, desc="camera distance: small = strong perspective")),
         _f_tilt3d,
-        "La clip come una carta nello spazio, con prospettiva vera. Animabile: un giro "
-        "completo e' yaw da 0 a 360. Fuori dalla carta si vede la traccia sotto.",
+        "The clip as a card in space, with true perspective. Animatable: a full turn is yaw from "
+        "0 to 360. Outside the card the track below shows.",
     ),
     EffectDef(
-        "sky_key", "video", "Sostituzione cielo",
-        (Param("color", "#7fb0e0", kind="color", desc="colore del cielo da togliere"),
+        "sky_key", "video", "Sky replacement",
+        (Param("color", "#7fb0e0", kind="color", desc="colour of the sky to remove"),
          Param("similarity", 0.3, min=0.01, max=1),
          Param("blend", 0.15, min=0, max=1),
-         Param("horizon", 0.6, min=0.05, max=1, desc="sotto questa altezza (frazione) niente si toglie"),
-         Param("feather", 0.08, min=0, max=0.5, desc="sfumatura del confine")),
+         Param("horizon", 0.6, min=0.05, max=1, desc="below this height (fraction) nothing is "
+                                                     "removed"),
+         Param("feather", 0.08, min=0, max=0.5, desc="softness of the edge")),
         _f_sky_key,
-        "Rende trasparente il cielo sopra l'orizzonte; il cielo nuovo va su una traccia "
-        "sotto. Campiona il colore con preview_frame o color_scopes.",
+        "Makes the sky above the horizon transparent; the new sky goes on a track below. Sample "
+        "the colour with preview_frame or color_scopes.",
     ),
     EffectDef(
-        "remove_object", "video", "Rimuovi oggetto",
-        (Param("x", 0, anim=True, desc="px, angolo in alto a sinistra"), Param("y", 0, anim=True),
+        "remove_object", "video", "Remove object",
+        (Param("x", 0, anim=True, desc="px, top-left corner"), Param("y", 0, anim=True),
          Param("w", 120, min=4), Param("h", 80, min=4),
-         Param("ranges", "", kind="string", desc="'1.2-1.8;4-4.5' = solo in quegli istanti")),
+         Param("ranges", "", kind="string", desc="'1.2-1.8;4-4.5' = only at those moments")),
         _f_remove_object,
-        "Cancella logo, scritta, cavo o piccolo oggetto ricostruendolo dai bordi. "
-        "Ottimo su sfondi uniformi, su sfondi ricchi lascia una macchia morbida.",
+        "Erases a logo, text, cable or small object by rebuilding it from the edges. Great on "
+        "plain backgrounds, on busy ones it leaves a soft smudge.",
     ),
     EffectDef(
-        "matte", "video", "Scontorno IA",
-        (Param("file", "", kind="file", desc="video maschera (bianco = tieni)"),
-         Param("t0", 0.0, min=0, desc="secondo della sorgente su cui parte la maschera"),
-         Param("feather", 2, min=0, max=40, desc="sfumatura del bordo in px"),
-         Param("invert", False, kind="bool", desc="togli il soggetto invece dello sfondo")),
+        "matte", "video", "AI cut-out",
+        (Param("file", "", kind="file", desc="matte video (white = keep)"),
+         Param("t0", 0.0, min=0, desc="source second the matte starts at"),
+         Param("feather", 2, min=0, max=40, desc="edge softness in px"),
+         Param("invert", False, kind="bool", desc="remove the subject instead of the background")),
         _f_matte,
-        "Toglie lo sfondo senza green screen. Non si imposta a mano: lo crea "
-        "remove_background segmentando il soggetto fotogramma per fotogramma.",
+        "Removes the background without a green screen. Not set by hand: remove_background "
+        "creates it by segmenting the subject frame by frame.",
     ),
     # ---- audio ----
     EffectDef(
-        "eq3", "audio", "Equalizzatore",
+        "eq3", "audio", "Equaliser",
         (Param("bass", 0, min=-20, max=20, desc="dB"), Param("mid", 0, min=-20, max=20),
          Param("treble", 0, min=-20, max=20)),
         _a_eq3,
     ),
     EffectDef(
-        "compressor", "audio", "Compressore",
+        "compressor", "audio", "Compressor",
         (Param("threshold", -18, min=-60, max=0, desc="dB"), Param("ratio", 3, min=1, max=20),
          Param("attack", 20, min=0.01, max=2000), Param("release", 250, min=0.01, max=9000),
          Param("makeup", 1, min=1, max=64)),
@@ -1457,17 +1460,17 @@ _DEFS: tuple[EffectDef, ...] = (
     ),
     EffectDef("limiter", "audio", "Limiter", (Param("limit", 0.95, min=0.1, max=1),), _a_limiter),
     EffectDef(
-        "adenoise", "audio", "Riduzione rumore",
+        "adenoise", "audio", "Noise reduction",
         (Param("reduction", 12, min=0.01, max=97, desc="dB"), Param("floor", -40, min=-80, max=-20)),
-        _a_denoise, "Toglie fruscio/ronzio di fondo.",
+        _a_denoise, "Removes background hiss/hum.",
     ),
-    EffectDef("highpass", "audio", "Passa-alto", (Param("freq", 80, min=10, max=2000),), _a_highpass,
-              "Taglia le basse: rimuove rimbombo e rumore di traffico."),
-    EffectDef("lowpass", "audio", "Passa-basso", (Param("freq", 16000, min=500, max=20000),), _a_lowpass),
-    EffectDef("echo", "audio", "Eco", (Param("delay_ms", 300, min=10, max=5000), Param("decay", 0.4, min=0, max=1)), _a_echo),
-    EffectDef("reverb", "audio", "Riverbero", (Param("amount", 0.3, min=0, max=0.9), Param("size", 0.5, min=0.1, max=1)), _a_reverb),
+    EffectDef("highpass", "audio", "High-pass", (Param("freq", 80, min=10, max=2000),), _a_highpass,
+              "Cuts the lows: removes rumble and traffic noise."),
+    EffectDef("lowpass", "audio", "Low-pass", (Param("freq", 16000, min=500, max=20000),), _a_lowpass),
+    EffectDef("echo", "audio", "Echo", (Param("delay_ms", 300, min=10, max=5000), Param("decay", 0.4, min=0, max=1)), _a_echo),
+    EffectDef("reverb", "audio", "Reverb", (Param("amount", 0.3, min=0, max=0.9), Param("size", 0.5, min=0.1, max=1)), _a_reverb),
     EffectDef("pitch", "audio", "Pitch", (Param("semitones", 0, min=-24, max=24),), _a_pitch,
-              "Cambia intonazione senza cambiare durata."),
+              "Changes the pitch without changing the duration."),
     EffectDef(
         "gate", "audio", "Noise gate",
         (Param("threshold", 0.02, min=0, max=1), Param("ratio", 4, min=1, max=20),
@@ -1475,43 +1478,43 @@ _DEFS: tuple[EffectDef, ...] = (
         _a_gate,
     ),
     EffectDef(
-        "censor", "audio", "Censura parlato",
+        "censor", "audio", "Speech censor",
         (
-            Param("ranges", "", kind="string", desc="'12.4-12.9;30.1-30.4' dalla trascrizione"),
+            Param("ranges", "", kind="string", desc="'12.4-12.9;30.1-30.4' from the transcript"),
             Param("mode", "mute", kind="enum", choices=("mute", "scramble")),
-            Param("shift", 400, min=50, max=2000, desc="Hz, solo per scramble"),
+            Param("shift", 400, min=50, max=2000, desc="Hz, only for scramble"),
         ),
         _a_censor,
-        "Copre gli intervalli indicati: mute li azzera, scramble sposta le "
-        "frequenze e rende la voce incomprensibile ma presente. Gli intervalli "
-        "arrivano da analyze.censor_spans (timestamp per parola).",
+        "Covers the given ranges: mute silences them, scramble shifts the frequencies and makes "
+        "the voice unintelligible but present. The ranges come from analyze.censor_spans "
+        "(per-word timestamps).",
     ),
     EffectDef(
         "deesser", "audio", "De-esser",
-        (Param("amount", 0.6, min=0, max=1, desc="quanto smorza: 0 niente, 1 molto"),
+        (Param("amount", 0.6, min=0, max=1, desc="how much it tames: 0 nothing, 1 a lot"),
          Param("frequency", 5500, min=2000, max=12000,
-               desc="Hz da cui partono le sibilanti: 5000-6000 voce maschile, 6000-8000 femminile")),
-        _a_deesser, "Smorza le 's' sibilanti della voce.",
+               desc="Hz the sibilants start from: 5000-6000 male voice, 6000-8000 female")),
+        _a_deesser, "Tames the sibilant 's' of the voice.",
     ),
     EffectDef(
-        "eqparam", "audio", "Equalizzatore parametrico",
+        "eqparam", "audio", "Parametric equaliser",
         (Param("bands", BANDE_DEFAULT, kind="bands",
-               desc="lista di bande {type: peak|lowshelf|highshelf|highpass|lowpass|notch, "
-                    "freq: Hz, gain: dB, q, on}"),
-         Param("output", 0.0, min=-24, max=24, desc="guadagno finale in dB")),
-        _a_eqparam, "Fino a dieci bande con frequenza, guadagno e larghezza a scelta.",
+               desc="list of bands {type: peak|lowshelf|highshelf|highpass|lowpass|notch, freq: "
+                    "Hz, gain: dB, q, on}"),
+         Param("output", 0.0, min=-24, max=24, desc="output gain in dB")),
+        _a_eqparam, "Up to ten bands with free frequency, gain and width.",
     ),
     EffectDef(
-        "vst", "audio", "Plugin VST",
-        (Param("file", "", kind="file", desc="plugin .vst3 (o .component su Mac)"),
-         Param("values", {}, kind="dict", desc="valori dei parametri del plugin, per nome"),
-         Param("mix", 1.0, min=0, max=1, desc="0 = suono originale, 1 = solo plugin")),
-        _a_vst, "Un plugin audio esterno (VST3/AU): si applica prima degli altri effetti.",
+        "vst", "audio", "VST plugin",
+        (Param("file", "", kind="file", desc=".vst3 plugin (or .component on Mac)"),
+         Param("values", {}, kind="dict", desc="plugin parameter values, by name"),
+         Param("mix", 1.0, min=0, max=1, desc="0 = original sound, 1 = plugin only")),
+        _a_vst, "An external audio plugin (VST3/AU): applied before the other effects.",
     ),
     EffectDef(
-        "dynnorm", "audio", "Normalizzazione dinamica",
+        "dynnorm", "audio", "Dynamic normalisation",
         (Param("frame_ms", 200, min=10, max=8000), Param("gauss", 15, min=3, max=31), Param("peak", 0.9, min=0.1, max=1)),
-        _a_dynnorm, "Livella il volume nel tempo (per parlato irregolare).",
+        _a_dynnorm, "Evens out the volume over time (for uneven speech).",
     ),
 )
 
@@ -1561,7 +1564,7 @@ def validate_effect(type_: str, params: dict) -> dict:
     unknown = set(params or {}) - known
     if unknown:
         raise ValueError(
-            f"parametri sconosciuti per {type_!r}: {sorted(unknown)}; ammessi: {sorted(known)}"
+            f"unknown parameters for {type_!r}: {sorted(unknown)}; allowed: {sorted(known)}"
         )
     clean = {}
     for p in d.params:
@@ -1570,22 +1573,22 @@ def validate_effect(type_: str, params: dict) -> dict:
         v = params[p.name]
         if kf.is_kf(v):
             if not p.anim:
-                raise ValueError(f"{type_}.{p.name} non e' animabile")
+                raise ValueError(f"{type_}.{p.name} is not animatable")
             kf.validate(v)
         elif p.kind == "number" and (p.min is not None or p.max is not None):
             fv = float(v)
             if p.min is not None and fv < p.min:
-                raise ValueError(f"{type_}.{p.name}={fv} sotto il minimo {p.min}")
+                raise ValueError(f"{type_}.{p.name}={fv} below the minimum {p.min}")
             if p.max is not None and fv > p.max:
-                raise ValueError(f"{type_}.{p.name}={fv} sopra il massimo {p.max}")
+                raise ValueError(f"{type_}.{p.name}={fv} above the maximum {p.max}")
             v = fv
         elif p.kind == "bands":
             v = bande_valide(v)
         elif p.kind == "dict":
             if not isinstance(v, dict) or not all(
                     isinstance(x, (int, float, str, bool)) for x in v.values()):
-                raise ValueError(f"{type_}.{p.name} vuole un oggetto nome -> valore")
+                raise ValueError(f"{type_}.{p.name} needs a name -> value object")
         elif p.kind == "enum" and p.choices and str(v) not in p.choices:
-            raise ValueError(f"{type_}.{p.name}={v!r} non ammesso, scegli tra {list(p.choices)}")
+            raise ValueError(f"{type_}.{p.name}={v!r} not allowed, choose from {list(p.choices)}")
         clean[p.name] = v
     return clean

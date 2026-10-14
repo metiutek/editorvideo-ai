@@ -107,7 +107,7 @@ def test_tint_amount_zero_non_cambia_niente():
 
 
 def test_tint_colore_sbagliato_e_un_errore_chiaro():
-    with pytest.raises(ValueError, match="colore"):
+    with pytest.raises(ValueError, match="colour"):
         fx.tint_matrix("fucsiaacceso", 0.5)
 
 

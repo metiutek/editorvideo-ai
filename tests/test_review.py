@@ -57,7 +57,7 @@ def test_sample_times_su_un_intervallo(montaggio):
 
 
 def test_intervallo_vuoto(montaggio):
-    with pytest.raises(ValueError, match="intervallo vuoto"):
+    with pytest.raises(ValueError, match="empty range"):
         review.sample_times(montaggio.project, 3, start=3.0, end=1.0)
 
 

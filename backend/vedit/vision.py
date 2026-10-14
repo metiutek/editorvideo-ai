@@ -43,7 +43,7 @@ def model_path(name: str = DEFAULT_MODEL) -> str:
         tmp.replace(dst)
     except OSError as e:
         tmp.unlink(missing_ok=True)
-        raise VisionError(f"impossibile scaricare il modello {name}: {e}") from e
+        raise VisionError(f"cannot download the model {name}: {e}") from e
     return str(dst)
 
 
@@ -53,7 +53,7 @@ def _frames(path: str, fps: float, width: int):
 
     m = probe.probe(path)
     if not m.has_video:
-        raise VisionError(f"{path} non ha video")
+        raise VisionError(f"{path} has no video")
     h = max(2, int(width * (m.height or 9) / (m.width or 16)) // 2 * 2)
     proc = subprocess.run([
         ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error",
@@ -65,7 +65,7 @@ def _frames(path: str, fps: float, width: int):
     size = width * h * 3
     n = len(raw) // size
     if n == 0:
-        raise VisionError(f"nessun fotogramma leggibile in {path}")
+        raise VisionError(f"no readable frames in {path}")
     buf = np.frombuffer(raw[: n * size], dtype=np.uint8).reshape(n, h, width, 3)
     return buf, (m.width or width, m.height or h), (width, h)
 
@@ -77,7 +77,7 @@ def detect(path: str, classes: tuple[str, ...] = ("person",), fps: float = SAMPL
     try:
         from ultralytics import YOLO
     except ImportError as e:
-        raise VisionError("ultralytics non installato: pip install ultralytics") from e
+        raise VisionError("ultralytics not installed: pip install ultralytics") from e
 
     buf, (ow, oh), (pw, ph) = _frames(path, fps, width)
     if len(buf) > max_frames:
@@ -195,7 +195,7 @@ def mask_keyframes(track: list[dict], padding: float = 1.25) -> dict:
     """Riquadro che segue il soggetto: parametri pronti per mask_blur/mask_box."""
     utili = [p for p in track if p["box"]]
     if not utili:
-        raise VisionError("nessun soggetto rilevato: niente da mascherare")
+        raise VisionError("no subject detected: nothing to mask")
     w = max(p["box"]["w"] for p in utili) * padding
     h = max(p["box"]["h"] for p in utili) * padding
     kx = [{"t": p["t"], "v": round(p["cx"] - w / 2, 1)} for p in track if p["cx"] is not None]
@@ -245,12 +245,12 @@ BOX_MIN_SCORE = 0.45       # sotto, il riquadro trovato non somiglia all'oggetto
 def box_in_pixel(box: list[float], src_w: int, src_h: int) -> tuple[float, float, float, float]:
     """``[x, y, w, h]`` in frazioni del fotogramma (0..1) oppure in pixel della sorgente."""
     if len(box) != 4:
-        raise VisionError("box vuole quattro numeri: [x, y, larghezza, altezza]")
+        raise VisionError("box needs four numbers: [x, y, width, height]")
     x, y, w, h = (float(v) for v in box)
     if max(x, y, w, h) <= 1.0:
         x, y, w, h = x * src_w, y * src_h, w * src_w, h * src_h
     if w < 4 or h < 4:
-        raise VisionError("box troppo piccolo: almeno qualche pixel per lato")
+        raise VisionError("box too small: at least a few pixels per side")
     x, y = max(0.0, min(x, src_w - w)), max(0.0, min(y, src_h - h))
     return x, y, min(w, src_w), min(h, src_h)
 
@@ -261,7 +261,7 @@ def _grigi(path: str, t0: float, t1: float, fps: float, width: int):
 
     m = probe.probe(path)
     if not m.has_video:
-        raise VisionError(f"{path} non ha video")
+        raise VisionError(f"{path} has no video")
     width = min(width, m.width or width) // 2 * 2
     h = max(2, int(width * (m.height or 9) / (m.width or 16)) // 2 * 2)
     cmd = [ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error"]
@@ -272,7 +272,7 @@ def _grigi(path: str, t0: float, t1: float, fps: float, width: int):
     raw = subprocess.run(cmd, capture_output=True, timeout=3600).stdout or b""
     n = len(raw) // (width * h)
     if n == 0:
-        raise VisionError(f"nessun fotogramma leggibile in {path}")
+        raise VisionError(f"no readable frames in {path}")
     buf = np.frombuffer(raw[: n * width * h], dtype=np.uint8).reshape(n, h, width)
     return buf.astype(np.float32), (m.width or width, m.height or h), (width, h)
 
@@ -328,7 +328,7 @@ def track_box(path: str, box: list[float], t: float, t0: float = 0.0,
     durata = probe.probe(path).duration or 0.0
     fine = t1 if t1 is not None else durata
     if fine <= t0:
-        raise VisionError("tratto vuoto: niente da seguire")
+        raise VisionError("empty range: nothing to track")
     t = max(t0, min(float(t), fine))
     buf, (ow, oh), (pw, ph) = _grigi(path, t0, fine, fps, width)
     k = pw / ow
@@ -431,15 +431,15 @@ def segment_matte(path: str, t0: float = 0.0, t1: float | None = None,
     try:
         from ultralytics import YOLO
     except ImportError as e:
-        raise VisionError("ultralytics non installato: pip install 'vedit-mcp[vision]'") from e
+        raise VisionError("ultralytics not installed: pip install 'vedit-mcp[vision]'") from e
 
     m = probe.probe(path)
     if not m.has_video:
-        raise VisionError(f"{path} non ha video")
+        raise VisionError(f"{path} has no video")
     fps = m.fps or 25.0
     fine = t1 if t1 is not None else (m.duration or 0.0)
     if fine <= t0:
-        raise VisionError("tratto vuoto: niente da scontornare")
+        raise VisionError("empty range: nothing to cut out")
     st = Path(path).stat()
     chiave = hashlib.sha1(
         f"{Path(path).resolve()}|{st.st_mtime_ns}|{st.st_size}|{t0:.3f}|{fine:.3f}|"
@@ -466,7 +466,7 @@ def segment_matte(path: str, t0: float = 0.0, t1: float | None = None,
     voluti = {c.lower() for c in classes} if classes else None
     ids = [i for i, nome in net.names.items() if voluti is None or str(nome).lower() in voluti]
     if not ids:
-        raise VisionError(f"classi sconosciute al modello: {sorted(voluti or [])}")
+        raise VisionError(f"classes unknown to the model: {sorted(voluti or [])}")
     size = width * h * 3
     n = visti = 0
     try:
@@ -495,7 +495,7 @@ def segment_matte(path: str, t0: float = 0.0, t1: float | None = None,
         scrittore.wait()
     if n == 0 or scrittore.returncode != 0:
         tmp.unlink(missing_ok=True)
-        raise VisionError(f"scontorno fallito: nessun fotogramma letto da {path}")
+        raise VisionError(f"cut-out failed: no frames read from {path}")
     tmp.replace(dst)
     return {"file": str(dst), "t0": t0, "t1": fine, "fps": fps, "cache": False,
             "fotogrammi": n, "copertura": round(visti / n, 3)}

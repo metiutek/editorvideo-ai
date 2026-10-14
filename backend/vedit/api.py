@@ -104,7 +104,7 @@ class Session:
 
     def need(self) -> Store:
         if self.store is None:
-            raise HTTPException(400, "nessun progetto aperto")
+            raise HTTPException(400, "no project open")
         return self.store
 
     def publish(self, event: dict) -> None:
@@ -416,14 +416,14 @@ def lista_recenti() -> list[dict]:
 def op(name: str, body: dict | None = None) -> dict:
     """Esegue un'operazione di editing e restituisce il progetto aggiornato."""
     if name not in OPS:
-        raise HTTPException(404, f"operazione sconosciuta: {name}")
+        raise HTTPException(404, f"unknown operation: {name}")
     store = S.need()
     args = dict(body or {})
     try:
         with S.lock:
             result = getattr(store, name)(**args)
     except TypeError as exc:
-        raise HTTPException(400, f"argomenti non validi per {name}: {exc}") from exc
+        raise HTTPException(400, f"invalid arguments for {name}: {exc}") from exc
     except (EditError, ValueError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -473,7 +473,7 @@ def browse(path: str | None = None) -> dict:
                 "dirs": [{"name": d, "path": d} for d in _dischi()]}
     base = Path(path) if path else Path.home()
     if not base.exists():
-        raise HTTPException(404, f"cartella inesistente: {base}")
+        raise HTTPException(404, f"folder does not exist: {base}")
     if base.is_file():
         base = base.parent
 
@@ -563,7 +563,7 @@ def stream(media_id: str, request: Request):
     src = m.proxy if (m.proxy and Path(m.proxy).exists()) else m.path
     p = Path(src)
     if not p.is_file():
-        raise HTTPException(404, f"file non trovato: {src}")
+        raise HTTPException(404, f"file not found: {src}")
     # FileResponse gestisce le richieste Range, indispensabili per il seek
     return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "video/mp4")
 
@@ -578,7 +578,7 @@ async def upload(files: list[UploadFile] = File(...), folder: str = Form("")) ->
     """
     store = S.need()
     if not store.path:
-        raise HTTPException(400, "salva il progetto prima di trascinarci dentro dei file")
+        raise HTTPException(400, "save the project before dropping files into it")
     dest_dir = Path(store.path).parent / "media"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -646,7 +646,7 @@ def _errore_breve(exc: Exception) -> str:
     il percorso intero davanti al motivo: ``C:\\...\\clip.mp4: Invalid data...``.
     """
     righe = [r.strip() for r in str(exc).splitlines()
-             if any(c.isalpha() for c in r) and "uscito con codice" not in r]
+             if any(c.isalpha() for c in r) and "exited with code" not in r]
     if not righe:
         return type(exc).__name__
     return righe[-1].rsplit(": ", 1)[-1][:300]
@@ -667,7 +667,7 @@ def scan(path: str) -> dict:
 
     base = Path(path)
     if not base.is_dir():
-        raise HTTPException(404, f"cartella inesistente: {base}")
+        raise HTTPException(404, f"folder does not exist: {base}")
     known = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
     files, totale = [], 0
     for radice, dirs, nomi in os.walk(base):
@@ -684,8 +684,8 @@ def scan(path: str) -> dict:
             files.append({"path": str(p), "cartella": "" if rel == "." else rel, "size": size})
             totale += size
             if len(files) > MAX_SCAN:
-                raise HTTPException(400, f"piu' di {MAX_SCAN} file multimediali in {base}: "
-                                         "scegli una cartella piu' precisa")
+                raise HTTPException(400, f"more than {MAX_SCAN} media files in {base}: "
+                                         "choose a narrower folder")
     return {"path": str(base), "nome": base.name, "files": files, "byte": totale}
 
 
@@ -704,7 +704,7 @@ def scan(path: str) -> dict:
 
 def _cartella_media(store: Store) -> Path:
     if not store.path:
-        raise HTTPException(400, "salva il progetto prima di trascinarci dentro dei file")
+        raise HTTPException(400, "save the project before dropping files into it")
     d = Path(store.path).parent / "media"
     (d / ".parti").mkdir(parents=True, exist_ok=True)
     return d
@@ -762,7 +762,7 @@ def _riprova_se_bloccato(fn, *args):
         except PermissionError:
             if attesa is None:
                 raise HTTPException(
-                    503, "file bloccato da un altro programma (antivirus o sincronizzazione): riprovo")
+                    503, "file locked by another program (antivirus or sync): retrying")
             time.sleep(attesa)
 
 
@@ -822,7 +822,7 @@ async def _scrivi_pezzo(request: Request, cartella: Path, chiave: str, nome: str
     attuale = parte.stat().st_size if parte.exists() else 0
     if offset > attuale or offset < 0:
         # un pezzo perso in mezzo: si riparte da quello che c'e' davvero
-        raise HTTPException(409, f"atteso offset {attuale}, arrivato {offset}")
+        raise HTTPException(409, f"expected offset {attuale}, got {offset}")
 
     def apri():
         fh = parte.open("r+b" if parte.exists() else "wb")
@@ -837,7 +837,7 @@ async def _scrivi_pezzo(request: Request, cartella: Path, chiave: str, nome: str
         async for blocco in request.stream():
             buf += blocco
             if scritti + len(buf) > size:
-                raise HTTPException(400, "il pezzo va oltre la dimensione dichiarata")
+                raise HTTPException(400, "the chunk goes past the declared size")
             if len(buf) >= 4 << 20:   # su disco a blocchi grandi, fuori dal loop
                 await asyncio.to_thread(fh.write, bytes(buf))
                 scritti += len(buf)
@@ -883,7 +883,7 @@ def _finisci_upload(cartella: Path, parte: Path, chiave: str, nome: str, size: i
 def raw_file(path: str):
     p = Path(path)
     if not p.is_file():
-        raise HTTPException(404, "file inesistente")
+        raise HTTPException(404, "file does not exist")
     return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "application/octet-stream")
 
 
@@ -900,7 +900,7 @@ def _clip_html(clip_id: str):
     store = S.need()
     found = store.project.find_clip(clip_id)
     if not found or found[1].type != "html":
-        raise HTTPException(404, f"clip html {clip_id!r} inesistente")
+        raise HTTPException(404, f"html clip {clip_id!r} does not exist")
     return store, found[1]
 
 
@@ -922,11 +922,11 @@ def html_file(clip_id: str, rel: str):
     """File relativi della clip (immagini, font, script), solo dalla sua cartella."""
     _, clip = _clip_html(clip_id)
     if not clip.html_base:
-        raise HTTPException(404, "la clip non ha una cartella base")
+        raise HTTPException(404, "the clip has no base folder")
     root = Path(clip.html_base).resolve()
     target = (root / rel).resolve()
     if not target.is_relative_to(root) or not target.is_file():
-        raise HTTPException(404, "file inesistente")
+        raise HTTPException(404, "file does not exist")
     return FileResponse(target, headers=_CORS_HTML,
                         media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream")
 
@@ -1025,7 +1025,7 @@ def _aggiungi_prova(snap, effetti: list[Effect], clip_id: str | None) -> None:
             if c.id == clip_id:
                 c.effects.extend(effetti)
                 return
-    raise HTTPException(404, f"clip sconosciuta: {clip_id}")
+    raise HTTPException(404, f"unknown clip: {clip_id}")
 
 
 @app.get("/api/frame")
@@ -1039,9 +1039,9 @@ def frame(t: float = 0.0, width: int = 960,
     """
     store = S.need()
     if store.project.duration() <= 0:
-        raise HTTPException(400, "timeline vuota")
+        raise HTTPException(400, "empty timeline")
     if effect and effect not in fx.EFFECTS:
-        raise HTTPException(400, f"effetto sconosciuto: {effect}")
+        raise HTTPException(400, f"unknown effect: {effect}")
 
     da_provare: list[Effect] = []
     if effect:
@@ -1049,7 +1049,7 @@ def frame(t: float = 0.0, width: int = 960,
     if preset:
         p = presets.find(preset)
         if not p:
-            raise HTTPException(400, f"preset sconosciuto: {preset}")
+            raise HTTPException(400, f"unknown preset: {preset}")
         for e in p.get("effects", []):
             da_provare.append(Effect(type=e["type"],
                                      params=fx.validate_effect(e["type"], e.get("params") or {})))
@@ -1067,7 +1067,7 @@ def frame(t: float = 0.0, width: int = 960,
                     _produce(out, lambda tmp: render.render_frame(
                         snap, t, str(tmp), width, use_proxy=True))
                 except Exception as exc:
-                    raise HTTPException(500, f"anteprima fallita: {exc}") from exc
+                    raise HTTPException(500, f"preview failed: {exc}") from exc
     return FileResponse(out, media_type="image/jpeg",
                         headers={"Cache-Control": "public, max-age=86400"})
 
@@ -1086,7 +1086,7 @@ def mixer_levels():
                     _produce(out, lambda tmp: Path(tmp).write_text(
                         json.dumps(review.livelli(snap)), encoding="utf-8"))
                 except Exception as exc:
-                    raise HTTPException(500, f"misura dei livelli fallita: {exc}") from exc
+                    raise HTTPException(500, f"level measurement failed: {exc}") from exc
     return FileResponse(out, media_type="application/json")
 
 
@@ -1095,9 +1095,9 @@ def scope(t: float = 0.0, view: str = "waveform"):
     """Scope grafico del fotogramma (review.scope_immagine), in cache per revisione."""
     store = S.need()
     if store.project.duration() <= 0:
-        raise HTTPException(400, "timeline vuota")
+        raise HTTPException(400, "empty timeline")
     if view not in review.SCOPI:
-        raise HTTPException(400, f"scope sconosciuto: {view}")
+        raise HTTPException(400, f"unknown scope: {view}")
     key = f"s_{S.revision()}_{t:.3f}_{view}"
     out = _preview_dir() / f"{key}.png"
     if not _ready(out):
@@ -1107,7 +1107,7 @@ def scope(t: float = 0.0, view: str = "waveform"):
                 try:
                     _produce(out, lambda tmp: review.scope_immagine(snap, t, view, str(tmp)))
                 except Exception as exc:
-                    raise HTTPException(500, f"scope fallito: {exc}") from exc
+                    raise HTTPException(500, f"scope failed: {exc}") from exc
     return FileResponse(out, media_type="image/png",
                         headers={"Cache-Control": "public, max-age=86400"})
 
@@ -1117,7 +1117,7 @@ def _segment(start: float, duration: float, height: int) -> tuple[Path, float, f
     store = S.need()
     total = store.project.duration()
     if total <= 0:
-        raise HTTPException(400, "timeline vuota")
+        raise HTTPException(400, "empty timeline")
     start = max(0.0, min(start, max(0.0, total - 0.05)))
     duration = max(0.2, min(duration, total - start))
 
@@ -1148,7 +1148,7 @@ def _segment(start: float, duration: float, height: int) -> tuple[Path, float, f
             args, *_ = render.build_command(snap, replace(opts, output=str(Path(wd) / "s.mp4")), Path(wd))
             key = "s_" + render.chiave_pezzo(args, Path(wd))
     except Exception as exc:
-        raise HTTPException(500, f"anteprima fallita: {exc}") from exc
+        raise HTTPException(500, f"preview failed: {exc}") from exc
     out = _preview_dir() / f"{key}.mp4"
     _segmenti[revisione] = out
     if len(_segmenti) > 512:
@@ -1166,7 +1166,7 @@ def _segment(start: float, duration: float, height: int) -> tuple[Path, float, f
             try:
                 _produce(out, make)
             except Exception as exc:
-                raise HTTPException(500, f"anteprima fallita: {exc}") from exc
+                raise HTTPException(500, f"preview failed: {exc}") from exc
             proxy.pota(_preview_dir(), proxy.tetto_mb("VEDIT_CACHE_ANTEPRIMA_MB", 2048))
     return out, start, duration
 
@@ -1237,7 +1237,7 @@ def render_start(body: RenderBody) -> dict:
     try:
         render.controlla_codec(body.codec, body.output)
         if body.subtitle_track and Path(body.output).suffix.lower() not in render.SOTTOTITOLI_CODEC:
-            raise ValueError("i sottotitoli come traccia vanno in .mp4, .mov, .mkv o .webm")
+            raise ValueError("subtitle streams go in .mp4, .mov, .mkv or .webm")
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     job_id = uuid.uuid4().hex[:8]
@@ -1280,7 +1280,7 @@ def render_start(body: RenderBody) -> dict:
 def render_status(job_id: str) -> dict:
     job = S.jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "job inesistente")
+        raise HTTPException(404, "job does not exist")
     return job
 
 
@@ -1404,7 +1404,7 @@ def preset_apply(body: PresetBody) -> dict:
     store = S.need()
     p = presets.find(body.preset_id)
     if p is None:
-        raise HTTPException(404, f"preset sconosciuto: {body.preset_id}")
+        raise HTTPException(404, f"unknown preset: {body.preset_id}")
     try:
         with S.lock:
             store.add_effects(body.clip_id, p["effects"])
@@ -1537,7 +1537,7 @@ def subtitles_export(body: SottotitoliBody) -> dict:
     S.need()
     fmt = Path(body.path).suffix.lower().lstrip(".")
     if fmt not in ("srt", "vtt"):
-        raise HTTPException(400, "si scrive .srt o .vtt")
+        raise HTTPException(400, "it writes .srt or .vtt")
     try:
         righe = captions.da_traccia(_snapshot(), body.track)
         return {"file": captions.write(body.path, righe, fmt), "righe": len(righe)}
@@ -1633,7 +1633,7 @@ def chat_link(body: LinkBody) -> dict:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 - rete, certificati, 404 del sito
-        raise HTTPException(400, f"non riesco a leggere il link: {exc}") from exc
+        raise HTTPException(400, f"cannot read the link: {exc}") from exc
 
 
 @app.post("/api/chat/allega")
@@ -1674,19 +1674,19 @@ def chiedi(lista, timeout: float = 1800.0) -> dict:
     qid = uuid.uuid4().hex[:10]
     evento = threading.Event()
     if S.domanda is not None:
-        return {"annullata": True, "motivo": "c'e' gia' una domanda in attesa di risposta"}
+        return {"annullata": True, "motivo": "a question is already waiting for an answer"}
     S.domanda = {"id": qid, "domande": norm, "evento": evento, "risposte": None}
     S.publish({"type": "domande", "id": qid, "domande": norm})
     scadenza = time.time() + timeout
     try:
         while not evento.wait(0.25):
             if S.fermo.is_set():
-                return {"annullata": True, "motivo": "l'utente ha fermato l'assistente"}
+                return {"annullata": True, "motivo": "the user stopped the assistant"}
             if time.time() > scadenza:
-                return {"annullata": True, "motivo": "nessuna risposta"}
+                return {"annullata": True, "motivo": "no answer"}
         r = S.domanda["risposte"] or {}
         if r.get("__annulla__"):
-            return {"annullata": True, "motivo": "l'utente ha chiuso le domande senza rispondere"}
+            return {"annullata": True, "motivo": "the user closed the questions without answering"}
         return {"risposte": r}
     finally:
         S.domanda = None
@@ -1707,7 +1707,7 @@ class RispostaBody(BaseModel):
 def domanda_rispondi(qid: str, body: RispostaBody) -> dict:
     d = S.domanda
     if d is None or d["id"] != qid:
-        raise HTTPException(404, "nessuna domanda in attesa con questo id")
+        raise HTTPException(404, "no pending question with this id")
     d["risposte"] = body.risposte
     d["evento"].set()
     return {"ok": True}
@@ -1882,7 +1882,7 @@ def _porta_libera(host: str, porta: int) -> int:
         with socket.socket() as s:
             if s.connect_ex((host, tentativo)) != 0:
                 return tentativo
-    raise RuntimeError(f"nessuna porta libera fra {porta} e {porta + 20}")
+    raise RuntimeError(f"no free port between {porta} and {porta + 20}")
 
 
 def serve_background(store: Store | None = None, host: str = "127.0.0.1", port: int = 8760,
@@ -1916,7 +1916,7 @@ def serve_background(store: Store | None = None, host: str = "127.0.0.1", port: 
     while not server.started and thread.is_alive() and time.time() < scadenza:
         time.sleep(0.05)
     if not server.started:
-        raise RuntimeError("l'interfaccia non si e' avviata entro 15 secondi")
+        raise RuntimeError("the interface did not start within 15 seconds")
 
     _background.update({"url": f"http://{host}:{port}", "host": host, "port": port,
                         "server": server, "thread": thread})

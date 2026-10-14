@@ -84,15 +84,15 @@ async def test_flusso_completo(assets, tmp_path):
 
 @pytest.mark.anyio
 async def test_errori_sono_parlanti(tmp_path):
-    with pytest.raises(ToolError, match="nessun progetto aperto"):
+    with pytest.raises(ToolError, match="no project open"):
         await call("add_clip", media="x")
 
     await call("project_create", path=str(tmp_path / "p.json"))
-    with pytest.raises(ToolError, match="inesistente"):
+    with pytest.raises(ToolError, match="does not exist"):
         await call("add_clip", media="fantasma")
     with pytest.raises(ToolError):
         await call("add_effect", type="nonesiste")
-    with pytest.raises(ToolError, match="sconosciuti"):
+    with pytest.raises(ToolError, match="unknown"):
         await call("add_effect", type="blur", params={"raggio": 3})
 
 
@@ -210,7 +210,7 @@ async def test_analisi_su_un_progetto_lo_dice(assets, tmp_path):
     """Passare il progetto dove va il girato e' l'errore naturale: va spiegato."""
     p = str(tmp_path / "p.json")
     await call("project_create", path=p)
-    with pytest.raises(ToolError, match="e' un progetto, non del girato"):
+    with pytest.raises(ToolError, match="is a project, not footage"):
         await call("inspect_footage", path=p)
 
 
@@ -289,14 +289,14 @@ async def test_particelle_su_misura_dall_agente(tmp_path, monkeypatch):
     assert c["parametri"]["custom"]["shape"] == "star"
     v = await call("set_particles", clip=c["id"], custom={"motion": "float"}, density=1.5)
     assert v["parametri"]["custom"]["motion"] == "float" and v["parametri"]["density"] == 1.5
-    with pytest.raises(ToolError, match="forma"):
+    with pytest.raises(ToolError, match="shape"):
         await call("add_particles", kind="custom", custom={"shape": "drago"})
     salvate = await call("create_particles", name="Oro", custom={"shape": "star"})
     pid = salvate["particelle"]["id"]
     assert pid in salvate["prossimo_passo"]
     assert (await call("add_particles", kind=pid))["parametri"]["custom"]["shape"] == "star"
     await call("delete_particles", particles=pid)
-    with pytest.raises(ToolError, match="inesistenti"):
+    with pytest.raises(ToolError, match="do not exist"):
         await call("delete_particles", particles=pid)
 
 
@@ -328,7 +328,7 @@ async def test_apply_style_e_review_edit(assets, tmp_path):
     assert esito["applicato"]["look"] == "cinema_teal_orange"
     dopo = await call("review_edit", style="cinematico")
     assert not dopo["solo_tagli"]
-    with pytest.raises(ToolError, match="stile sconosciuto"):
+    with pytest.raises(ToolError, match="unknown style"):
         await call("apply_style", style="barocco")
 
 
@@ -351,10 +351,10 @@ async def test_l_agente_crea_e_applica_uno_stile(assets, tmp_path, monkeypatch):
     await call("add_clips", clips=[{"media": m, "start": i * 1.0, "in": 0.0,
                                     "duration": 1.0} for i in range(4)])
     assert (await call("apply_style", style=sid))["applicato"]["look"] == "sogno"
-    with pytest.raises(ToolError, match="look sconosciuto"):
+    with pytest.raises(ToolError, match="unknown look"):
         await call("create_style", name="Z", guide="g", recipe={"look": "marte"})
     await call("delete_style", style=sid)
-    with pytest.raises(ToolError, match="inesistente"):
+    with pytest.raises(ToolError, match="does not exist"):
         await call("delete_style", style=sid)
 
 

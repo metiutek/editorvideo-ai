@@ -49,7 +49,7 @@ def test_istogramma_di_un_rosso_pieno(tmp_path):
 
 
 def test_scope_sconosciuto(tmp_path):
-    with pytest.raises(ValueError, match="scope sconosciuto"):
+    with pytest.raises(ValueError, match="unknown scope"):
         review.scope_immagine(_rosso().project, 1.0, "falsi colori", str(tmp_path / "x.png"))
 
 

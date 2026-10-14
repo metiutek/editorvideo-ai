@@ -46,10 +46,10 @@ def segnala(tipo: str, cosa: str, compito: str = "", strumento: str = "",
             proposta: str = "") -> dict:
     tipo = (tipo or "").strip().lower()
     if tipo not in TIPI:
-        raise ValueError(f"tipo sconosciuto: {tipo!r} (ammessi: {', '.join(TIPI)})")
+        raise ValueError(f"unknown type: {tipo!r} (allowed: {', '.join(TIPI)})")
     cosa = (cosa or "").strip()
     if not cosa:
-        raise ValueError("descrivi cosa non va in 'cosa'")
+        raise ValueError("describe what is wrong in 'cosa'")
     righe = [f"\n## [{tipo}] {strumento or 'generale'} — {time.strftime('%Y-%m-%d %H:%M')}\n",
              f"\n{cosa}\n"]
     if compito.strip():

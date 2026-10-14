@@ -16,47 +16,47 @@ import re
 from pathlib import Path
 
 STILI: list[dict] = [
-    {"id": "cinematico", "nome": "Cinematografico", "piano": "cinematic",
-     "breve": "Lento, immagini tenute, colore da film",
+    {"id": "cinematico", "nome": "Cinematic", "piano": "cinematic",
+     "breve": "Slow, held shots, film colour",
      "guida": "Inquadrature tenute 3-8 s, tagli sul respiro e non sul beat. Dissolvenze morbide "
               "(0.6-1 s) solo dove il tempo passa. Colore: contrasto morbido, ombre fredde e pelle "
               "calda, con mano leggera sul master. Movimento lento dentro l'inquadratura (spinte "
               "con set_transform). Titoli sottili e piccoli, molto spazio. Musica con un arco vero "
               "e silenzio prima del momento forte. Si chiude su un'immagine tenuta."},
-    {"id": "dinamico", "nome": "Dinamico / Social", "piano": "shortform",
-     "breve": "Tagli veloci sul beat, testi grandi",
+    {"id": "dinamico", "nome": "Dynamic / Social", "piano": "shortform",
+     "breve": "Fast cuts on the beat, big text",
      "guida": "Il gancio nei primi 2 secondi. Tagli di 0.5-1.5 s sul battito (music_beats), "
               "punch-in con scala animata, testi grandi e animati che si leggono senza audio, "
               "sottotitoli. Niente pause morte. Se il materiale lo consente, formato verticale. "
               "Ogni 3-4 secondi cambia qualcosa: inquadratura, scala o testo."},
-    {"id": "documentario", "nome": "Documentario", "piano": "documentary",
-     "breve": "Guidato dal parlato, sobrio",
+    {"id": "documentario", "nome": "Documentary", "piano": "documentary",
+     "breve": "Driven by speech, understated",
      "guida": "Il parlato decide i tagli: J e L cut (jl_cut), sottopancia con nome e ruolo, "
               "b-roll che illustra quello che si dice. Colore naturale. Musica bassa sotto la "
               "voce (duck_music). Transizioni rare e motivate. Si apre calmi e si costruisce."},
     {"id": "vlog", "nome": "Vlog", "piano": "vlog",
-     "breve": "Jump cut, ritmo personale",
+     "breve": "Jump cuts, personal pace",
      "guida": "Jump cut sul parlato (tighten_speech) per togliere le pause, b-roll e dettagli fra "
               "le frasi, titoli giocosi, zoom leggeri per enfasi. Ritmo sostenuto ma respirabile, "
               "musica allegra bassa. Chiusura con un saluto o una call to action."},
     {"id": "trailer", "nome": "Trailer", "piano": "cinematic",
-     "breve": "Tre atti, crescendo, cartelli",
+     "breve": "Three acts, crescendo, title cards",
      "guida": "Tre atti: presentazione lenta, tensione che cresce, raffica finale. Cartelli di "
               "testo su nero tra le scene, tagli che accelerano verso il picco, un attimo di "
               "silenzio prima dell'ultimo colpo, poi titolo e data. Transizioni secche, qualche "
               "flash bianco sui colpi."},
-    {"id": "videoclip", "nome": "Videoclip musicale", "piano": "shortform",
-     "breve": "Tutto a tempo di musica",
+    {"id": "videoclip", "nome": "Music video", "piano": "shortform",
+     "breve": "Everything on the beat",
      "guida": "La musica comanda: stacchi sui battiti e cambi di scena sulle battute "
               "(music_beats con every=4). Sezioni diverse per strofa, ritornello e break, con "
               "colore e grafica che cambiano con l'energia. Effetti sincronizzati sui colpi."},
-    {"id": "minimal", "nome": "Minimal / Pulito", "piano": "documentary",
-     "breve": "Pochi tagli, niente effetti",
+    {"id": "minimal", "nome": "Minimal / Clean", "piano": "documentary",
+     "breve": "Few cuts, no effects",
      "guida": "Pochi tagli e tenuti, transizioni secche, niente effetti vistosi. Tipografia "
               "sobria, molto spazio vuoto, colore neutro. Ogni elemento sullo schermo deve "
               "guadagnarsi il posto."},
     {"id": "retro", "nome": "Retro / VHS", "piano": "vlog",
-     "breve": "Grana, glitch, anni '90",
+     "breve": "Grain, glitch, the 90s",
      "guida": "Look videocassetta: grana, leggera sfocatura, saturazione e colori anni '90, "
               "scritte in stile timecode o pixel. Transizioni glitch brevi, qualche salto di "
               "fotogramma voluto. Formato 4:3 se il materiale lo permette."},
@@ -68,7 +68,9 @@ STILI: list[dict] = [
 # ---------------------------------------------------------------------------
 
 PIANI = ("cinematic", "shortform", "documentary", "vlog")
-MAX_GUIDA = 4000
+# le istruzioni di uno stile arrivano al modello a ogni messaggio: 20k caratteri
+# sono circa 5k token, abbastanza per una guida di montaggio dettagliata
+MAX_GUIDA = 20000
 
 
 def _file() -> Path:
@@ -105,18 +107,18 @@ def salva(nome: str, guida: str, breve: str = "", piano: str = "vlog",
     """
     nome, guida, breve = (nome or "").strip(), (guida or "").strip(), (breve or "").strip()
     if not nome:
-        raise ValueError("dai un nome allo stile")
+        raise ValueError("give the style a name")
     if not guida:
-        raise ValueError("scrivi come deve montare l'assistente con questo stile")
+        raise ValueError("write how the assistant should edit with this style")
     if len(guida) > MAX_GUIDA:
-        raise ValueError(f"istruzioni troppo lunghe ({len(guida)} caratteri, massimo {MAX_GUIDA})")
+        raise ValueError(f"instructions too long ({len(guida)} characters, at most {MAX_GUIDA})")
     if piano not in PIANI:
-        raise ValueError(f"ritmo di base sconosciuto {piano!r}; ammessi: {', '.join(PIANI)}")
+        raise ValueError(f"unknown base pace {piano!r}; allowed: {', '.join(PIANI)}")
     propria = valida_ricetta(ricetta) if ricetta is not None else None
     lista = personali()
     if stile_id:
         if not any(s["id"] == stile_id for s in lista):
-            raise ValueError(f"stile personale {stile_id!r} inesistente")
+            raise ValueError(f"personal style {stile_id!r} does not exist")
     else:
         radice = "mio-" + (re.sub(r"[^a-z0-9]+", "-", nome.lower()).strip("-") or "stile")
         stile_id, n = radice, 2
@@ -138,7 +140,7 @@ def salva(nome: str, guida: str, breve: str = "", piano: str = "vlog",
 def elimina(stile_id: str) -> None:
     lista = personali()
     if not any(s["id"] == stile_id for s in lista):
-        raise ValueError(f"stile personale {stile_id!r} inesistente")
+        raise ValueError(f"personal style {stile_id!r} does not exist")
     _scrivi([s for s in lista if s["id"] != stile_id])
 
 
@@ -279,32 +281,32 @@ def valida_ricetta(r: dict) -> dict:
     from .model import TRANSITIONS
 
     if not isinstance(r, dict):
-        raise ValueError('la ricetta e\' un oggetto, es. {"movimento": "punch", "zoom": 0.1}')
+        raise ValueError('the recipe is an object, e.g. {"movimento": "punch", "zoom": 0.1}')
     ignote = [k for k in r if k not in VOCI_RICETTA]
     if ignote:
-        raise ValueError(f"voci di ricetta sconosciute: {', '.join(ignote)}; "
-                         f"ammesse: {', '.join(VOCI_RICETTA)}")
+        raise ValueError(f"unknown recipe entries: {', '.join(ignote)}; "
+                         f"allowed: {', '.join(VOCI_RICETTA)}")
 
     def numero(k, lo, hi):
         try:
             v = float(r[k])
         except (TypeError, ValueError):
-            raise ValueError(f"{k} dev'essere un numero tra {lo} e {hi}") from None
+            raise ValueError(f"{k} must be a number between {lo} and {hi}") from None
         if not lo <= v <= hi:
-            raise ValueError(f"{k} fuori scala ({v}): tra {lo} e {hi}")
+            raise ValueError(f"{k} out of range ({v}): between {lo} and {hi}")
         return round(v, 3)
 
     def scelta(k, ammessi):
         v = r[k]
         if v is not None and v not in ammessi:
-            raise ValueError(f"{k} sconosciuto {v!r}; ammessi: {', '.join(ammessi)} o null")
+            raise ValueError(f"unknown {k} {v!r}; allowed: {', '.join(ammessi)} or null")
         return v
 
     out: dict = {}
     if "look" in r:
         looks = [p["id"] for p in presets.LOOKS]
         if r["look"] is not None and r["look"] not in looks:
-            raise ValueError(f"look sconosciuto {r['look']!r}; ammessi: {', '.join(looks)} o null")
+            raise ValueError(f"unknown look {r['look']!r}; allowed: {', '.join(looks)} or null")
         out["look"] = r["look"]
     if "movimento" in r:
         out["movimento"] = scelta("movimento", MOVIMENTI)
@@ -328,12 +330,12 @@ def valida_ricetta(r: dict) -> dict:
                 dur, ogni = float(dur), int(ogni)
             except (TypeError, ValueError):
                 raise ValueError('transizioni: {"tipo": "dissolve", "durata": 0.6, "ogni": 4} '
-                                 "oppure null") from None
+                                 "or null") from None
             ammesse = [t for t in TRANSITIONS if t != "none"]
             if tipo not in ammesse:
-                raise ValueError(f"transizione sconosciuta {tipo!r}; ammesse: {', '.join(ammesse)}")
+                raise ValueError(f"unknown transition {tipo!r}; allowed: {', '.join(ammesse)}")
             if not 0.1 <= dur <= 3.0 or not 1 <= ogni <= 50:
-                raise ValueError("transizioni: durata tra 0.1 e 3 s, ogni tra 1 e 50 clip")
+                raise ValueError("transizioni: duration between 0.1 and 3 s, every between 1 and 50 clips")
             v = [tipo, round(dur, 3), ogni]
         out["transizioni"] = v
     if "accenti" in r:
@@ -345,17 +347,17 @@ def valida_ricetta(r: dict) -> dict:
                 nome, ogni = v
                 ogni = int(ogni)
             except (TypeError, ValueError):
-                raise ValueError('accenti: {"effetto": "shake", "ogni": 4} oppure null') from None
+                raise ValueError('accenti: {"effetto": "shake", "ogni": 4} or null') from None
             if nome not in ACCENTI or not 1 <= ogni <= 50:
-                raise ValueError(f"accenti: effetto tra {', '.join(ACCENTI)}, ogni tra 1 e 50")
+                raise ValueError(f"accenti: effect among {', '.join(ACCENTI)}, every between 1 and 50")
             v = [nome, ogni]
         out["accenti"] = v
     if "attese" in r:
         v = list(r["attese"] or [])
         ignote = [a for a in v if a not in review._RIMEDI]
         if ignote:
-            raise ValueError(f"attese sconosciute: {', '.join(map(str, ignote))}; "
-                             f"ammesse: {', '.join(review._RIMEDI)}")
+            raise ValueError(f"unknown expectations: {', '.join(map(str, ignote))}; "
+                             f"allowed: {', '.join(review._RIMEDI)}")
         out["attese"] = v
     if "da_fare" in r:
         v = r["da_fare"] or []
@@ -377,7 +379,7 @@ def _da_json(r: dict) -> dict:
 def ricetta(stile_id: str) -> dict:
     s = trova(stile_id)
     if s is None:
-        raise ValueError(f"stile sconosciuto {stile_id!r}; disponibili: "
+        raise ValueError(f"unknown style {stile_id!r}; available: "
                          + ", ".join(x["id"] for x in tutti()))
     if s["id"] in RICETTE:
         return RICETTE[s["id"]]
@@ -439,11 +441,11 @@ def applica(store, stile_id: str, track: str | None = None) -> dict:
     p = store.project
     tracce = [t for t in p.tracks if t.kind == "video" and (track is None or t.id == track)]
     if track is not None and not tracce:
-        raise ValueError(f"traccia video {track!r} inesistente")
+        raise ValueError(f"video track {track!r} does not exist")
     principale = next((t for t in tracce if any(c.type == "media" for c in t.clips)), None)
     if principale is None:
-        raise ValueError("nessuna clip video in timeline: prima metti il materiale "
-                         "(add_clips o plan_edit apply=True)")
+        raise ValueError("no video clips in the timeline: lay down the footage first "
+                         "(add_clips or plan_edit apply=True)")
     ids = [c.id for c in sorted((c for c in principale.clips
                                  if c.type == "media" and c.enabled), key=lambda c: c.start)]
     fatto: dict[str, object] = {}

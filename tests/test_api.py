@@ -58,7 +58,7 @@ def test_errori_http(client, tmp_path):
     assert client.post("/api/op/add_clip", json={"media_id": "x"}).status_code == 400
     _create(client, tmp_path)
     r = client.post("/api/op/add_clip", json={"media_id": "fantasma"})
-    assert r.status_code == 400 and "inesistente" in r.json()["detail"]
+    assert r.status_code == 400 and "does not exist" in r.json()["detail"]
 
     assert client.post("/api/op/formatta_il_disco", json={}).status_code == 404
     r = client.post("/api/op/add_clip", json={"parametro_sbagliato": 1})
@@ -123,7 +123,7 @@ def test_transizione_via_api(client, tmp_path, assets):
 
     r = client.post("/api/op/crossfade",
                     json={"clip_a": a["id"], "clip_b": b["id"], "type": "tenda"})
-    assert r.status_code == 400 and "sconosciuta" in r.json()["detail"]
+    assert r.status_code == 400 and "unknown" in r.json()["detail"]
 
 
 @pytest.mark.slow

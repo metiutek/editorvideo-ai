@@ -39,7 +39,7 @@ def test_ripple_testa_toglie_e_tira_indietro(lunga):
     s.ripple_trim(b, "start", 0.5)
     # la clip resta dove sta, perde mezzo secondo di testa, il seguito arretra
     assert _v(s) == [(0, 1.5, 0), (1.5, 1.0, 2.5), (2.5, 1.0, 3.5)]
-    with pytest.raises(EditError, match="prima del suo attacco"):
+    with pytest.raises(EditError, match="before its in point"):
         s.ripple_trim(a, "start", -0.5)
 
 
@@ -47,11 +47,11 @@ def test_roll_sposta_solo_il_taglio(lunga):
     s, (a, b, c) = lunga
     s.roll_edit(a, 0.4)
     assert _v(s) == [(0, 1.9, 0), (1.9, 1.1, 2.4), (3.0, 1.0, 3.5)]
-    with pytest.raises(EditError, match="attaccata dopo"):
+    with pytest.raises(EditError, match="butted after"):
         s.roll_edit(c, 0.2)
-    with pytest.raises(EditError, match="senza durata"):
+    with pytest.raises(EditError, match="no duration"):
         s.roll_edit(a, -2)
-    with pytest.raises(EditError, match="dopo la sua fine"):
+    with pytest.raises(EditError, match="after its end"):
         s.roll_edit(a, 5)
 
 
@@ -59,9 +59,9 @@ def test_slip_cambia_solo_il_tratto(lunga):
     s, (a, b, c) = lunga
     s.slip_clip(b, 1.0)
     assert _v(s)[1] == (1.5, 1.5, 3.0)
-    with pytest.raises(EditError, match="dopo di cosi'"):
+    with pytest.raises(EditError, match="after that"):
         s.slip_clip(b, 1.0)        # 4.0 + 1.5 > 5
-    with pytest.raises(EditError, match="prima di cosi'"):
+    with pytest.raises(EditError, match="before that"):
         s.slip_clip(a, -0.1)
 
 
@@ -99,7 +99,7 @@ def test_velocita_e_reverse(tmp_path, assets):
     c = s.clip_or_die(c.id)[1]
     # a 2x mezzo secondo di timeline e' un secondo di sorgente
     assert (round(c.duration, 3), round(c.in_, 3)) == (1.5, 1.0)
-    with pytest.raises(EditError, match="dopo la sua fine"):
+    with pytest.raises(EditError, match="after its end"):
         s.ripple_trim(c.id, "end", 0.6)          # 1 + 2.1*2 > 5
     s.set_reverse(c.id, True)
     s.ripple_trim(c.id, "end", -0.5)
@@ -119,6 +119,6 @@ def test_collegate_seguono_e_traccia_bloccata(tmp_path, assets):
     s.slip_clip(b.id, 0.5)
     assert round(audio.clips[1].in_, 3) == 2.5
     s.set_track(audio.id, locked=True)
-    with pytest.raises(EditError, match="bloccata"):
+    with pytest.raises(EditError, match="locked"):
         s.ripple_trim(a.id, "end", 0.2)
 

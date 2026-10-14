@@ -36,22 +36,22 @@ from typing import Any, Callable, Iterator
 PROVIDERS: list[dict] = [
     {"id": "claude_code", "nome": "Claude Code", "tipo": "claude_code", "chiave": False,
      "modello": "", "modelli": ["", "opus", "sonnet", "haiku"],
-     "nota": "Usa il Claude Code installato su questo computer, con il tuo abbonamento. "
-             "Nessuna chiave da incollare."},
+     "nota": "Uses the Claude Code installed on this computer, with your subscription. "
+             "No key to paste."},
     {"id": "anthropic", "nome": "Anthropic (Claude)", "tipo": "anthropic", "chiave": True,
      "env": "ANTHROPIC_API_KEY", "modello": "claude-opus-5-5",
      "modelli": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5", "claude-fable-5-1"],
-     "nota": "Chiave da console.anthropic.com"},
+     "nota": "Key from console.anthropic.com"},
     {"id": "openai", "nome": "OpenAI", "tipo": "openai", "chiave": True, "env": "OPENAI_API_KEY",
      "base": "https://api.openai.com/v1", "modello": "gpt-5", "modelli": ["gpt-5", "gpt-5-mini"],
-     "nota": "Chiave da platform.openai.com"},
+     "nota": "Key from platform.openai.com"},
     {"id": "gemini", "nome": "Google Gemini", "tipo": "openai", "chiave": True, "env": "GEMINI_API_KEY",
      "base": "https://generativelanguage.googleapis.com/v1beta/openai", "modello": "gemini-2.5-pro",
-     "modelli": ["gemini-2.5-pro", "gemini-2.5-flash"], "nota": "Chiave da aistudio.google.com"},
+     "modelli": ["gemini-2.5-pro", "gemini-2.5-flash"], "nota": "Key from aistudio.google.com"},
     {"id": "openrouter", "nome": "OpenRouter", "tipo": "openai", "chiave": True,
      "env": "OPENROUTER_API_KEY", "base": "https://openrouter.ai/api/v1",
      "modello": "anthropic/claude-opus-5-5", "modelli": [],
-     "nota": "Una chiave sola per centinaia di modelli: openrouter.ai"},
+     "nota": "One key for hundreds of models: openrouter.ai"},
     {"id": "groq", "nome": "Groq", "tipo": "openai", "chiave": True, "env": "GROQ_API_KEY",
      "base": "https://api.groq.com/openai/v1", "modello": "", "modelli": []},
     {"id": "mistral", "nome": "Mistral", "tipo": "openai", "chiave": True, "env": "MISTRAL_API_KEY",
@@ -60,14 +60,14 @@ PROVIDERS: list[dict] = [
      "base": "https://api.deepseek.com/v1", "modello": "deepseek-chat", "modelli": []},
     {"id": "xai", "nome": "xAI (Grok)", "tipo": "openai", "chiave": True, "env": "XAI_API_KEY",
      "base": "https://api.x.ai/v1", "modello": "", "modelli": []},
-    {"id": "ollama", "nome": "Ollama (sul computer)", "tipo": "openai", "chiave": False,
+    {"id": "ollama", "nome": "Ollama (on this computer)", "tipo": "openai", "chiave": False,
      "base": "http://localhost:11434/v1", "modello": "", "modelli": [],
-     "nota": "Modelli locali: serve un modello che sappia usare gli strumenti"},
-    {"id": "lmstudio", "nome": "LM Studio (sul computer)", "tipo": "openai", "chiave": False,
+     "nota": "Local models: you need a model that can use tools"},
+    {"id": "lmstudio", "nome": "LM Studio (on this computer)", "tipo": "openai", "chiave": False,
      "base": "http://localhost:1234/v1", "modello": "", "modelli": []},
-    {"id": "custom", "nome": "Altro (compatibile OpenAI)", "tipo": "openai", "chiave": True,
+    {"id": "custom", "nome": "Other (OpenAI compatible)", "tipo": "openai", "chiave": True,
      "base": "", "modello": "", "modelli": [],
-     "nota": "Qualunque servizio che espone /chat/completions: incolla indirizzo e chiave"},
+     "nota": "Any service exposing /chat/completions: paste the address and key"},
 ]
 
 MAX_TURNS = 16
@@ -77,7 +77,7 @@ MAX_IMMAGINI = 6
 def provider(pid: str) -> dict:
     p = next((p for p in PROVIDERS if p["id"] == pid), None)
     if p is None:
-        raise ValueError(f"provider sconosciuto: {pid}")
+        raise ValueError(f"unknown provider: {pid}")
     return p
 
 
@@ -154,22 +154,22 @@ def _pronto(p: dict, cfg: dict) -> str | None:
     """None se il provider si puo' usare, altrimenti il motivo in parole."""
     if p["tipo"] == "claude_code":
         return None if claude_exe() else (
-            "Claude Code non e' installato su questo computer: "
-            "npm install -g @anthropic-ai/claude-code, poi `claude` una volta per accedere")
+            "Claude Code is not installed on this computer: "
+            "npm install -g @anthropic-ai/claude-code, then run `claude` once to sign in")
     if p["tipo"] == "anthropic":
         try:
             import anthropic  # noqa: F401
         except ImportError:
-            return "manca il pacchetto anthropic: pip install anthropic"
+            return "the anthropic package is missing: pip install anthropic"
         if not _chiave(p, cfg) and not os.environ.get("ANTHROPIC_AUTH_TOKEN"):
-            return "incolla la chiave API di Anthropic"
+            return "paste the Anthropic API key"
         return None
     if p["chiave"] and not _chiave(p, cfg):
-        return f"incolla la chiave API di {p['nome']}"
+        return f"paste the {p['nome']} API key"
     if not _indirizzo(p, cfg):
-        return "manca l'indirizzo del servizio"
+        return "the service address is missing"
     if not _modello(p, cfg):
-        return "scrivi il nome del modello"
+        return "type the model name"
     return None
 
 
@@ -196,7 +196,7 @@ def stato() -> dict:
         "provider": attivo, "providers": elenco,
         "ok": bool(a and a["pronto"]),
         "model": a["modello"] if a else "", "nome": a["nome"] if a else "",
-        "motivo": (a["motivo"] if a else "scegli un modello nelle impostazioni dell'assistente"),
+        "motivo": (a["motivo"] if a else "choose a model in the assistant settings"),
     }
 
 
@@ -213,7 +213,7 @@ def attivo() -> tuple[dict, dict]:
     cfg = carica()
     pid = cfg["provider"] or _scelta_automatica(cfg)
     if not pid:
-        raise RuntimeError("nessun modello configurato: apri le impostazioni dell'assistente")
+        raise RuntimeError("no model configured: open the assistant settings")
     p = provider(pid)
     motivo = _pronto(p, cfg)
     if motivo:
@@ -288,24 +288,24 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
                 yield {"type": "stopped"}
                 return
         except anthropic.AuthenticationError:
-            yield {"type": "error", "message": "chiave Anthropic non valida"}
+            yield {"type": "error", "message": "invalid Anthropic key"}
             return
         except anthropic.RateLimitError:
-            yield {"type": "error", "message": "troppe richieste: riprova fra poco"}
+            yield {"type": "error", "message": "too many requests: try again shortly"}
             return
         except anthropic.APIStatusError as exc:
-            yield {"type": "error", "message": f"errore dal servizio ({exc.status_code}): {exc.message}"}
+            yield {"type": "error", "message": f"service error ({exc.status_code}): {exc.message}"}
             return
         except anthropic.APIConnectionError:
-            yield {"type": "error", "message": "non riesco a raggiungere Anthropic: controlla la rete"}
+            yield {"type": "error", "message": "cannot reach Anthropic: check the network"}
             return
 
         history.append({"role": "assistant", "content": message.content})
         if message.stop_reason == "refusal":
-            yield {"type": "error", "message": "la richiesta e' stata rifiutata"}
+            yield {"type": "error", "message": "the request was refused"}
             return
         if message.stop_reason == "max_tokens":
-            yield {"type": "error", "message": "risposta troppo lunga, interrotta"}
+            yield {"type": "error", "message": "answer too long, cut off"}
             return
         if message.stop_reason != "tool_use":
             yield {"type": "done"}
@@ -339,7 +339,7 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
             history.append({"role": "assistant", "content": [{"type": "text", "text": "(interrotto dall'utente)"}]})
             yield {"type": "stopped"}
             return
-    yield {"type": "error", "message": "troppi passaggi: mi fermo qui"}
+    yield {"type": "error", "message": "too many steps: stopping here"}
 
 
 # --------------------------------------------------------------------------
@@ -382,8 +382,8 @@ def _errore_http(exc: urllib.error.HTTPError) -> str:
     except Exception:  # noqa: BLE001
         corpo = ""
     if exc.code in (401, 403):
-        return "chiave non valida o senza permessi"
-    return f"errore dal servizio ({exc.code}): {str(corpo)[:300]}"
+        return "invalid key or missing permissions"
+    return f"service error ({exc.code}): {str(corpo)[:300]}"
 
 
 def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list,
@@ -431,15 +431,15 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
                 if exc.code == 400 and isinstance(history[-1].get("content"), list) and any(
                         x.get("type") == "image_url" for x in history[-1]["content"]):
                     history[-1] = {"role": "user", "content": solo_testo}
-                    yield {"type": "note", "message": "questo modello non vede le immagini: "
-                                                      "mando i riferimenti solo come testo"}
+                    yield {"type": "note", "message": "this model cannot see images: "
+                                                      "sending the references as text only"}
                     continue
                 raise
         except urllib.error.HTTPError as exc:
             yield {"type": "error", "message": _errore_http(exc)}
             return
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            yield {"type": "error", "message": f"non riesco a raggiungere {p['nome']}: {exc}"}
+            yield {"type": "error", "message": f"cannot reach {p['nome']}: {exc}"}
             return
 
         if fermato:
@@ -464,7 +464,7 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
             try:
                 args = json.loads(tc["function"]["arguments"] or "{}")
                 if not isinstance(args, dict):
-                    raise ValueError("gli argomenti devono essere un oggetto")
+                    raise ValueError("the arguments must be an object")
             except ValueError as exc:
                 history.append({"role": "tool", "tool_call_id": tc["id"],
                                 "content": f"INVALID_JSON: {exc}"})
@@ -480,7 +480,7 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
         if fermo():
             yield {"type": "stopped"}
             return
-    yield {"type": "error", "message": "troppi passaggi: mi fermo qui"}
+    yield {"type": "error", "message": "too many steps: stopping here"}
 
 
 # --------------------------------------------------------------------------
@@ -504,14 +504,15 @@ momenti forti, e non dire che hai finito finche' review_edit da' avvisi.
 Se l'utente vuole uno stile che non esiste, crealo con create_style (guida piu'
 ricetta) e poi applicalo con apply_style.
 
-Scrivi sempre in italiano, anche le brevi note fra un passaggio e l'altro.
+Scrivi sempre nella lingua in cui ti scrive l'utente (l'interfaccia e' in inglese), anche
+le brevi note fra un passaggio e l'altro.
 
 Non esportare mai di tua iniziativa: render_video solo se l'utente lo chiede, e
 l'editor gli chiede comunque conferma. Per le scelte che spettano all'utente
 (stile, durata, formato, se esportare) usa mcp__vedit__ask_user, che gli mostra
 le domande con le opzioni nell'editor: AskUserQuestion qui non funziona. Se l'utente ti indica dei
 riferimenti (istanti, clip, aree dell'inquadratura) le immagini relative sono file
-PNG che puoi aprire con Read. Rispondi in italiano, breve."""
+PNG che puoi aprire con Read. Rispondi nella lingua dell'utente, breve."""
 
 
 def _comando_claude(exe: str) -> list[str]:
@@ -551,7 +552,7 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
             args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             cwd=cwd or None, env=env, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except OSError as exc:
-        yield {"type": "error", "message": f"non riesco ad avviare Claude Code: {exc}"}
+        yield {"type": "error", "message": f"cannot start Claude Code: {exc}"}
         return
     # la lettura dell'uscita blocca: e' un filo a parte che ferma il processo
     # quando l'utente preme "ferma"

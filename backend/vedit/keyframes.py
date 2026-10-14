@@ -174,15 +174,15 @@ def validate(value: Any) -> None:
         return
     kf = value["kf"]
     if not isinstance(kf, list) or not kf:
-        raise ValueError("blocco keyframe vuoto o non lista")
+        raise ValueError("keyframe block empty or not a list")
     for k in kf:
         if not isinstance(k, dict) or "t" not in k or "v" not in k:
-            raise ValueError(f"keyframe deve avere 't' e 'v': {k!r}")
+            raise ValueError(f"a keyframe needs 't' and 'v': {k!r}")
         _numero(k["t"], "t")
         _numero(k["v"], "v")
         ease = str(k.get("ease", "linear"))
         if ease not in EASINGS:
-            raise ValueError(f"easing sconosciuto {ease!r}, attesi: {', '.join(EASINGS)}")
+            raise ValueError(f"unknown easing {ease!r}, expected: {', '.join(EASINGS)}")
 
 
 def _numero(x: Any, nome: str) -> None:
@@ -191,7 +191,7 @@ def _numero(x: Any, nome: str) -> None:
     try:
         float(x)
     except (TypeError, ValueError):
-        raise ValueError(f"{nome} deve essere un numero, non {x!r}") from None
+        raise ValueError(f"{nome} must be a number, not {x!r}") from None
 
 
 def coerce(value: Any) -> Any:

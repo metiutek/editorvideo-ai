@@ -16,7 +16,7 @@ class FFmpegError(RuntimeError):
         self.code = code
         self.log = log
         tail = "\n".join(log.strip().splitlines()[-25:])
-        super().__init__(f"ffmpeg uscito con codice {code}\n{tail}")
+        super().__init__(f"ffmpeg exited with code {code}\n{tail}")
 
 
 @lru_cache(maxsize=None)
@@ -35,9 +35,9 @@ def binary(name: str = "ffmpeg") -> str:
     if scaricato:
         return scaricato
     raise FileNotFoundError(
-        f"{name} non trovato nel PATH. Scaricalo con `vedit install-ffmpeg` (nessun permesso di "
-        f"amministratore, finisce in {ffbin.bin_dir()}), installalo col gestore pacchetti del "
-        f"sistema, oppure imposta VEDIT_{name.upper()} sul percorso del binario."
+        f"{name} not found in PATH. Download it with `vedit install-ffmpeg` (no administrator "
+        f"rights needed, it goes in {ffbin.bin_dir()}), install it with the system package "
+        f"manager, or set VEDIT_{name.upper()} to the path of the binary."
     )
 
 

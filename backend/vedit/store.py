@@ -80,7 +80,7 @@ class Store:
     def create(cls, name: str = "untitled", preset: str = "1080p", path: str | None = None,
                width: int | None = None, height: int | None = None, fps: float | None = None) -> "Store":
         if preset not in PRESETS:
-            raise EditError(f"preset sconosciuto {preset!r}; disponibili: {', '.join(PRESETS)}")
+            raise EditError(f"unknown preset {preset!r}; available: {', '.join(PRESETS)}")
         w, h, f = PRESETS[preset]
         settings = Settings(width=width or w, height=height or h, fps=fps or f)
         p = Project(name=name, settings=settings, master=Master())
@@ -97,7 +97,7 @@ class Store:
     def open(cls, path: str) -> "Store":
         f = Path(path)
         if not f.exists():
-            raise EditError(f"progetto non trovato: {path}")
+            raise EditError(f"project not found: {path}")
         data = json.loads(f.read_text(encoding="utf-8"))
         return cls(Project.from_obj(data), str(f.resolve()))
 
@@ -113,7 +113,7 @@ class Store:
         """
         target = Path(path or self.path or "")
         if not str(target):
-            raise EditError("nessun percorso di salvataggio: passa path=")
+            raise EditError("no save path: pass path=")
         target.parent.mkdir(parents=True, exist_ok=True)
         blob = json.dumps(self.project.to_dict(), indent=2, ensure_ascii=False)
 
@@ -138,7 +138,7 @@ class Store:
                 last = exc
                 time.sleep(0.02 * (attempt + 1))
         else:
-            raise EditError(f"salvataggio non riuscito su {target}: {last}")
+            raise EditError(f"saving to {target} failed: {last}")
 
         self.path = str(target.resolve())
         return self.path
@@ -282,8 +282,8 @@ class Store:
         used = [c.id for t in self.project.tracks for c in t.clips if c.media == m.id]
         if used and not force:
             raise EditError(
-                f"{m.name} e' usato da {len(used)} clip ({', '.join(used[:4])}"
-                f"{'...' if len(used) > 4 else ''}); usa force=true per eliminarle"
+                f"{m.name} is used by {len(used)} clips ({', '.join(used[:4])}"
+                f"{'...' if len(used) > 4 else ''}); use force=true to delete them"
             )
         self._touch()
         for t in self.project.tracks:
@@ -309,13 +309,13 @@ class Store:
         m = self.project.media_by_id(media_id)
         if m is None:
             known = ", ".join(f"{x.id}({x.name})" for x in self.project.media) or "nessuno"
-            raise EditError(f"media {media_id!r} inesistente; importati: {known}")
+            raise EditError(f"media {media_id!r} does not exist; imported: {known}")
         return m
 
     # ---- tracce --------------------------------------------------------
     def add_track(self, kind: str = "video", name: str | None = None, index: int | None = None) -> Track:
         if kind not in ("video", "audio"):
-            raise EditError("kind deve essere 'video' o 'audio'")
+            raise EditError("kind must be 'video' or 'audio'")
         self._touch()
         same = [t for t in self.project.tracks if t.kind == kind]
         tid = f"{'V' if kind == 'video' else 'A'}{len(same) + 1}"
@@ -333,14 +333,14 @@ class Store:
         t = self.project.track_by_id(track_id)
         if t is None:
             known = ", ".join(x.id for x in self.project.tracks)
-            raise EditError(f"traccia {track_id!r} inesistente; disponibili: {known}")
+            raise EditError(f"track {track_id!r} does not exist; available: {known}")
         return t
 
     def track_for_edit(self, track_id: str) -> Track:
         """Come ``track_or_die``, ma rifiuta le tracce bloccate."""
         t = self.track_or_die(track_id)
         if t.locked:
-            raise EditError(f"la traccia {t.id} e' bloccata: sbloccala per modificarla")
+            raise EditError(f"track {t.id} is locked: unlock it to edit it")
         return t
 
     def remove_track(self, track_id: str) -> None:
@@ -379,7 +379,7 @@ class Store:
             kf.validate(volume)
             volume = kf.coerce(volume)
         if surround is not None and surround not in SURROUND:
-            raise EditError(f"instradamento {surround!r} sconosciuto; ammessi: {', '.join(SURROUND)}")
+            raise EditError(f"unknown routing {surround!r}; allowed: {', '.join(SURROUND)}")
         self._touch()
         if surround is not None:
             t.surround = surround
@@ -418,18 +418,18 @@ class Store:
             return t
         src = self.track_or_die(str(source))
         if src.id == t.id:
-            raise EditError("una traccia non puo' abbassarsi ascoltando se stessa")
+            raise EditError("a track cannot duck by listening to itself")
         ignoti = set(valori) - set(self.SIDECHAIN_DEFAULT)
         if ignoti:
-            raise EditError(f"parametri sidechain sconosciuti {sorted(ignoti)}; "
-                            f"ammessi: {sorted(self.SIDECHAIN_DEFAULT)}")
+            raise EditError(f"unknown sidechain parameters {sorted(ignoti)}; "
+                            f"allowed: {sorted(self.SIDECHAIN_DEFAULT)}")
         conf = {**self.SIDECHAIN_DEFAULT, **(t.sidechain or {})}
         for k, v in valori.items():
             if v is None:
                 continue
             lo, hi = self._SIDECHAIN_LIMITI[k]
             if not lo <= float(v) <= hi:
-                raise EditError(f"sidechain {k}={v} fuori da {lo}..{hi}")
+                raise EditError(f"sidechain {k}={v} outside {lo}..{hi}")
             conf[k] = float(v)
         conf["source"] = src.id
         self._touch()
@@ -442,7 +442,7 @@ class Store:
         found = self.project.find_clip(clip_id)
         if not found:
             ids = [c.id for t in self.project.tracks for c in t.clips]
-            raise EditError(f"clip {clip_id!r} inesistente; presenti: {', '.join(ids) or 'nessuna'}")
+            raise EditError(f"clip {clip_id!r} does not exist; present: {', '.join(ids) or 'none'}")
         return found
 
     def clip_for_edit(self, clip_id: str) -> tuple[Track, Clip]:
@@ -455,7 +455,7 @@ class Store:
         track, clip = self.clip_or_die(clip_id)
         if track.locked:
             raise EditError(
-                f"la clip {clip_id} sta sulla traccia bloccata {track.id}: sbloccala prima"
+                f"clip {clip_id} is on the locked track {track.id}: unlock it first"
             )
         return track, clip
 
@@ -485,16 +485,16 @@ class Store:
             track_id = self._default_track("audio" if m.kind == "audio" else "video")
         track = self.track_for_edit(track_id)
         if m.kind == "audio" and track.kind != "audio":
-            raise EditError(f"{m.name} e' solo audio: mettilo su una traccia audio")
+            raise EditError(f"{m.name} is audio only: put it on an audio track")
 
         if duration is None:
             duration = m.duration - in_ if m.duration > 0 else 5.0  # immagini: 5s
         if duration <= 0:
-            raise EditError(f"durata non valida ({duration}s): in_={in_} oltre la fine del media ({m.duration}s)")
+            raise EditError(f"invalid duration ({duration}s): in_={in_} is past the end of the media ({m.duration}s)")
         if m.duration > 0 and in_ + duration > m.duration + 1e-3:
             duration = max(0.0, m.duration - in_)
             if duration <= 0:
-                raise EditError(f"in_={in_}s e' oltre la durata del media ({m.duration}s)")
+                raise EditError(f"in_={in_}s is past the media duration ({m.duration}s)")
 
         self._touch()
         c = Clip(
@@ -513,10 +513,10 @@ class Store:
         st = TextStyle(text=text)
         for k, v in style.items():
             if not hasattr(st, k):
-                raise EditError(f"stile testo sconosciuto {k!r}; ammessi: {', '.join(vars(st))}")
+                raise EditError(f"unknown text style {k!r}; allowed: {', '.join(vars(st))}")
             setattr(st, k, v)
         if float(duration) <= 0:
-            raise EditError("la durata deve essere > 0")
+            raise EditError("the duration must be > 0")
         track = self.track_for_edit(track_id or self._traccia_in_cima())
         self._touch()
         c = Clip(type="text", start=float(start), duration=float(duration), text=st,
@@ -538,11 +538,11 @@ class Store:
         """
         if testo is None:
             if not path:
-                raise EditError("serve il file dei sottotitoli")
+                raise EditError("the subtitle file is needed")
             testo = Path(path).read_text(encoding="utf-8-sig", errors="replace")
         fmt = (fmt or Path(path or "").suffix.lstrip(".")).lower()
         if fmt not in ("srt", "vtt", "ass", "ssa"):
-            raise EditError(f"sottotitoli .{fmt or '?'} non letti: usa .srt, .vtt o .ass")
+            raise EditError(f".{fmt or '?'} subtitles not read: use .srt, .vtt or .ass")
         try:
             righe = captions.leggi(testo, "ass" if fmt == "ssa" else fmt)
         except ValueError as e:
@@ -552,7 +552,7 @@ class Store:
         dimensione = int(font_size or max(24, round(st.height * 0.05)))
         y = round(st.height * 0.5 - dimensione * 2.2)
         with self.batch():
-            track = self.add_track("video", name="sottotitoli")
+            track = self.add_track("video", name="subtitles")
             for r in righe:
                 c = self.add_text(r["text"], track.id, max(0.0, r["start"] + float(offset)),
                                   r["end"] - r["start"], font_size=dimensione, box=True,
@@ -580,19 +580,19 @@ class Store:
         percorsi relativi (immagini, font) e resta quella del file.
         """
         if (html is None) == (path is None):
-            raise EditError("passa html (il documento) oppure path (un file .html), uno dei due")
+            raise EditError("pass html (the document) or path (an .html file), one of the two")
         base = None
         if path is not None:
             f = Path(path)
             if not f.is_file():
-                raise EditError(f"file html non trovato: {path}")
+                raise EditError(f"html file not found: {path}")
             html = f.read_text(encoding="utf-8", errors="replace")
             base = str(f.resolve().parent)
         assert html is not None
         if not html.strip():
-            raise EditError("il documento html e' vuoto")
+            raise EditError("the html document is empty")
         if len(html) > htmlclip.MAX_HTML:
-            raise EditError(f"documento html troppo grande ({len(html)} caratteri)")
+            raise EditError(f"html document too large ({len(html)} characters)")
         return html, base
 
     def add_html(self, html: str | None = None, path: str | None = None, track_id: str | None = None,
@@ -607,13 +607,13 @@ class Store:
         doc, cartella = self._sorgente_html(html, path)
         if base is not None:
             if not Path(base).is_dir():
-                raise EditError(f"cartella base inesistente: {base}")
+                raise EditError(f"base folder does not exist: {base}")
             cartella = str(Path(base).resolve())
         if float(duration) <= 0:
-            raise EditError("la durata deve essere > 0")
+            raise EditError("the duration must be > 0")
         track = self.track_for_edit(track_id or self._traccia_in_cima())
         if track.kind != "video":
-            raise EditError("una clip html va su una traccia video")
+            raise EditError("an html clip goes on a video track")
         self._touch()
         c = Clip(type="html", html=doc, html_base=cartella, start=max(0.0, float(start)),
                  duration=float(duration), name=name or (Path(path).stem if path else "html"))
@@ -648,7 +648,7 @@ class Store:
         _, clip = self.clip_for_edit(clip_id)
         par = particelle.parametri(clip.html) if clip.type == "html" else None
         if par is None:
-            raise EditError(f"la clip {clip_id} non e' fatta di particelle")
+            raise EditError(f"clip {clip_id} is not made of particles")
         if kind is not None and kind != par["kind"]:
             kind, ricetta, nome = self._particelle(kind, custom)
         else:
@@ -683,7 +683,7 @@ class Store:
         mie = particelle.trova(kind)
         if mie is None:
             nomi = [*particelle.KINDS, particelle.CUSTOM, *(p["id"] for p in particelle.personali())]
-            raise EditError(f"particelle sconosciute {kind!r}; scegli tra {', '.join(nomi)}")
+            raise EditError(f"unknown particles {kind!r}; choose from {', '.join(nomi)}")
         try:
             ricetta = particelle.valida({**mie["spec"], **(custom or {})})
         except ValueError as e:
@@ -693,7 +693,7 @@ class Store:
     def _doc_particelle(self, kind, color, density, speed, size, seed, custom) -> str:
         for nome, v in (("density", density), ("speed", speed), ("size", size)):
             if not 0 < float(v) <= 20:
-                raise EditError(f"{nome} deve stare tra 0 e 20")
+                raise EditError(f"{nome} must be between 0 and 20")
         st = self.project.settings
         try:
             return particelle.html(kind, st.width, st.height, color, density, speed, size,
@@ -706,12 +706,12 @@ class Store:
         """Sostituisce il documento di una clip html (o solo la cartella base)."""
         track, clip = self.clip_for_edit(clip_id)
         if clip.type != "html":
-            raise EditError(f"la clip {clip_id} non e' di tipo html")
+            raise EditError(f"clip {clip_id} is not an html clip")
         doc, cartella = (None, None)
         if html is not None or path is not None:
             doc, cartella = self._sorgente_html(html, path)
         if base is not None and base != "" and not Path(base).is_dir():
-            raise EditError(f"cartella base inesistente: {base}")
+            raise EditError(f"base folder does not exist: {base}")
         self._touch()
         if doc is not None:
             clip.html = doc
@@ -792,7 +792,7 @@ class Store:
             # la clip spostata nel tempo ma sulla traccia di prima
             dst = self.track_for_edit(track_id)
             if dst.kind != track.kind:
-                raise EditError(f"non posso spostare una clip {track.kind} su una traccia {dst.kind}")
+                raise EditError(f"cannot move a {track.kind} clip onto a {dst.kind} track")
         self._touch()
         if start is not None:
             clip.start = max(0.0, float(start))
@@ -818,14 +818,14 @@ class Store:
         e', si inserisce una traccia nuova proprio li'. Un solo passo di undo.
         """
         if direction not in ("up", "down", "top", "bottom"):
-            raise EditError("direction deve essere up, down, top o bottom")
+            raise EditError("direction must be up, down, top or bottom")
         track, clip = self.clip_for_edit(clip_id)
         if track.kind != "video":
-            raise EditError("le clip audio non hanno un davanti e un dietro")
+            raise EditError("audio clips have no front and back")
         video = self.project.video_tracks()
         i = video.index(track)
         if direction in ("down", "bottom") and i == 0:
-            raise EditError("la clip e' gia' sulla traccia piu' in fondo")
+            raise EditError("the clip is already on the bottom track")
 
         def libera(t: Track) -> bool:
             return not t.locked and all(
@@ -871,10 +871,10 @@ class Store:
         if duration is not None:
             new_dur = float(duration)
         if new_dur <= 0:
-            raise EditError("la durata risultante e' <= 0")
+            raise EditError("the resulting duration is <= 0")
         if media and media.duration > 0 and clip.type == "media":
             if new_in >= media.duration:
-                raise EditError(f"attacco {new_in}s oltre la durata del media ({media.duration}s)")
+                raise EditError(f"in point {new_in}s past the media duration ({media.duration}s)")
             max_dur = (media.duration - new_in) / max(abs(clip.speed), 1e-6)
             if new_dur > max_dur + 1e-3:
                 new_dur = max_dur
@@ -926,15 +926,15 @@ class Store:
             if not clip.reverse:
                 inp += d * k
         if dur < self.MIN_DUR - 1e-9:
-            raise EditError(f"la clip {clip.id} resterebbe senza durata")
+            raise EditError(f"clip {clip.id} would be left with no duration")
         if start < -1e-9 and not fermo:
-            raise EditError("prima dell'inizio della timeline non si va")
+            raise EditError("you cannot go before the start of the timeline")
         media = self.project.media_by_id(clip.media) if clip.type == "media" and clip.media else None
         if media is not None:
             if inp < -1e-6:
-                raise EditError(f"la clip {clip.id} non ha altro materiale prima del suo attacco")
+                raise EditError(f"clip {clip.id} has no more material before its in point")
             if media.duration > 0 and media.kind != "image" and inp + dur * k > media.duration + 1e-3:
-                raise EditError(f"la clip {clip.id} non ha altro materiale dopo la sua fine")
+                raise EditError(f"clip {clip.id} has no more material after its end")
         clip.start, clip.duration, clip.in_ = max(0.0, start), dur, max(0.0, inp)
 
     def _dopo(self, track: Track, clip: Clip) -> Clip | None:
@@ -962,7 +962,7 @@ class Store:
         clip e su quelle delle sue collegate.
         """
         if edge not in ("start", "end"):
-            raise EditError("edge deve essere start o end")
+            raise EditError("edge must be start or end")
         track, clip = self.clip_for_edit(clip_id)
         d = float(delta)
         if abs(d) < 1e-9:
@@ -970,7 +970,7 @@ class Store:
         gruppo = [(track, clip), *self.collegate(clip)]
         for t, _ in gruppo:
             if t.locked:
-                raise EditError(f"la traccia {t.id} e' bloccata")
+                raise EditError(f"track {t.id} is locked")
         with self._tutto_o_niente():
             for t, c in gruppo:
                 fine = c.end
@@ -998,7 +998,7 @@ class Store:
         track, clip = self.clip_for_edit(clip_id)
         dopo = self._dopo(track, clip)
         if dopo is None:
-            raise EditError(f"la clip {clip_id} non ha una clip attaccata dopo: niente taglio da spostare")
+            raise EditError(f"clip {clip_id} has no clip butted after it: no cut to move")
         d = float(delta)
         with self._tutto_o_niente():
             self._bordo(clip, "end", d)
@@ -1015,16 +1015,16 @@ class Store:
         """
         track, clip = self.clip_for_edit(clip_id)
         if clip.type != "media":
-            raise EditError("lo slip vale per le clip di un media: testi e grafica non hanno sorgente")
+            raise EditError("slip works on media clips: text and graphics have no source")
         media = self.project.media_by_id(clip.media)
         if media is not None and media.kind == "image":
-            raise EditError("un'immagine ferma non ha un tratto da far scorrere")
+            raise EditError("a still image has no stretch to slip")
         nuovo = clip.in_ + float(delta)
         k = abs(clip.speed or 1.0)
         if nuovo < -1e-6:
-            raise EditError("la sorgente non ha materiale prima di cosi'")
+            raise EditError("the source has no material before that")
         if media is not None and media.duration > 0 and nuovo + clip.duration * k > media.duration + 1e-3:
-            raise EditError("la sorgente non ha materiale dopo di cosi'")
+            raise EditError("the source has no material after that")
         self._touch()
         clip.in_ = max(0.0, nuovo)
         self._allinea(clip)
@@ -1042,7 +1042,7 @@ class Store:
         d = float(delta)
         prima, dopo = self._prima(track, clip), self._dopo(track, clip)
         if clip.start + d < -1e-9:
-            raise EditError("prima dell'inizio della timeline non si va")
+            raise EditError("you cannot go before the start of the timeline")
         with self._tutto_o_niente():
             if prima is not None:
                 self._bordo(prima, "end", d)
@@ -1051,7 +1051,7 @@ class Store:
             clip.start += d
             fuori = {id(clip), *(id(c) for c in (prima, dopo) if c is not None)}
             if not self._libero(track, clip.start, clip.end, fuori):
-                raise EditError("la clip finirebbe sopra un'altra: lasciale spazio o avvicina le vicine")
+                raise EditError("the clip would land on top of another one: leave it room or move the neighbours")
             track.clips.sort(key=lambda x: x.start)
             for c in (clip, prima, dopo):
                 if c is not None:
@@ -1063,7 +1063,7 @@ class Store:
         track, clip = self.clip_for_edit(clip_id)
         if not (clip.start + 1e-4 < at < clip.end - 1e-4):
             raise EditError(
-                f"il punto di taglio {at}s e' fuori dalla clip ({clip.start:.3f}-{clip.end:.3f}s)"
+                f"the split point {at}s is outside the clip ({clip.start:.3f}-{clip.end:.3f}s)"
             )
         self._touch()
         altre = self.collegate(clip)
@@ -1116,11 +1116,11 @@ class Store:
         """Cambia velocita'. Di default la durata in timeline si accorcia/allunga."""
         track, clip = self.clip_for_edit(clip_id)
         if clip.type == "html":
-            raise EditError("una clip html non ha velocita': il ritmo lo decide la sua animazione")
+            raise EditError("an html clip has no speed: its animation sets the pace")
         if speed <= 0:
-            raise EditError("la velocita' deve essere > 0 (usa reverse=true per il contrario)")
+            raise EditError("the speed must be > 0 (use reverse=true to play backwards)")
         if speed > 100 or speed < 0.01:
-            raise EditError("velocita' fuori scala: ammessa 0.01x - 100x")
+            raise EditError("speed out of range: allowed 0.01x - 100x")
         self._touch()
         src = clip.source_duration()
         clip.speed = float(speed)
@@ -1150,7 +1150,7 @@ class Store:
         allowed = set(vars(Transform()))
         bad = set(values) - allowed
         if bad:
-            raise EditError(f"campi transform sconosciuti {sorted(bad)}; ammessi: {sorted(allowed)}")
+            raise EditError(f"unknown transform fields {sorted(bad)}; allowed: {sorted(allowed)}")
         clean = self._animabili(values)
         self._touch()
         for k, v in clean.items():
@@ -1163,7 +1163,7 @@ class Store:
         allowed = set(vars(ClipAudio()))
         bad = set(values) - allowed
         if bad:
-            raise EditError(f"campi audio sconosciuti {sorted(bad)}; ammessi: {sorted(allowed)}")
+            raise EditError(f"unknown audio fields {sorted(bad)}; allowed: {sorted(allowed)}")
         clean = self._animabili(values)
         self._touch()
         for k, v in clean.items():
@@ -1210,16 +1210,16 @@ class Store:
         allowed = {"enabled", "fit", "blend", "name", "color", "start", "duration", "in_"}
         bad = set(values) - allowed
         if bad:
-            raise EditError(f"campi sconosciuti {sorted(bad)}; ammessi: {sorted(allowed)}")
+            raise EditError(f"unknown fields {sorted(bad)}; allowed: {sorted(allowed)}")
         if values.get("fit") is not None and values["fit"] not in ("contain", "cover", "stretch", "none"):
-            raise EditError("fit deve essere contain | cover | stretch | none")
+            raise EditError("fit must be contain | cover | stretch | none")
         if values.get("blend") is not None and values["blend"] not in BLEND_MODES:
-            raise EditError(f"blend deve essere uno di {' | '.join(BLEND_MODES)}")
+            raise EditError(f"blend must be one of {' | '.join(BLEND_MODES)}")
         for k in ("start", "duration", "in_"):
             if values.get(k) is not None and float(values[k]) < 0:
-                raise EditError(f"{k} non puo' essere negativo")
+                raise EditError(f"{k} cannot be negative")
         if values.get("duration") is not None and float(values["duration"]) <= 0:
-            raise EditError("la durata deve essere > 0")
+            raise EditError("the duration must be > 0")
         self._touch()
         for k, v in values.items():
             if v is not None:
@@ -1242,11 +1242,11 @@ class Store:
     def set_text(self, clip_id: str, **values: Any) -> Clip:
         track, clip = self.clip_for_edit(clip_id)
         if clip.type != "text" or clip.text is None:
-            raise EditError(f"la clip {clip_id} non e' di tipo testo")
+            raise EditError(f"clip {clip_id} is not a text clip")
         allowed = set(vars(TextStyle()))
         bad = set(values) - allowed
         if bad:
-            raise EditError(f"campi testo sconosciuti {sorted(bad)}; ammessi: {sorted(allowed)}")
+            raise EditError(f"unknown text fields {sorted(bad)}; allowed: {sorted(allowed)}")
         self._touch()
         for k, v in values.items():
             if v is not None:
@@ -1305,9 +1305,9 @@ class Store:
         for name in effects:
             kind = fx._spec(name).kind
             if kind not in ha:
-                cosa = "suono" if kind == "audio" else "immagine"
-                raise EditError(f"{name!r} e' un effetto {kind} e la clip {clip_id} non ha {cosa}: "
-                                f"non cambierebbe niente")
+                cosa = "sound" if kind == "audio" else "picture"
+                raise EditError(f"{name!r} is a {kind} effect and clip {clip_id} has no {cosa}: "
+                                f"it would change nothing")
 
     def _effect_list(self, clip_id: str | None) -> list[Effect]:
         return self.project.master.effects if clip_id is None else self.clip_for_edit(clip_id)[1].effects
@@ -1316,7 +1316,7 @@ class Store:
                       enabled: bool | None = None) -> Effect:
         lst = self._effect_list(clip_id)
         if not (0 <= index < len(lst)):
-            raise EditError(f"indice effetto {index} fuori range (0..{len(lst) - 1})")
+            raise EditError(f"effect index {index} out of range (0..{len(lst) - 1})")
         e = lst[index]
         self._touch()
         if params:
@@ -1331,7 +1331,7 @@ class Store:
     def remove_effect(self, clip_id: str | None, index: int) -> None:
         lst = self._effect_list(clip_id)
         if not (0 <= index < len(lst)):
-            raise EditError(f"indice effetto {index} fuori range (0..{len(lst) - 1})")
+            raise EditError(f"effect index {index} out of range (0..{len(lst) - 1})")
         self._touch()
         lst.pop(index)
         self._done()
@@ -1348,7 +1348,7 @@ class Store:
         lst = self._effect_list(clip_id)
         n = len(lst)
         if not (0 <= index < n):
-            raise EditError(f"indice effetto {index} fuori range (0..{n - 1})")
+            raise EditError(f"effect index {index} out of range (0..{n - 1})")
         to = max(0, min(int(to), n - 1))
         if to == index:
             return lst
@@ -1367,9 +1367,9 @@ class Store:
         """
         track, clip = self.clip_for_edit(clip_id)
         if clip.type != "media":
-            raise EditError("lo scontorno si applica solo alle clip con un media")
+            raise EditError("the cut-out only applies to media clips")
         if not Path(file).exists():
-            raise EditError(f"maschera inesistente: {file}")
+            raise EditError(f"matte does not exist: {file}")
         params = fx.validate_effect("matte", {"file": str(file), "t0": float(t0),
                                               "feather": float(feather), "invert": bool(invert)})
         self._touch()
@@ -1400,11 +1400,11 @@ class Store:
         Il doppione e' muto: l'audio resta all'originale.
         """
         if mode not in self.HIGHLIGHT_MODES:
-            raise EditError(f"mode deve essere {' | '.join(self.HIGHLIGHT_MODES)}")
+            raise EditError(f"mode must be {' | '.join(self.HIGHLIGHT_MODES)}")
         fx.tint_matrix(color, amount)   # colore sbagliato -> errore subito, non al render
         track, clip = self.clip_for_edit(clip_id)
         if clip.type != "media":
-            raise EditError("l'evidenziazione si applica a una clip con un video")
+            raise EditError("highlighting applies to a clip with video")
         a = max(0.0, min(1.0, float(amount)))
         with self.batch():
             sopra = self.add_track("video", name="evidenzia",
@@ -1478,7 +1478,7 @@ class Store:
             kx.append({"t": round(t_loc, 3), "v": round(dx * sc + tx + offset_x, 1)})
             ky.append({"t": round(t_loc, 3), "v": round(dy * sc + ty + offset_y, 1)})
         if not kx:
-            raise EditError("il soggetto non e' mai visibile mentre la clip agganciata e' in scena")
+            raise EditError("the subject is never visible while the pinned clip is on screen")
         kx.sort(key=lambda q: q["t"])
         ky.sort(key=lambda q: q["t"])
         return self.set_transform(clip_id, x={"kf": kx}, y={"kf": ky})
@@ -1516,7 +1516,7 @@ class Store:
             return []
         for i, it in enumerate(items):
             if not it.get("media"):
-                raise EditError(f"voce {i}: manca 'media'")
+                raise EditError(f"item {i}: 'media' is missing")
 
         out: list[Clip] = []
         with self.batch():
@@ -1541,16 +1541,16 @@ class Store:
         tendina, scorrimento o iris (vedi model.TRANSITIONS).
         """
         if type not in TRANSITIONS:
-            raise EditError(f"transizione {type!r} sconosciuta; disponibili: {', '.join(TRANSITIONS)}")
+            raise EditError(f"unknown transition {type!r}; available: {', '.join(TRANSITIONS)}")
         ta, a = self.clip_for_edit(clip_a)
         tb, b = self.clip_for_edit(clip_b)
         if ta.id != tb.id:
-            raise EditError("la transizione richiede due clip sulla stessa traccia")
+            raise EditError("a transition needs two clips on the same track")
         if a.id == b.id or b.start <= a.start:
-            raise EditError("la transizione va dalla clip che viene prima (clip_a) a quella dopo (clip_b)")
+            raise EditError("the transition goes from the earlier clip (clip_a) to the later one (clip_b)")
         d = min(float(duration), a.duration * 0.9, b.duration * 0.9)
         if d <= 0:
-            raise EditError("durata di transizione non valida")
+            raise EditError("invalid transition duration")
         self._touch()
         # B (e tutto cio' che segue) risale fino a sovrapporsi ad A di d secondi
         delta = b.start - (a.end - d)
@@ -1582,7 +1582,7 @@ class Store:
         solo il tipo di una transizione esistente.
         """
         if type not in TRANSITIONS:
-            raise EditError(f"transizione {type!r} sconosciuta; disponibili: {', '.join(TRANSITIONS)}")
+            raise EditError(f"unknown transition {type!r}; available: {', '.join(TRANSITIONS)}")
         _, clip = self.clip_for_edit(clip_id)
         d = max(0.0, min(float(duration), clip.duration))
         self._touch()
@@ -1633,7 +1633,7 @@ class Store:
         kf.validate(volume)
         volume = kf.coerce(volume)
         if not kf.is_kf(volume) and not 0 <= float(volume) <= 4:
-            raise EditError("il volume del master sta fra 0 e 4 (1 = invariato)")
+            raise EditError("master volume ranges from 0 to 4 (1 = unchanged)")
         self._touch()
         self.project.master.volume = volume
         self._done()
@@ -1643,9 +1643,9 @@ class Store:
         allowed = set(vars(Settings()))
         bad = set(values) - allowed
         if bad:
-            raise EditError(f"impostazioni sconosciute {sorted(bad)}; ammesse: {sorted(allowed)}")
+            raise EditError(f"unknown settings {sorted(bad)}; allowed: {sorted(allowed)}")
         if values.get("audio_layout") is not None and values["audio_layout"] not in AUDIO_LAYOUTS:
-            raise EditError(f"audio {values['audio_layout']!r} sconosciuto; ammessi: "
+            raise EditError(f"unknown audio layout {values['audio_layout']!r}; allowed: "
                             f"{', '.join(AUDIO_LAYOUTS)}")
         self._touch()
         for k, v in values.items():

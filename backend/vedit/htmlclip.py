@@ -255,9 +255,9 @@ def _lancia(pw):
         except Exception as exc:  # noqa: BLE001 - ogni canale fallisce a modo suo
             errori.append(f"{canale or 'chromium'}: {str(exc).splitlines()[0][:100]}")
     raise HtmlNonDisponibile(
-        "nessun browser Chromium utilizzabile per le clip HTML ("
+        "no usable Chromium browser for HTML clips ("
         + "; ".join(errori)
-        + "). Installa Chrome o Edge, oppure: python -m playwright install chromium"
+        + "). Install Chrome or Edge, or: python -m playwright install chromium"
     )
 
 
@@ -365,9 +365,9 @@ def _fotografa(html: str, base: str | None, width: int, height: int, fps: float,
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise HtmlNonDisponibile(
-            "le clip HTML vogliono Playwright: pip install \"vedit-mcp[html]\" "
-            "(oppure pip install playwright). Usa Chrome o Edge gia' installati; "
-            "se mancano: python -m playwright install chromium"
+            "HTML clips need Playwright: pip install \"vedit-mcp[html]\" "
+            "(or pip install playwright). It uses Chrome or Edge if installed; "
+            "if they are missing: python -m playwright install chromium"
         ) from exc
 
     chiave = blocchi[0][2].stem
@@ -416,7 +416,7 @@ def _blocco(page, width: int, height: int, fps: float, da: int, a: int, out: Pat
         proc.stdin.close()
         err = proc.stderr.read().decode("utf-8", "replace") if proc.stderr else ""
         if proc.wait() != 0:
-            raise RuntimeError(f"ffmpeg non ha accettato i fotogrammi della clip HTML: {err[-400:]}")
+            raise RuntimeError(f"ffmpeg did not accept the frames of the HTML clip: {err[-400:]}")
         os.replace(tmp, out)
     except BaseException:
         proc.kill()

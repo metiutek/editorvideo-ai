@@ -152,7 +152,7 @@ def measure_loudness(project: Project) -> dict:
         finally:
             ln.enabled = was
         if not c.audio_label:
-            raise RuntimeError("il progetto non ha audio da misurare")
+            raise RuntimeError("the project has no audio to measure")
 
         script = work / "fg.txt"
         graph = c.filtergraph + f";[{c.audio_label}]loudnorm=I={ln.i}:TP={ln.tp}:LRA={ln.lra}:print_format=json[lnout]"
@@ -166,7 +166,7 @@ def measure_loudness(project: Project) -> dict:
         log = (proc.stderr or "") + (proc.stdout or "")
         i, j = log.rfind("{"), log.rfind("}")
         if i == -1 or j == -1:
-            raise RuntimeError("misura loudness fallita:\n" + log[-1000:])
+            raise RuntimeError("loudness measurement failed:\n" + log[-1000:])
         import json
 
         return json.loads(log[i : j + 1])
@@ -219,10 +219,10 @@ def controlla_codec(codec: str, output: str) -> None:
     """
     ext = Path(output).suffix.lower()
     if codec not in CODEC and codec != "gif":
-        raise ValueError(f"codec sconosciuto {codec!r}; ammessi: {', '.join(CODEC)}")
+        raise ValueError(f"unknown codec {codec!r}; allowed: {', '.join(CODEC)}")
     def_v = CONTAINER_DEFAULTS.get(ext, ("h264", "aac"))[0]
     if codec in hw.MEZZANINE and def_v is not None and ext not in CONTENITORI_MEZZANINE:
-        raise ValueError(f"{codec} va in un file .mov, .mxf o .mkv, non {ext or 'senza estensione'}")
+        raise ValueError(f"{codec} goes in a .mov, .mxf or .mkv file, not {ext or 'no extension'}")
 
 
 def _codec_video(opts: RenderOptions, def_v: str | None) -> str:
@@ -428,8 +428,8 @@ def _righe_sottotitoli(project: Project, opts: RenderOptions) -> list[dict] | No
         return None
     ext = Path(opts.output).suffix.lower()
     if ext not in SOTTOTITOLI_CODEC:
-        raise ValueError(f"un file {ext} non porta sottotitoli come traccia: usa .mp4, .mov, "
-                         ".mkv o .webm, oppure imprimili")
+        raise ValueError(f"a {ext} file cannot carry a subtitle stream: use .mp4, .mov, "
+                         ".mkv or .webm, or burn them in")
     a = opts.start or 0.0
     if opts.subtitle_track:
         return captions.da_traccia(project, opts.subtitle_track, a, opts.end)
@@ -463,7 +463,7 @@ def _metti_sottotitoli(out_path: Path, righe: list[dict], lingua: str, workdir: 
 
 def render(project: Project, opts: RenderOptions, on_progress: Progress | None = None) -> RenderResult:
     if not opts.output:
-        raise ValueError("percorso di output mancante")
+        raise ValueError("output path missing")
     controlla_codec(opts.codec, opts.output)
     out_path = Path(opts.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -491,7 +491,7 @@ def render(project: Project, opts: RenderOptions, on_progress: Progress | None =
                         f"({opts.subtitle_lang})"]
         size = out_path.stat().st_size if out_path.exists() else 0
         if size == 0:
-            raise RuntimeError(f"render terminato ma il file e' vuoto: {out_path}")
+            raise RuntimeError(f"render finished but the file is empty: {out_path}")
         return RenderResult(
             output=str(out_path.resolve()), duration=duration, seconds=round(time.time() - t0, 2),
             encoder=enc, size=size, warnings=warnings, command=args,

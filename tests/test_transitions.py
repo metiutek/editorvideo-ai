@@ -22,7 +22,7 @@ def _due_clip(assets, tmp_path, dur=1.5):
 
 def test_tipo_sconosciuto(assets, tmp_path):
     s, a, b = _due_clip(assets, tmp_path)
-    with pytest.raises(EditError, match="sconosciuta"):
+    with pytest.raises(EditError, match="unknown"):
         s.crossfade(a.id, b.id, 0.5, type="tenda_veneziana")
 
 

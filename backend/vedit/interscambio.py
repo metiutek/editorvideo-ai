@@ -44,8 +44,8 @@ FORMATI = {".edl": "edl", ".fcpxml": "fcpxml", ".otio": "otio"}
 def formato(path: str) -> str:
     ext = Path(path).suffix.lower()
     if ext not in FORMATI:
-        raise ValueError(f"formato di timeline sconosciuto {ext or '(senza estensione)'}; "
-                         f"ammessi: {', '.join(FORMATI)}")
+        raise ValueError(f"unknown timeline format {ext or '(no extension)'}; "
+                         f"allowed: {', '.join(FORMATI)}")
     return FORMATI[ext]
 
 
@@ -119,8 +119,8 @@ def _pezzi(project: Project, track: Track, rate: Fraction, avvisi: list[str]) ->
             continue
         m = media.get(c.media) if c.type == "media" else None
         if m is None or m.kind == "image":
-            tipo = "immagine" if m is not None else {"text": "testo", "color": "colore",
-                                                      "html": "grafica html"}.get(c.type, c.type)
+            tipo = "image" if m is not None else {"text": "text", "color": "colour",
+                                                   "html": "html graphics"}.get(c.type, c.type)
             saltate[tipo] = saltate.get(tipo, 0) + 1
             continue
         k = c.speed if not c.reverse else -abs(c.speed)
@@ -141,26 +141,26 @@ def _pezzi(project: Project, track: Track, rate: Fraction, avvisi: list[str]) ->
                 p.entra = d
                 p.tipo_entra = prima.clip.transition_out.type or "dissolve"
                 if prima.clip.transition_out.duration > 0 and p.tipo_entra != "dissolve":
-                    avvisi.append(f"transizione {p.tipo_entra} esce come dissolvenza: "
-                                  "le tendine sono di vedit")
+                    avvisi.append(f"transition {p.tipo_entra} goes out as a dissolve: "
+                                  "wipes are vedit's own")
                 if p.dur <= 0 or prima.dur <= 0:
-                    avvisi.append(f"clip {c.id}: sovrapposta quasi per intero alla precedente, saltata")
+                    avvisi.append(f"clip {c.id}: almost entirely overlapping the previous one, skipped")
                     continue
         out.append(p)
     for tipo, n in saltate.items():
-        avvisi.append(f"traccia {track.id}: {n} clip di {tipo} non escono (restano a vedit)")
+        avvisi.append(f"track {track.id}: {n} {tipo} clips do not go out (they stay in vedit)")
     return out
 
 
 def _avvisi_comuni(project: Project, avvisi: list[str]) -> None:
     effetti = sum(len(c.effects) for t in project.tracks for c in t.clips) + len(project.master.effects)
     if effetti:
-        avvisi.append(f"{effetti} effetti non escono: colore e filtri sono di vedit")
+        avvisi.append(f"{effetti} effects do not go out: colour and filters are vedit's own")
     mossi = sum(1 for t in project.tracks for c in t.clips
                 if any(isinstance(v, dict) for v in (c.transform.x, c.transform.y,
                                                     c.transform.scale, c.transform.rotation)))
     if mossi:
-        avvisi.append(f"{mossi} clip con movimento a keyframe: il movimento non esce")
+        avvisi.append(f"{mossi} clips with keyframed motion: the motion does not go out")
 
 
 # --------------------------------------------------------------------------
@@ -194,7 +194,7 @@ def _traccia_edl(project: Project, track: str | None) -> Track:
     if track:
         t = next((x for x in project.tracks if x.id == track), None)
         if t is None:
-            raise ValueError(f"traccia sconosciuta {track!r}")
+            raise ValueError(f"unknown track {track!r}")
         return t
     for t in project.tracks:
         if t.kind == "video" and t.clips:
@@ -202,18 +202,18 @@ def _traccia_edl(project: Project, track: str | None) -> Track:
     for t in project.tracks:
         if t.clips:
             return t
-    raise ValueError("timeline vuota: niente da esportare")
+    raise ValueError("empty timeline: nothing to export")
 
 
 def _edl(project: Project, rate: Fraction, track: str | None, avvisi: list[str]) -> tuple[str, int]:
     t = _traccia_edl(project, track)
     altre = [x.id for x in project.tracks if x is not t and x.clips]
     if altre:
-        avvisi.append(f"l'EDL porta una traccia sola ({t.id}): fuori {', '.join(altre)}; "
-                      "per tutte usa .fcpxml o .otio")
+        avvisi.append(f"an EDL carries one track only ({t.id}): left out {', '.join(altre)}; "
+                      "for all of them use .fcpxml or .otio")
     pezzi = _pezzi(project, t, rate, avvisi)
     if any(p.entra for p in pezzi):
-        avvisi.append("nell'EDL le transizioni diventano tagli a meta' sovrapposizione")
+        avvisi.append("in the EDL transitions become cuts halfway through the overlap")
     # come Premiere e Resolve: la registrazione parte da un'ora
     ora = int(round(float(rate))) * 3600
     canale = "V" if t.kind == "video" else "AA"
@@ -288,8 +288,8 @@ def _fcpxml(project: Project, rate: Fraction, avvisi: list[str]) -> tuple[str, i
         if p.clip.audio.mute and not solo_audio:
             e.set("srcEnable", "video")
         if abs(p.speed - 1.0) > 1e-6:
-            avvisi.append(f"clip {p.clip.id}: la velocita' {p.speed}x non esce nell'FCPXML "
-                          "(usa .otio)")
+            avvisi.append(f"clip {p.clip.id}: the {p.speed}x speed does not go out in FCPXML "
+                          "(use .otio)")
         return e
 
     # trama principale: la prima traccia video, con i buchi riempiti da gap
@@ -320,7 +320,7 @@ def _fcpxml(project: Project, rate: Fraction, avvisi: list[str]) -> tuple[str, i
                 asset_clip(el, p, start + (p.rec - off), lane, solo_audio)
                 n += 1
                 return
-        avvisi.append(f"clip {p.clip.id}: fuori dalla durata della sequenza, saltata")
+        avvisi.append(f"clip {p.clip.id}: outside the sequence duration, skipped")
 
     # le altre tracce: clip agganciate su corsie sopra (video) e sotto (audio)
     for lane, t in enumerate(video[1:], 1):
@@ -439,11 +439,11 @@ def importa(store, path: str, cartella: str | None = None, testo: str | None = N
     else:
         voci = _leggi_edl(testo, rate, store, cartella, avvisi)
     if not voci:
-        raise ValueError("nessuna clip da importare in questo file")
+        raise ValueError("no clips to import in this file")
     mancanti = sorted({v.path for v in voci if not Path(v.path).is_file()})
     if mancanti:
         elenco = ", ".join(mancanti[:5]) + (" e altri" if len(mancanti) > 5 else "")
-        raise ValueError(f"file non trovati: {elenco}")
+        raise ValueError(f"files not found: {elenco}")
 
     # si accoda: niente di quello che c'e' gia' viene toccato
     coda = store.project.duration()
@@ -463,7 +463,7 @@ def importa(store, path: str, cartella: str | None = None, testo: str | None = N
         for v in sorted(voci, key=lambda x: x.start):
             m = gia[str(Path(v.path).resolve()).lower()]
             if v.kind == "video" and not m.has_video:
-                avvisi.append(f"{Path(v.path).name}: senza video, messa su una traccia audio")
+                avvisi.append(f"{Path(v.path).name}: no video, put on an audio track")
                 v.kind, v.corsia = "audio", 0
                 if not tracce["audio"]:
                     tracce["audio"].append(store.add_track("audio"))
@@ -491,8 +491,8 @@ def _rimetti(store, track, taglio: float, d: Dissolvenza, avvisi: list[str]) -> 
     ma, mb = media.get(a.media), media.get(b.media)
     ka, kb = abs(a.speed or 1.0), abs(b.speed or 1.0)
     if (ma and ma.duration and a.in_ + (a.duration + d.dopo) * ka > ma.duration + 1e-3)             or b.in_ - d.prima * kb < -1e-3 or a.reverse or b.reverse:
-        avvisi.append(f"transizione a {round(taglio, 2)}s: materiale insufficiente oltre il "
-                      "taglio, resta un taglio secco")
+        avvisi.append(f"transition at {round(taglio, 2)}s: not enough material past the "
+                      "cut, it stays a hard cut")
         return 0
     store.set_clip(a.id, duration=a.duration + d.dopo)
     store.set_clip(b.id, start=b.start - d.prima, in_=max(0.0, b.in_ - d.prima * kb),
@@ -504,7 +504,7 @@ def _rimetti(store, track, taglio: float, d: Dissolvenza, avvisi: list[str]) -> 
 def _leggi_otio(testo: str, avvisi: list[str], dissolvenze: list[Dissolvenza]) -> list[Voce]:
     doc = json.loads(testo)
     if not str(doc.get("OTIO_SCHEMA", "")).startswith("Timeline"):
-        raise ValueError("non e' una timeline OTIO")
+        raise ValueError("not an OTIO timeline")
 
     def secondi(t: dict | None) -> float:
         return float(t["value"]) / float(t["rate"]) if t and t.get("rate") else 0.0
@@ -538,14 +538,14 @@ def _leggi_otio(testo: str, avvisi: list[str], dissolvenze: list[Dissolvenza]) -
                     voci.append(Voce(p, kind.lower(), corsia, pos, secondi(sr.get("start_time")),
                                      dur, speed, el.get("name", "")))
                 else:
-                    avvisi.append(f"clip {el.get('name', '')!r} senza file: saltata")
+                    avvisi.append(f"clip {el.get('name', '')!r} without a file: skipped")
                 pos += dur
             elif schema.startswith("Transition"):
                 dissolvenze.append(Dissolvenza(kind.lower(), corsia, pos,
                                                secondi(el.get("in_offset")),
                                                secondi(el.get("out_offset"))))
             elif schema.startswith("Stack"):
-                avvisi.append("clip annidate OTIO: saltate")
+                avvisi.append("nested OTIO clips: skipped")
                 pos += dur
     return voci
 
@@ -553,7 +553,7 @@ def _leggi_otio(testo: str, avvisi: list[str], dissolvenze: list[Dissolvenza]) -
 def _leggi_fcpxml(testo: str, avvisi: list[str], dissolvenze: list[Dissolvenza]) -> list[Voce]:
     root = ET.fromstring(testo)
     if root.tag != "fcpxml":
-        raise ValueError("non e' un FCPXML")
+        raise ValueError("not an FCPXML")
 
     def secondi(v: str | None) -> float:
         if not v:
@@ -568,7 +568,7 @@ def _leggi_fcpxml(testo: str, avvisi: list[str], dissolvenze: list[Dissolvenza])
         file_di[a.get("id")] = _percorso(src)
     seq = next(root.iter("sequence"), None)
     if seq is None:
-        raise ValueError("FCPXML senza sequence")
+        raise ValueError("FCPXML without a sequence")
     spine = seq.find("spine")
     voci: list[Voce] = []
     corsie_video: dict[int, int] = {}
@@ -588,7 +588,7 @@ def _leggi_fcpxml(testo: str, avvisi: list[str], dissolvenze: list[Dissolvenza])
             ref = dentro.get("ref") if dentro is not None else None
         p = file_di.get(ref or "", "")
         if not p:
-            avvisi.append(f"{el.tag} {el.get('name', '')!r} senza file: saltato")
+            avvisi.append(f"{el.tag} {el.get('name', '')!r} without a file: skipped")
             return
         kind, n = corsia(lane)
         if el.get("srcEnable") == "audio" and kind == "video":
@@ -596,7 +596,7 @@ def _leggi_fcpxml(testo: str, avvisi: list[str], dissolvenze: list[Dissolvenza])
         voci.append(Voce(p, kind, n, assoluto, secondi(el.get("start")),
                          secondi(el.get("duration")), 1.0, el.get("name", "")))
         if el.find("timeMap") is not None:
-            avvisi.append(f"{el.get('name', '')!r}: cambio di velocita' FCPXML non letto")
+            avvisi.append(f"{el.get('name', '')!r}: FCPXML speed change not read")
 
     def visita(contenitore, base_assoluta: float, start_locale: float) -> None:
         for el in contenitore:
@@ -616,7 +616,7 @@ def _leggi_fcpxml(testo: str, avvisi: list[str], dissolvenze: list[Dissolvenza])
                     dissolvenze.append(Dissolvenza("video", 0, taglio, meta, dur - meta))
                 continue
             if el.tag in ("ref-clip", "title"):
-                avvisi.append(f"{el.tag} {el.get('name', '')!r}: non importato")
+                avvisi.append(f"{el.tag} {el.get('name', '')!r}: not imported")
             elif el.tag != "gap":
                 clip(el, lane, assoluto)
             # le agganciate contano il tempo dall'attacco di chi le porta
@@ -658,7 +658,7 @@ def _leggi_edl(testo: str, rate: Fraction, store, cartella: str | None,
             except (IndexError, ValueError):
                 pass
     if not eventi:
-        raise ValueError("nessun evento in questo EDL")
+        raise ValueError("no events in this EDL")
 
     # la registrazione di solito parte da un'ora (01:00:00:00): si riporta a zero
     ora = int(round(float(rate))) * 3600
@@ -667,15 +667,15 @@ def _leggi_edl(testo: str, rate: Fraction, store, cartella: str | None,
     voci = []
     for e in eventi:
         if e["tipo"] != "C":
-            avvisi.append("transizioni EDL: entrano come tagli")
+            avvisi.append("EDL transitions: they come in as cuts")
         p = e["file"] if e["file"] and Path(e["file"]).is_file() else ""
         if not p and e["nome"]:
             p = noti.get(e["nome"].lower(), "")
             if not p and cartella and (Path(cartella) / e["nome"]).is_file():
                 p = str(Path(cartella) / e["nome"])
         if not p:
-            raise ValueError(f"EDL: non trovo il file di {e['nome'] or 'un evento senza nome'}; "
-                             "mettilo accanto all'EDL o importalo prima nel progetto")
+            raise ValueError(f"EDL: cannot find the file for {e['nome'] or 'an unnamed event'}; "
+                             "put it next to the EDL or import it into the project first")
         kind = "video" if "V" in e["canale"] else "audio"
         speed = e["speed"] or 1.0
         src_in = min(e["src"]) / float(rate)

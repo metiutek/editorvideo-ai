@@ -43,7 +43,7 @@ def _vista(s: Store) -> list:
 def test_andata_e_ritorno(tmp_path, assets, ext):
     s = _montaggio(assets)
     r = ix.esporta(s.project, str(tmp_path / f"t{ext}"))
-    assert any("testo" in w for w in r["avvisi"])        # il titolo non esce, e lo dice
+    assert any("text" in w for w in r["avvisi"])        # il titolo non esce, e lo dice
     n = Store.create("n", "720p")
     n.set_settings(fps=25)
     ri = ix.importa(n, r["file"])
@@ -57,7 +57,7 @@ def test_andata_e_ritorno(tmp_path, assets, ext):
         assert v2 == [(1.0, 1.0, 1.0, 2.0, 0.0)]          # la velocita' viaggia in OTIO
     else:
         assert [x[:3] for x in v2] == [(1.0, 1.0, 1.0)]
-        assert any("velocita'" in w for w in r["avvisi"])
+        assert any("speed" in w for w in r["avvisi"])
 
 
 def test_edl_cmx3600(tmp_path, assets):
@@ -71,7 +71,7 @@ def test_edl_cmx3600(tmp_path, assets):
     assert righe[0].split()[-4:] == ["00:00:00:10", "00:00:02:22", "01:00:00:00", "01:00:02:12"]
     assert righe[1].split()[-2:] == ["01:00:02:12", "01:00:05:00"]
     assert "* FROM CLIP NAME: red.mp4" in testo
-    assert any("una traccia sola" in w for w in r["avvisi"])
+    assert any("one track only" in w for w in r["avvisi"])
     n = Store.create("n", "720p")
     n.set_settings(fps=25)
     ix.importa(n, r["file"])
@@ -131,10 +131,10 @@ def test_import_atomico_e_formato(tmp_path, assets):
     ix.esporta(s.project, str(tmp_path / "t.otio"))
     testo = (tmp_path / "t.otio").read_text(encoding="utf-8").replace("red.mp4", "manca.mp4")
     n = Store.create("n", "720p")
-    with pytest.raises(ValueError, match="non trovati"):
+    with pytest.raises(ValueError, match="not found"):
         ix.importa(n, "t.otio", testo=testo)
     assert n.project.media == [] and len(n._undo) == 0
-    with pytest.raises(ValueError, match="sconosciuto"):
+    with pytest.raises(ValueError, match="unknown"):
         ix.esporta(s.project, str(tmp_path / "t.aaf"))
 
 

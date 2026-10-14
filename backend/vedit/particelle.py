@@ -34,14 +34,14 @@ KINDS: dict[str, tuple[str, int]] = {
 }
 
 DESCRIZIONI = {
-    "snow": "neve che scende ondeggiando",
-    "rain": "pioggia obliqua veloce",
-    "sparks": "braci e scintille che salgono e si spengono",
-    "confetti": "coriandoli colorati che cadono girando",
-    "dust": "pulviscolo nella luce, lento",
-    "bokeh": "grandi dischi sfocati che fluttuano",
-    "stars": "cielo stellato che brilla",
-    "fireflies": "lucciole che vagano e pulsano",
+    "snow": "snow drifting down",
+    "rain": "fast slanted rain",
+    "sparks": "embers and sparks rising and dying out",
+    "confetti": "colourful confetti tumbling down",
+    "dust": "dust in the light, slow",
+    "bokeh": "big blurred discs floating",
+    "stars": "twinkling starry sky",
+    "fireflies": "fireflies wandering and pulsing",
 }
 
 _JS = r"""
@@ -152,8 +152,8 @@ def html(kind: str, width: int, height: int, color: str | None = None,
         nome = "personalizzate"
     else:
         if kind not in KINDS:
-            raise ValueError(f"particelle sconosciute {kind!r}; scegli tra "
-                             f"{', '.join(KINDS)} o {CUSTOM}")
+            raise ValueError(f"unknown particles {kind!r}; choose from "
+                             f"{', '.join(KINDS)} or {CUSTOM}")
         colore, base = KINDS[kind]
         opt = {
             "kind": kind, "seed": int(seed), "color": color or colore,
@@ -207,12 +207,12 @@ CUSTOM = "custom"
 SHAPES = ("circle", "square", "triangle", "star", "heart", "ring", "line", "text")
 MOTIONS = ("fall", "rise", "drift", "float", "burst", "still")
 
-FORME = {"circle": "cerchio", "square": "quadrato", "triangle": "triangolo",
-         "star": "stella", "heart": "cuore", "ring": "anello", "line": "trattino",
-         "text": "testo o emoji"}
-MOTI = {"fall": "cadono", "rise": "salgono", "drift": "vento (direzione a scelta)",
-        "float": "fluttuano sul posto", "burst": "esplosione da un punto",
-        "still": "ferme, compaiono e spariscono"}
+FORME = {"circle": "circle", "square": "square", "triangle": "triangle",
+         "star": "star", "heart": "heart", "ring": "ring", "line": "dash",
+         "text": "text or emoji"}
+MOTI = {"fall": "fall", "rise": "rise", "drift": "wind (any direction)",
+        "float": "float in place", "burst": "burst from a point",
+        "still": "still, appear and disappear"}
 
 # voce -> (predefinito, minimo, massimo); le coppie sono [da, a]
 _NUMERI = {
@@ -249,30 +249,30 @@ def valida(spec: dict) -> dict:
     glow, twinkle, life, interval, spread, gravity, origin [x,y], fade
     """
     if not isinstance(spec, dict):
-        raise ValueError("le particelle personalizzate vogliono un oggetto di parametri")
+        raise ValueError("custom particles need an object of parameters")
     ignote = set(spec) - set(PREDEFINITA)
     if ignote:
-        raise ValueError(f"voci sconosciute per le particelle: {', '.join(sorted(ignote))}; "
-                         f"ammesse: {', '.join(PREDEFINITA)}")
+        raise ValueError(f"unknown particle entries: {', '.join(sorted(ignote))}; "
+                         f"allowed: {', '.join(PREDEFINITA)}")
     out = {**PREDEFINITA, **{k: v for k, v in spec.items() if v is not None}}
     if out["shape"] not in SHAPES:
-        raise ValueError(f"forma sconosciuta {out['shape']!r}; ammesse: {', '.join(SHAPES)}")
+        raise ValueError(f"unknown shape {out['shape']!r}; allowed: {', '.join(SHAPES)}")
     if out["motion"] not in MOTIONS:
-        raise ValueError(f"moto sconosciuto {out['motion']!r}; ammessi: {', '.join(MOTIONS)}")
+        raise ValueError(f"unknown motion {out['motion']!r}; allowed: {', '.join(MOTIONS)}")
     colori = out["colors"]
     if isinstance(colori, str):
         colori = [c for c in re.split(r"[\s,]+", colori) if c]
     if not isinstance(colori, list) or not 1 <= len(colori) <= 12:
-        raise ValueError("colors: da 1 a 12 colori")
+        raise ValueError("colors: from 1 to 12 colours")
     for c in colori:
         if not isinstance(c, str) or not _COLORE.match(c):
-            raise ValueError(f"colore non valido {c!r}: scrivilo come #rrggbb")
+            raise ValueError(f"invalid colour {c!r}: write it as #rrggbb")
     out["colors"] = list(colori)
     out["text"] = str(out["text"] or "").strip()
     if len(out["text"]) > MAX_TESTO:
-        raise ValueError(f"text troppo lungo (massimo {MAX_TESTO} caratteri)")
+        raise ValueError(f"text too long (at most {MAX_TESTO} characters)")
     if out["shape"] == "text" and not out["text"]:
-        raise ValueError("con shape=text scrivi in text i simboli o le emoji da usare")
+        raise ValueError("with shape=text put the symbols or emoji to use in text")
     out["fade"] = bool(out["fade"])
     for k, (_, lo, hi) in _NUMERI.items():
         v = out[k]
@@ -280,14 +280,14 @@ def valida(spec: dict) -> dict:
         if coppia and isinstance(v, (int, float)):
             v = [v, v]
         if coppia and (not isinstance(v, (list, tuple)) or len(v) != 2):
-            raise ValueError(f"{k}: una coppia [da, a]")
+            raise ValueError(f"{k}: a pair [from, to]")
         try:
             vals = [float(x) for x in (v if coppia else [v])]
         except (TypeError, ValueError):
-            raise ValueError(f"{k}: serve un numero") from None
+            raise ValueError(f"{k}: a number is needed") from None
         for x in vals:
             if not lo <= x <= hi:
-                raise ValueError(f"{k} deve stare tra {lo:g} e {hi:g}")
+                raise ValueError(f"{k} must be between {lo:g} and {hi:g}")
         if coppia and k != "origin":
             vals.sort()
         out[k] = vals if coppia else vals[0]
@@ -328,12 +328,12 @@ def salva(nome: str, spec: dict, pid: str | None = None) -> dict:
     """Crea (o con ``pid`` aggiorna) particelle personali; restituisce la voce salvata."""
     nome = (nome or "").strip()
     if not nome:
-        raise ValueError("dai un nome alle particelle")
+        raise ValueError("give the particles a name")
     spec = valida(spec)
     lista = personali()
     if pid:
         if not any(p["id"] == pid for p in lista):
-            raise ValueError(f"particelle personali {pid!r} inesistenti")
+            raise ValueError(f"personal particles {pid!r} do not exist")
     else:
         radice = "mie-" + (re.sub(r"[^a-z0-9]+", "-", nome.lower()).strip("-") or "particelle")
         pid, n = radice, 2
@@ -351,7 +351,7 @@ def salva(nome: str, spec: dict, pid: str | None = None) -> dict:
 def elimina(pid: str) -> None:
     lista = personali()
     if not any(p["id"] == pid for p in lista):
-        raise ValueError(f"particelle personali {pid!r} inesistenti")
+        raise ValueError(f"personal particles {pid!r} do not exist")
     _scrivi([p for p in lista if p["id"] != pid])
 
 

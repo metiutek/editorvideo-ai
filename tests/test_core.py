@@ -132,11 +132,11 @@ def test_effetti_solo_dove_cambiano_qualcosa(assets, tmp_path):
     s.add_effect(cv.id, "color", {"saturation": 1.2})
     s.add_effect(cv.id, "compressor", {})
     s.add_effect(ca.id, "compressor", {})
-    with pytest.raises(EditError, match="non ha immagine"):
+    with pytest.raises(EditError, match="has no picture"):
         s.add_effect(ca.id, "color", {})
-    with pytest.raises(EditError, match="non ha suono"):
+    with pytest.raises(EditError, match="has no sound"):
         s.add_effect(ct.id, "compressor", {})
-    with pytest.raises(EditError, match="non ha suono"):
+    with pytest.raises(EditError, match="has no sound"):
         s.add_effect(cm.id, "reverb", {})
     # la catena e' atomica: un effetto fuori posto ferma tutti
     with pytest.raises(EditError):

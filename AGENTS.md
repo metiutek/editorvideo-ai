@@ -322,9 +322,12 @@ l'ultimo che salva vince, non c'è un lock. Con `open_ui` il problema non si pon
 
 ## 5. Convenzioni della repo
 
-- Codice, commenti e messaggi all'utente **in italiano**, come il resto del progetto.
-  Fa eccezione la vetrina pubblica: `README.md` e' in inglese (e' anche la pagina PyPI),
-  la versione italiana e' `README.it.md`. Se cambi uno dei due, allinea l'altro.
+- Codice e commenti **in italiano**, come il resto del progetto. Quello che legge chi usa
+  l'editor e' invece **in inglese**: testi dell'interfaccia, messaggi di errore, nomi e
+  descrizioni di effetti, look, transizioni, stili e particelle, avvisi degli strumenti.
+  I test che controllano un messaggio cercano il testo inglese. L'assistente risponde nella
+  lingua in cui gli si scrive. La vetrina pubblica: `README.md` in inglese (e' anche la
+  pagina PyPI), la versione italiana e' `README.it.md`. Se cambi uno dei due, allinea l'altro.
 - Niente dipendenze nuove senza motivo. Il core sta su ffmpeg, libreria standard e `numpy`
   — quest'ultimo non è facoltativo: senza, restano fuori `music_beats`, `plan_edit`,
   `inspect_footage`, `match_color` e `check_cuts`, cioè scelta del materiale e montaggio a

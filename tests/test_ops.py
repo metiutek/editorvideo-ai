@@ -241,7 +241,7 @@ def test_l_cut_limitato_dal_materiale(progetto):
 def test_jl_cut_kind_sbagliato(progetto):
     s, _, _ = progetto
     c = s.project.tracks[0].clips[0]
-    with pytest.raises(ValueError, match="'J' o 'L'"):
+    with pytest.raises(ValueError, match="'J' or 'L'"):
         ops.jl_cut(s, c.id, kind="X")
 
 

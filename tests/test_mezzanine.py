@@ -27,7 +27,7 @@ def test_codec_e_contenitore_controllati_prima():
     render.controlla_codec("h264", "x.mxf")
     with pytest.raises(ValueError, match="mov"):
         render.controlla_codec("prores", "x.mp4")
-    with pytest.raises(ValueError, match="sconosciuto"):
+    with pytest.raises(ValueError, match="unknown"):
         render.controlla_codec("mpeg2", "x.mov")
 
 

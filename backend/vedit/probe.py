@@ -46,7 +46,7 @@ def probe(path: str, media_id: str | None = None) -> Media:
     """Ritorna un Media popolato. Solleva FileNotFoundError se il file manca."""
     p = Path(path)
     if not p.exists():
-        raise FileNotFoundError(f"file non trovato: {path}")
+        raise FileNotFoundError(f"file not found: {path}")
 
     data = probe_raw(str(p))
     streams = data.get("streams", [])
@@ -208,5 +208,5 @@ def loudness(path: str, start: float = 0.0, duration: float | None = None) -> di
     start_idx = log.rfind("{")
     end_idx = log.rfind("}")
     if start_idx == -1 or end_idx == -1:
-        raise RuntimeError("impossibile misurare il loudness:\n" + log[-800:])
+        raise RuntimeError("cannot measure the loudness:\n" + log[-800:])
     return json.loads(log[start_idx : end_idx + 1])

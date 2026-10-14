@@ -67,9 +67,9 @@ def risolvi(path: str) -> str:
         if candidati:
             return str(candidati[0])
     if not p.exists():
-        raise PluginNonDisponibile(f"plugin non trovato: {path}")
+        raise PluginNonDisponibile(f"plugin not found: {path}")
     if p.suffix.lower() == ".dll":
-        raise PluginNonDisponibile("i plugin VST2 (.dll) non sono supportati: serve la versione VST3")
+        raise PluginNonDisponibile("VST2 plugins (.dll) are not supported: the VST3 version is needed")
     return str(p)
 
 
@@ -78,8 +78,8 @@ def _pedalboard():
         import pedalboard
     except ImportError as exc:
         raise PluginNonDisponibile(
-            "i plugin VST vogliono pedalboard: pip install \"vedit-mcp[plugin]\" "
-            "(oppure pip install pedalboard)") from exc
+            "VST plugins need pedalboard: pip install \"vedit-mcp[plugin]\" "
+            "(or pip install pedalboard)") from exc
     return pedalboard
 
 
@@ -91,7 +91,7 @@ def _carica(path: str):
     except PluginNonDisponibile:
         raise
     except Exception as exc:  # noqa: BLE001 - ogni plugin fallisce a modo suo
-        raise PluginNonDisponibile(f"il plugin non si carica: {str(exc).splitlines()[0][:200]}") from exc
+        raise PluginNonDisponibile(f"the plugin does not load: {str(exc).splitlines()[0][:200]}") from exc
 
 
 def _finito(x, silenzio: float = -96.0):
@@ -132,7 +132,7 @@ def _imposta(pl, valori: dict) -> None:
         try:
             setattr(pl, nome, v)
         except Exception as exc:  # noqa: BLE001
-            raise PluginNonDisponibile(f"parametro {nome}={v!r} non accettato: {exc}") from exc
+            raise PluginNonDisponibile(f"parameter {nome}={v!r} not accepted: {exc}") from exc
 
 
 def _leggi(path: str, inizio: float, durata: float, sr: int) -> np.ndarray:

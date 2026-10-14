@@ -944,7 +944,7 @@ def compile_project(project: Project, opts: CompileOptions | None = None) -> Com
         duration = project.duration()
 
     if duration <= 0:
-        raise ValueError("timeline vuota: nessuna clip da rendere")
+        raise ValueError("empty timeline: no clips to render")
 
     b = _Builder(proj, opts)
     vlabel = b.build_video(duration) if opts.video else None

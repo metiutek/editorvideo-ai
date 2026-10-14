@@ -120,7 +120,7 @@ def speech_ranges(store, clip_id: str, min_speech: float = 0.3) -> list[tuple[fl
     """Tratti in cui la clip parla, in tempo di **timeline**."""
     _, clip = store.clip_or_die(clip_id)
     if not clip.media:
-        raise ValueError(f"la clip {clip_id} non ha un file sorgente")
+        raise ValueError(f"clip {clip_id} has no source file")
     path = store.media_or_die(clip.media).path
     inizio, fine = clip.in_, clip.in_ + clip.source_duration()
     speed = abs(clip.speed or 1.0)
@@ -202,10 +202,10 @@ def detach_audio(store, clip_id: str, track_id: str | None = None) -> dict:
     """
     _, clip = store.clip_or_die(clip_id)
     if not clip.media:
-        raise ValueError(f"la clip {clip_id} non ha un file sorgente")
+        raise ValueError(f"clip {clip_id} has no source file")
     m = store.media_or_die(clip.media)
     if not m.has_audio:
-        raise ValueError(f"{m.name} non ha audio da scollegare")
+        raise ValueError(f"{m.name} has no audio to detach")
     gia = [(t, c) for t, c in store.collegate(clip) if t.kind == "audio"]
     if gia:
         # l'audio e' gia' su una traccia sua: basta tagliare il collegamento
@@ -238,9 +238,9 @@ def jl_cut(store, clip_id: str, seconds: float = 0.5, kind: str = "J") -> dict:
     Se l'audio non e' ancora scollegato lo scollega da solo.
     """
     if kind not in ("J", "L"):
-        raise ValueError("kind deve essere 'J' o 'L'")
+        raise ValueError("kind must be 'J' or 'L'")
     if seconds <= 0:
-        raise ValueError("seconds deve essere positivo")
+        raise ValueError("seconds must be positive")
 
     _, clip = store.clip_or_die(clip_id)
     # scollegare e spostare sono un gesto solo: un undo, niente meta' lavoro

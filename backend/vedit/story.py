@@ -459,7 +459,7 @@ def collect(folder: str, order: str = "name") -> list[str]:
     """
     p = Path(folder)
     if not p.is_dir():
-        raise NotADirectoryError(f"non e' una cartella: {folder}")
+        raise NotADirectoryError(f"not a folder: {folder}")
     exts = VIDEO_EXTS | AUDIO_EXTS
     files = [str(f.resolve()) for f in p.iterdir()
              if f.is_file() and f.suffix.lower() in exts]
@@ -496,9 +496,9 @@ def plan(source: str | list[str], style: str = "vlog", target_duration: float | 
     """
     st = STYLES.get(style)
     if st is None:
-        raise ValueError(f"stile sconosciuto: {style!r}; scegli tra {sorted(STYLES)}")
+        raise ValueError(f"unknown style: {style!r}; choose from {sorted(STYLES)}")
     if order not in ORDERS:
-        raise ValueError(f"order sconosciuto: {order!r}; scegli tra {list(ORDERS)}")
+        raise ValueError(f"unknown order: {order!r}; choose from {list(ORDERS)}")
 
     paths = (collect(source, order) if isinstance(source, str)
              else list(source))
@@ -506,7 +506,7 @@ def plan(source: str | list[str], style: str = "vlog", target_duration: float | 
         from . import probe
         paths = sorted(paths, key=probe.sort_key)
     if not paths:
-        raise ValueError("nessun file da montare")
+        raise ValueError("no files to edit")
 
     if segment:
         shots = [s for p in paths for s in shots_from(p, st, deep=deep, **kw)]

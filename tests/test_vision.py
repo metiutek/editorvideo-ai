@@ -130,7 +130,7 @@ def test_mask_keyframes_riquadro_con_margine():
 
 
 def test_mask_keyframes_senza_soggetto():
-    with pytest.raises(vision.VisionError, match="nessun soggetto"):
+    with pytest.raises(vision.VisionError, match="no subject"):
         vision.mask_keyframes(_traccia((0, None, None)))
 
 

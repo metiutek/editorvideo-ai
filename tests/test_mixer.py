@@ -31,7 +31,7 @@ def test_validazione(assets):
     s, ids = _tre_tracce(assets)
     with pytest.raises(EditError, match="audio"):
         s.set_settings(audio_layout="7.1")
-    with pytest.raises(EditError, match="instradamento"):
+    with pytest.raises(EditError, match="routing"):
         s.set_track(ids["voce"], surround="soffitto")
     with pytest.raises(EditError, match="master"):
         s.set_master_volume(9)

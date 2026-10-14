@@ -57,13 +57,13 @@ def valida(domande: Any) -> list[dict]:
     if isinstance(domande, dict) and "domande" in domande:
         domande = domande["domande"]
     if not isinstance(domande, list) or not domande:
-        raise ValueError("serve una lista di domande")
+        raise ValueError("a list of questions is needed")
     if len(domande) > MAX_DOMANDE:
-        raise ValueError(f"al massimo {MAX_DOMANDE} domande per volta")
+        raise ValueError(f"at most {MAX_DOMANDE} questions at a time")
     out = []
     for d in domande:
         if not isinstance(d, dict) or not str(d.get("domanda", "")).strip():
-            raise ValueError("ogni domanda vuole il campo 'domanda'")
+            raise ValueError("each question needs the 'domanda' field")
         opz = []
         for o in d.get("opzioni") or []:
             if isinstance(o, str):
@@ -72,7 +72,7 @@ def valida(domande: Any) -> list[dict]:
                 opz.append({"etichetta": str(o["etichetta"]).strip()[:80],
                             "descrizione": str(o.get("descrizione", "")).strip()[:240]})
         if len(opz) < 2:
-            raise ValueError(f"la domanda {d['domanda']!r} vuole almeno due opzioni")
+            raise ValueError(f"question {d['domanda']!r} needs at least two options")
         out.append({
             "domanda": str(d["domanda"]).strip(),
             "titolo": str(d.get("titolo") or "").strip()[:24],
@@ -92,12 +92,12 @@ def conferma_export(output: str, quality: str) -> list[dict]:
 
     f = Path(output)
     return [{
-        "domanda": f"L'assistente vuole esportare il video come \"{f.name}\". Procedo?",
+        "domanda": f"The assistant wants to export the video as \"{f.name}\". Go ahead?",
         "titolo": "Export",
         "opzioni": [
-            {"etichetta": "Si', esporta",
-             "descrizione": f"qualita' {quality}, nella cartella {f.parent}"},
-            {"etichetta": "No, non ancora", "descrizione": "il video resta nell'editor, continuo a lavorarci"},
+            {"etichetta": "Yes, export",
+             "descrizione": f"{quality} quality, in the folder {f.parent}"},
+            {"etichetta": "No, not yet", "descrizione": "the video stays in the editor, I keep working on it"},
         ],
         "multipla": False,
     }]
@@ -112,4 +112,5 @@ def approvato(esito: dict) -> bool:
         return False
     r = risposte[0]
     r = r[0] if isinstance(r, list) and r else r
-    return isinstance(r, str) and r.lower().startswith("si")
+    # "yes" dalla UI in inglese; "si" resta valido per chi risponde a parole
+    return isinstance(r, str) and r.lower().startswith(("yes", "si", "sì"))

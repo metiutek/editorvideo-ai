@@ -249,12 +249,12 @@ def test_plan_chrono_shortform_apre_col_gancio_poi_torna_in_ordine(tmp_path):
 
 
 def test_plan_order_sconosciuto(girato):
-    with pytest.raises(ValueError, match="order sconosciuto"):
+    with pytest.raises(ValueError, match="unknown order"):
         story.plan(girato["dir"], order="boh")
 
 
 def test_plan_stile_sconosciuto(girato):
-    with pytest.raises(ValueError, match="stile sconosciuto"):
+    with pytest.raises(ValueError, match="unknown style"):
         story.plan(girato["dir"], style="boh")
 
 

@@ -38,7 +38,7 @@ def _range(project, start: float | None, end: float | None) -> tuple[float, floa
     a = max(0.0, start if start is not None else 0.0)
     b = min(dur, end if end is not None else dur)
     if b <= a:
-        raise ValueError(f"intervallo vuoto: {a}-{b} (timeline lunga {dur:.3f}s)")
+        raise ValueError(f"empty range: {a}-{b} (timeline is {dur:.3f}s long)")
     return a, b
 
 
@@ -135,7 +135,7 @@ def media_sheet(path: str, output: str, count: int = 8, width: int = 320,
 
     m = probe.probe(path)
     if not m.has_video:
-        raise ValueError(f"{Path(path).name} non ha video: niente da guardare")
+        raise ValueError(f"{Path(path).name} has no video: nothing to look at")
     dur = m.duration or 0.0
     if t is not None:
         tempi = [max(0.0, min(float(t), max(0.0, dur - 0.05)))]
@@ -143,7 +143,7 @@ def media_sheet(path: str, output: str, count: int = 8, width: int = 320,
         a = max(0.0, start or 0.0)
         b = min(dur, end) if end is not None else dur
         if b <= a:
-            raise ValueError(f"intervallo vuoto: {a}-{b} (il file dura {dur:.2f}s)")
+            raise ValueError(f"empty range: {a}-{b} (the file lasts {dur:.2f}s)")
         n = max(1, int(count))
         tempi = [round(a + (b - a) / n * (i + 0.5), 3) for i in range(n)]
     tmp = Path(tempfile.mkdtemp(prefix="vedit_media_"))
@@ -158,7 +158,7 @@ def media_sheet(path: str, output: str, count: int = 8, width: int = 320,
         if f.exists() and f.stat().st_size > 0:
             frames.append((f"{i}  {_timecode(tt)}", str(f), tt))
     if not frames:
-        raise ValueError(f"nessun fotogramma leggibile da {Path(path).name}")
+        raise ValueError(f"no readable frames from {Path(path).name}")
     res = griglia([(e, f) for e, f, _ in frames], output, cols, guide)
     return {"file": res["file"], "tempi": [tt for _, _, tt in frames],
             "durata_sorgente": round(dur, 3), "risoluzione": [m.width, m.height]}
@@ -379,7 +379,7 @@ def scope_immagine(project, t: float, tipo: str, output: str) -> str:
     sposta il colore quanto basta a falsare la misura.
     """
     if tipo not in SCOPI:
-        raise ValueError(f"scope sconosciuto {tipo!r}; ammessi: {', '.join(SCOPI)}")
+        raise ValueError(f"unknown scope {tipo!r}; allowed: {', '.join(SCOPI)}")
     out = Path(output)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix="vedit_scope_")) / "f.png"
@@ -509,7 +509,7 @@ def cuts_on_speech(store, clip_id: str, model_size: str = "small",
     """
     _, clip = store.clip_or_die(clip_id)
     if not clip.media:
-        raise ValueError(f"la clip {clip_id} non ha un file sorgente")
+        raise ValueError(f"clip {clip_id} has no source file")
     path = store.media_or_die(clip.media).path
     tr = analyze.transcribe(path, model_size, language)
 

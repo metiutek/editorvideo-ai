@@ -125,10 +125,10 @@ def test_particelle_su_misura(tmp_path):
     assert a == particelle.html("custom", 1920, 1080, seed=3, custom=ricetta)
     assert "Math.random" not in a
     assert particelle.parametri(a)["custom"] == spec
-    for sbagliata, msg in (({"shape": "drago"}, "forma"), ({"motion": "salta"}, "moto"),
-                           ({"colors": ["rosso"]}, "colore"), ({"shape": "text"}, "text"),
-                           ({"size": [1, 9999]}, "size"), ({"vento": 1}, "sconosciute"),
-                           ({"opacity": [0.5]}, "coppia")):
+    for sbagliata, msg in (({"shape": "drago"}, "shape"), ({"motion": "salta"}, "motion"),
+                           ({"colors": ["rosso"]}, "colour"), ({"shape": "text"}, "text"),
+                           ({"size": [1, 9999]}, "size"), ({"vento": 1}, "unknown"),
+                           ({"opacity": [0.5]}, "pair")):
         with pytest.raises(ValueError, match=msg):
             particelle.valida(sbagliata)
     # "</" dentro un testo non chiude il blocco dei parametri
@@ -138,7 +138,7 @@ def test_particelle_su_misura(tmp_path):
     s = _progetto(tmp_path)
     c = s.add_particles("custom", custom=ricetta, duration=2)
     assert c.name == "particelle personalizzate"
-    with pytest.raises(EditError, match="forma"):
+    with pytest.raises(EditError, match="shape"):
         s.add_particles("custom", custom={"shape": "drago"})
 
 
@@ -159,7 +159,7 @@ def test_set_particles_cambia_senza_ricreare(tmp_path):
     s.undo()
     assert particelle.parametri(s.clip_or_die(c.id)[1].html)["custom"]["colors"] == ["#ffffff"]
     t = s.add_text("ciao")
-    with pytest.raises(EditError, match="non e' fatta di particelle"):
+    with pytest.raises(EditError, match="is not made of particles"):
         s.set_particles(t.id, density=2)
 
 
@@ -175,9 +175,9 @@ def test_particelle_personali_salvate(tmp_path, monkeypatch):
     assert c.name == "particelle Cuori"
     assert particelle.parametri(c.html)["custom"]["count"] == 40
     particelle.elimina(mie["id"])
-    with pytest.raises(EditError, match="sconosciute"):
+    with pytest.raises(EditError, match="unknown"):
         s.add_particles(mie["id"])
-    with pytest.raises(ValueError, match="inesistenti"):
+    with pytest.raises(ValueError, match="do not exist"):
         particelle.elimina(mie["id"])
 
 

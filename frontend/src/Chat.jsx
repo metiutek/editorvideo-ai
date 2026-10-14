@@ -627,6 +627,9 @@ function ModelSettings({ available, setError, onSaved }) {
   )
 }
 
+// stili.MAX_GUIDA: quanto puo' essere lunga la guida di uno stile
+const MAX_GUIDA = 20000
+
 const PIANI = [
   ['vlog', 'medium — vlog, personal story'],
   ['shortform', 'fast — social, short cuts'],
@@ -655,11 +658,13 @@ function EditorStile({ stile, setError, onClose, onSalvato, onEliminato }) {
       <label>name<input value={f.nome} onChange={set('nome')} placeholder="e.g. My channel" autoFocus /></label>
       <label>in short<input value={f.breve} onChange={set('breve')} placeholder="one line describing it (optional)" /></label>
       <label>how the assistant should edit
-        <textarea rows={8} value={f.guida} onChange={set('guida')}
+        <textarea rows={14} value={f.guida} onChange={set('guida')} maxLength={MAX_GUIDA}
           placeholder={'Write it as you would tell an editor. E.g.:\n'
             + 'Always open with the strongest line. Cuts of 1-2 s, never dissolves. '
             + 'Big yellow subtitles at the bottom. Warm, saturated colour. '
             + 'Music rising at the end, close on the logo.'} />
+        <span className={`hint ${f.guida.length > MAX_GUIDA * 0.9 ? 'warn' : ''}`}>
+          {f.guida.length.toLocaleString()} / {MAX_GUIDA.toLocaleString()} characters</span>
       </label>
       <label>base pace
         <select value={f.piano} onChange={set('piano')}>

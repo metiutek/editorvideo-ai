@@ -79,12 +79,12 @@ def test_non_tocca_quello_che_e_gia_deciso(montaggio):
 
 
 def test_senza_clip_lo_dice(assets):
-    with pytest.raises(ValueError, match="nessuna clip"):
+    with pytest.raises(ValueError, match="no video clips"):
         stili.applica(Store.create("v", "720p"), "cinematico")
 
 
 def test_stile_sconosciuto(montaggio):
-    with pytest.raises(ValueError, match="stile sconosciuto"):
+    with pytest.raises(ValueError, match="unknown style"):
         stili.applica(montaggio, "barocco")
 
 
@@ -135,15 +135,15 @@ def test_aggiornare_lo_stile_tiene_la_ricetta(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("ricetta, errore", [
-    ({"colore": "blu"}, "voci di ricetta sconosciute"),
-    ({"look": "barocco"}, "look sconosciuto"),
-    ({"movimento": "volo"}, "movimento sconosciuto"),
-    ({"zoom": 3}, "zoom fuori scala"),
-    ({"transizioni": ["esplosione", 1, 2]}, "transizione sconosciuta"),
+    ({"colore": "blu"}, "unknown recipe entries"),
+    ({"look": "barocco"}, "unknown look"),
+    ({"movimento": "volo"}, "unknown movimento"),
+    ({"zoom": 3}, "zoom out of range"),
+    ({"transizioni": ["esplosione", 1, 2]}, "unknown transition"),
     ({"transizioni": "dissolve"}, "transizioni"),
     ({"accenti": ["blur", 2]}, "accenti"),
-    ({"attese": ["bellezza"]}, "attese sconosciute"),
-    ("punch", "oggetto"),
+    ({"attese": ["bellezza"]}, "unknown expectations"),
+    ("punch", "object"),
 ])
 def test_ricetta_sbagliata_dice_cosa_e_ammesso(ricetta, errore, monkeypatch, tmp_path):
     monkeypatch.setenv("VEDIT_CACHE", str(tmp_path))
@@ -177,3 +177,14 @@ def test_ogni_ricetta_si_renderizza(montaggio, stile, tmp_path):
     res = render.render(montaggio.project, render.RenderOptions(
         output=str(out), quality="draft", width=320, height=180))
     assert out.exists() and res.duration == pytest.approx(8.0, abs=0.3)
+
+
+def test_guida_lunga_fino_a_ventimila(monkeypatch, tmp_path):
+    """Una guida di montaggio dettagliata e' lunga: 4000 caratteri non bastavano."""
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path))
+    assert stili.MAX_GUIDA >= 20000
+    lunga = "Taglia sul battito. " * 750          # 15000 caratteri
+    mio = stili.salva("Lungo", lunga)
+    assert stili.trova(mio["id"])["guida"] == lunga.strip()
+    with pytest.raises(ValueError, match="too long"):
+        stili.salva("Troppo", "x" * (stili.MAX_GUIDA + 1))

@@ -72,7 +72,7 @@ def test_marker_regione(progetto):
 
 def test_marker_kind_sbagliato(progetto):
     s, _ = progetto
-    with pytest.raises(ValueError, match="sconosciuto"):
+    with pytest.raises(ValueError, match="unknown"):
         versions.add_marker(s, 1.0, "x", "boh")
 
 
@@ -87,7 +87,7 @@ def test_marker_si_toglie_e_si_annulla(progetto):
 
 def test_remove_marker_inesistente(progetto):
     s, _ = progetto
-    with pytest.raises(ValueError, match="inesistente"):
+    with pytest.raises(ValueError, match="does not exist"):
         versions.remove_marker(s, "mk_nope")
 
 
@@ -134,7 +134,7 @@ def test_restore_si_annulla(progetto, tmp_path):
 
 def test_restore_inesistente(progetto):
     s, _ = progetto
-    with pytest.raises(ValueError, match="inesistente"):
+    with pytest.raises(ValueError, match="does not exist"):
         versions.restore(s, "mai_salvata")
 
 
@@ -184,11 +184,11 @@ def test_snapshot_nome_con_caratteri_strani(progetto):
 
 def test_snapshot_nome_vuoto(progetto):
     s, _ = progetto
-    with pytest.raises(ValueError, match="vuoto"):
+    with pytest.raises(ValueError, match="empty"):
         versions.snapshot(s, "   ")
 
 
 def test_snapshot_senza_progetto_su_disco():
     s = Store.create("in_memoria", "720p")
-    with pytest.raises(ValueError, match="salvalo prima"):
+    with pytest.raises(ValueError, match="save it before"):
         versions.snapshot(s, "A")

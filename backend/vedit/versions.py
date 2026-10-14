@@ -28,9 +28,9 @@ def add_marker(store, t: float, note: str = "", kind: str = "nota",
                duration: float = 0.0) -> dict:
     """Ancora una nota a un istante (o a una regione, con duration > 0)."""
     if kind not in KINDS:
-        raise ValueError(f"kind {kind!r} sconosciuto; scegli tra {list(KINDS)}")
+        raise ValueError(f"unknown kind {kind!r}; choose from {list(KINDS)}")
     if t < 0:
-        raise ValueError("il tempo non puo' essere negativo")
+        raise ValueError("time cannot be negative")
     store._touch()
     m = Marker(t=round(float(t), 3), duration=round(max(0.0, duration), 3),
                note=note.strip(), kind=kind)
@@ -58,7 +58,7 @@ def markers(store, kind: str | None = None, start: float | None = None,
 def remove_marker(store, marker_id: str) -> dict:
     m = next((x for x in store.project.markers if x.id == marker_id), None)
     if m is None:
-        raise ValueError(f"marker {marker_id!r} inesistente")
+        raise ValueError(f"marker {marker_id!r} does not exist")
     store._touch()
     store.project.markers.remove(m)
     store._done()
@@ -79,7 +79,7 @@ def _view(m: Marker) -> dict:
 
 def _dir(store) -> Path:
     if not store.path:
-        raise ValueError("il progetto non e' su disco: salvalo prima di usare gli snapshot")
+        raise ValueError("the project is not on disk: save it before using snapshots")
     d = Path(store.path).with_suffix("") .parent / (Path(store.path).stem + ".versioni")
     d.mkdir(parents=True, exist_ok=True)
     return d
@@ -88,7 +88,7 @@ def _dir(store) -> Path:
 def _safe(name: str) -> str:
     pulito = "".join(c if c.isalnum() or c in "-_ " else "_" for c in name).strip()
     if not pulito:
-        raise ValueError("nome dello snapshot vuoto")
+        raise ValueError("empty snapshot name")
     return pulito.replace(" ", "_")[:60]
 
 
@@ -122,7 +122,7 @@ def restore(store, name: str) -> dict:
     """Riporta il progetto a uno snapshot. E' una modifica: si annulla con undo."""
     f = _dir(store) / f"{_safe(name)}.json"
     if not f.exists():
-        raise ValueError(f"snapshot {name!r} inesistente; disponibili: "
+        raise ValueError(f"snapshot {name!r} does not exist; available: "
                          f"{[s['nome'] for s in snapshots(store)]}")
     dati = json.loads(f.read_text(encoding="utf-8"))
     dati.pop("_snapshot", None)
@@ -163,7 +163,7 @@ def compare(store, a: str, b: str | None = None) -> dict:
 def _carica(store, name: str) -> dict:
     f = _dir(store) / f"{_safe(name)}.json"
     if not f.exists():
-        raise ValueError(f"snapshot {name!r} inesistente")
+        raise ValueError(f"snapshot {name!r} does not exist")
     return json.loads(f.read_text(encoding="utf-8"))
 
 

@@ -138,7 +138,7 @@ def frame_stats(path: str, fps: float = STATS_FPS, width: int = 160,
         try:
             import numpy as np
         except ImportError as e:  # pragma: no cover - numpy e' una dipendenza
-            raise AnalysisError("numpy richiesto per frame_stats") from e
+            raise AnalysisError("numpy is required for frame_stats") from e
 
         h = 90 if width == 160 else max(2, int(width * 9 / 16) // 2 * 2)
         args = [
@@ -195,7 +195,7 @@ def beats(path: str, block: float = 4.0, force: bool = False) -> dict:
         try:
             import numpy as np
         except ImportError as e:  # pragma: no cover - numpy e' una dipendenza
-            raise AnalysisError("numpy richiesto per l'analisi del battito") from e
+            raise AnalysisError("numpy is required for the beat analysis") from e
 
         args = [
             ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error",
@@ -204,14 +204,14 @@ def beats(path: str, block: float = 4.0, force: bool = False) -> dict:
         raw = (subprocess.run(args, capture_output=True, timeout=3600).stdout or b"")
         x = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
         if x.size < BEAT_SR:
-            raise AnalysisError("traccia troppo corta o senza audio per il battito")
+            raise AnalysisError("track too short or without audio for the beat")
 
         hop = 128
         n = x.size // hop
         env = np.sqrt((x[: n * hop].reshape(n, hop) ** 2).mean(axis=1))
         fps = BEAT_SR / hop
         if env.size < 64:
-            raise AnalysisError("traccia troppo corta per stimare il BPM")
+            raise AnalysisError("track too short to estimate the BPM")
 
         onset = np.diff(env, prepend=env[0]).clip(min=0)
         onset = onset - onset.mean()
@@ -351,7 +351,7 @@ def _whisper(path: str, model_size: str, language: str | None, device: str) -> d
         from faster_whisper import WhisperModel
     except ImportError as e:
         raise AnalysisError(
-            "faster-whisper non installato: pip install faster-whisper"
+            "faster-whisper not installed: pip install faster-whisper"
         ) from e
     if device == "cpu":
         model = WhisperModel(model_size, device="cpu", compute_type="int8")
@@ -413,7 +413,7 @@ def _asr_isolata(path: str, model_size: str, language: str | None, device: str) 
             r = json.loads(Path(out).read_text("utf-8"))
         except (OSError, ValueError):
             coda = " | ".join((proc.stderr or "").strip().splitlines()[-6:])
-            raise _AsrCaduta(f"trascrizione interrotta (codice {proc.returncode}): {coda}")
+            raise _AsrCaduta(f"transcription interrupted (code {proc.returncode}): {coda}")
     finally:
         Path(out).unlink(missing_ok=True)
     if "errore" in r:
@@ -457,7 +457,7 @@ def transcribe(path: str, model_size: str = "small", language: str | None = None
             from faster_whisper import WhisperModel  # noqa: F401
         except ImportError as e:
             raise AnalysisError(
-                "faster-whisper non installato: pip install faster-whisper"
+                "faster-whisper not installed: pip install faster-whisper"
             ) from e
         voluto = os.environ.get("VEDIT_ASR_DEVICE", "auto").lower()
         if voluto not in ("auto", "cuda", "cpu"):

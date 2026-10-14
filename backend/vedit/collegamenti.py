@@ -85,7 +85,7 @@ def risolvi_link(url: str, cartella: Path) -> dict:
     url = url.strip()
     p = urllib.parse.urlparse(url)
     if p.scheme not in ("http", "https") or not p.netloc:
-        raise ValueError("serve un indirizzo che inizi con http:// o https://")
+        raise ValueError("an address starting with http:// or https:// is needed")
     cartella.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "*/*"})
     with urllib.request.urlopen(req, timeout=30) as res:
@@ -104,7 +104,7 @@ def risolvi_link(url: str, cartella: Path) -> dict:
                     if letti > MAX_SCARICO:
                         fh.close()
                         dest.unlink(missing_ok=True)
-                        raise ValueError("file troppo grande da scaricare (oltre 500 MB)")
+                        raise ValueError("file too large to download (over 500 MB)")
                     fh.write(chunk)
             from .chat import tipo_allegato
 

@@ -43,7 +43,7 @@ def stats(path: str, samples: int = SAMPLES, width: int = 128) -> dict:
     size = width * h * 3
     n = len(raw) // size
     if n == 0:
-        raise ValueError(f"nessun fotogramma leggibile in {path}")
+        raise ValueError(f"no readable frames in {path}")
     buf = np.frombuffer(raw[: n * size], dtype=np.uint8).reshape(n * h * width, 3)
     buf = buf.astype(np.float32) / 255.0
     return {

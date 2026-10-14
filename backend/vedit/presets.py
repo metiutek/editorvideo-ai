@@ -22,8 +22,8 @@ LOOKS: list[dict] = [
     {
         "id": "cinema_teal_orange",
         "name": "Cinema teal & orange",
-        "group": "Colore",
-        "desc": "Ombre fredde, incarnati caldi: il look da trailer.",
+        "group": "Colour",
+        "desc": "Cool shadows, warm skin tones: the trailer look.",
         "effects": [
             {"type": "colorbalance", "params": {"bs": 0.14, "gs": 0.04, "rh": 0.12, "gh": 0.03}},
             {"type": "color", "params": {"contrast": 1.12, "saturation": 1.08}},
@@ -31,16 +31,16 @@ LOOKS: list[dict] = [
     },
     {
         "id": "bianco_e_nero",
-        "name": "Bianco e nero",
-        "group": "Colore",
-        "desc": "Desaturazione totale con un po' di contrasto in piu'.",
+        "name": "Black and white",
+        "group": "Colour",
+        "desc": "Full desaturation with a touch more contrast.",
         "effects": [{"type": "color", "params": {"saturation": 0.0, "contrast": 1.15}}],
     },
     {
         "id": "bn_contrastato",
-        "name": "Bianco e nero contrastato",
-        "group": "Colore",
-        "desc": "Neri profondi, stile reportage.",
+        "name": "High-contrast black and white",
+        "group": "Colour",
+        "desc": "Deep blacks, reportage style.",
         "effects": [
             {"type": "color", "params": {"saturation": 0.0, "contrast": 1.45, "brightness": -0.04}},
             {"type": "grain", "params": {"strength": 8}},
@@ -48,9 +48,9 @@ LOOKS: list[dict] = [
     },
     {
         "id": "caldo_tramonto",
-        "name": "Caldo tramonto",
-        "group": "Colore",
-        "desc": "Temperatura verso l'arancio, luce di fine giornata.",
+        "name": "Warm sunset",
+        "group": "Colour",
+        "desc": "Temperature towards orange, end-of-day light.",
         "effects": [
             # sotto 6500 K colortemperature scalda: 8200 dava un tramonto blu
             {"type": "temperature", "params": {"temperature": 4200}},
@@ -59,9 +59,9 @@ LOOKS: list[dict] = [
     },
     {
         "id": "freddo_notturno",
-        "name": "Freddo notturno",
-        "group": "Colore",
-        "desc": "Blu, contrasto alto: notte o interni al neon.",
+        "name": "Cold night",
+        "group": "Colour",
+        "desc": "Blue, high contrast: night or neon interiors.",
         "effects": [
             {"type": "temperature", "params": {"temperature": 9000}},
             {"type": "color", "params": {"contrast": 1.2, "brightness": -0.06, "saturation": 0.9}},
@@ -69,9 +69,9 @@ LOOKS: list[dict] = [
     },
     {
         "id": "sbiadito_pellicola",
-        "name": "Sbiadito pellicola",
-        "group": "Colore",
-        "desc": "Neri alzati e grana: sembra girato su pellicola.",
+        "name": "Faded film",
+        "group": "Colour",
+        "desc": "Lifted blacks and grain: looks shot on film.",
         "effects": [
             {"type": "curves", "params": {"preset": "lighter"}},
             {"type": "color", "params": {"saturation": 0.82, "contrast": 0.92}},
@@ -80,9 +80,9 @@ LOOKS: list[dict] = [
     },
     {
         "id": "vhs",
-        "name": "VHS anni '90",
-        "group": "Stilizzati",
-        "desc": "Grana grossa, colori slavati, bordi morbidi.",
+        "name": "90s VHS",
+        "group": "Stylised",
+        "desc": "Heavy grain, washed-out colours, soft edges.",
         "effects": [
             {"type": "color", "params": {"saturation": 0.75, "contrast": 1.1}},
             {"type": "blur", "params": {"sigma": 2}},
@@ -92,9 +92,9 @@ LOOKS: list[dict] = [
     },
     {
         "id": "sogno",
-        "name": "Sogno",
-        "group": "Stilizzati",
-        "desc": "Alone luminoso diffuso, ricordo o flashback.",
+        "name": "Dream",
+        "group": "Stylised",
+        "desc": "Diffuse glowing halo, memory or flashback.",
         "effects": [
             {"type": "glow", "params": {"amount": 0.55, "sigma": 16}},
             {"type": "color", "params": {"brightness": 0.06, "saturation": 0.9}},
@@ -102,16 +102,16 @@ LOOKS: list[dict] = [
     },
     {
         "id": "nitido",
-        "name": "Nitido",
-        "group": "Ritocco",
-        "desc": "Dettaglio in piu' senza toccare i colori.",
+        "name": "Sharp",
+        "group": "Touch-up",
+        "desc": "Extra detail without touching the colours.",
         "effects": [{"type": "sharpen", "params": {"amount": 1.1}}],
     },
     {
         "id": "pulisci_ripresa",
-        "name": "Pulisci ripresa",
-        "group": "Ritocco",
-        "desc": "Riduzione rumore e recupero di contrasto: girato in poca luce.",
+        "name": "Clean up footage",
+        "group": "Touch-up",
+        "desc": "Noise reduction and contrast recovery: shot in low light.",
         "effects": [
             {"type": "denoise", "params": {"strength": 4}},
             {"type": "color", "params": {"contrast": 1.08, "brightness": 0.04}},
@@ -119,30 +119,30 @@ LOOKS: list[dict] = [
     },
     {
         "id": "vignettatura",
-        "name": "Vignettatura",
-        "group": "Ritocco",
-        "desc": "Bordi scuriti, lo sguardo va al centro.",
+        "name": "Vignette",
+        "group": "Touch-up",
+        "desc": "Darkened edges, the eye goes to the centre.",
         "effects": [{"type": "vignette", "params": {"angle": 0.85}}],
     },
     {
         "id": "censura",
-        "name": "Censura (pixel)",
-        "group": "Stilizzati",
-        "desc": "Mosaico su tutta l'immagine: volti o targhe.",
+        "name": "Censor (pixelate)",
+        "group": "Stylised",
+        "desc": "Mosaic on the whole picture: faces or number plates.",
         "effects": [{"type": "pixelate", "params": {"size": 24}}],
     },
     {
         "id": "specchia",
-        "name": "Specchia",
-        "group": "Ritocco",
-        "desc": "Ribalta in orizzontale: risolve le riprese speculari.",
+        "name": "Mirror",
+        "group": "Touch-up",
+        "desc": "Flips horizontally: fixes mirrored shots.",
         "effects": [{"type": "mirror", "params": {"horizontal": True}}],
     },
     {
         "id": "stabilizza",
-        "name": "Stabilizza",
-        "group": "Ritocco",
-        "desc": "Toglie il tremolio della camera a mano. Render piu' lento.",
+        "name": "Stabilise",
+        "group": "Touch-up",
+        "desc": "Removes handheld camera shake. Slower render.",
         "effects": [{"type": "stabilize", "params": {}}],
     },
 ]
@@ -154,9 +154,9 @@ LOOKS: list[dict] = [
 AUDIO: list[dict] = [
     {
         "id": "voce_pulita",
-        "name": "Voce pulita",
-        "group": "Voce",
-        "desc": "Taglia i bassi di rimbombo, comprime, riduce il fruscio.",
+        "name": "Clean voice",
+        "group": "Voice",
+        "desc": "Cuts the booming lows, compresses, reduces hiss.",
         "effects": [
             {"type": "highpass", "params": {"freq": 90}},
             {"type": "adenoise", "params": {"reduction": 10}},
@@ -165,9 +165,9 @@ AUDIO: list[dict] = [
     },
     {
         "id": "voce_radio",
-        "name": "Voce radiofonica",
-        "group": "Voce",
-        "desc": "Compressione decisa e presenza sui medi.",
+        "name": "Radio voice",
+        "group": "Voice",
+        "desc": "Firm compression and presence in the mids.",
         "effects": [
             {"type": "highpass", "params": {"freq": 110}},
             {"type": "compressor", "params": {"threshold": -24, "ratio": 6}},
@@ -177,9 +177,9 @@ AUDIO: list[dict] = [
     },
     {
         "id": "telefono",
-        "name": "Telefono",
-        "group": "Effetti",
-        "desc": "Banda stretta: voce al telefono o alla radio.",
+        "name": "Telephone",
+        "group": "Effects",
+        "desc": "Narrow band: voice on the phone or the radio.",
         "effects": [
             {"type": "highpass", "params": {"freq": 400}},
             {"type": "lowpass", "params": {"freq": 3000}},
@@ -187,23 +187,23 @@ AUDIO: list[dict] = [
     },
     {
         "id": "sala_grande",
-        "name": "Sala grande",
-        "group": "Effetti",
-        "desc": "Riverbero ampio.",
+        "name": "Large hall",
+        "group": "Effects",
+        "desc": "Wide reverb.",
         "effects": [{"type": "reverb", "params": {"amount": 0.4, "size": 0.8}}],
     },
     {
         "id": "eco",
-        "name": "Eco",
-        "group": "Effetti",
-        "desc": "Ripetizione ritmica.",
+        "name": "Echo",
+        "group": "Effects",
+        "desc": "Rhythmic repeats.",
         "effects": [{"type": "echo", "params": {"delay_ms": 350, "decay": 0.4}}],
     },
     {
         "id": "musica_sotto_voce",
-        "name": "Musica sotto la voce",
-        "group": "Musica",
-        "desc": "Abbassa e scurisce la base perche' non copra il parlato.",
+        "name": "Music under the voice",
+        "group": "Music",
+        "desc": "Lowers and darkens the music so it does not cover the speech.",
         "effects": [
             {"type": "lowpass", "params": {"freq": 9000}},
             {"type": "compressor", "params": {"threshold": -18, "ratio": 2.5}},
@@ -211,9 +211,9 @@ AUDIO: list[dict] = [
     },
     {
         "id": "volume_costante",
-        "name": "Volume costante",
-        "group": "Musica",
-        "desc": "Normalizzazione dinamica: livella i punti troppo alti o bassi.",
+        "name": "Steady volume",
+        "group": "Music",
+        "desc": "Dynamic normalisation: evens out the parts that are too loud or too quiet.",
         "effects": [{"type": "dynnorm", "params": {}}],
     },
 ]
@@ -223,16 +223,16 @@ AUDIO: list[dict] = [
 # --------------------------------------------------------------------------
 
 _TR_META = {
-    "dissolve": ("Dissolvenza", "Classica", "Una sfuma nell'altra.", 1.0),
-    "iris": ("Iris", "Classica", "Cerchio che si apre dal centro.", 1.0),
-    "wipe_right": ("Tendina ▸", "Tendina", "Scopre da sinistra a destra.", 0.8),
-    "wipe_left": ("Tendina ◂", "Tendina", "Scopre da destra a sinistra.", 0.8),
-    "wipe_down": ("Tendina ▾", "Tendina", "Scopre dall'alto.", 0.8),
-    "wipe_up": ("Tendina ▴", "Tendina", "Scopre dal basso.", 0.8),
-    "slide_left": ("Scorri ◂", "Scorrimento", "La clip esce verso sinistra.", 0.7),
-    "slide_right": ("Scorri ▸", "Scorrimento", "La clip esce verso destra.", 0.7),
-    "slide_up": ("Scorri ▴", "Scorrimento", "La clip esce verso l'alto.", 0.7),
-    "slide_down": ("Scorri ▾", "Scorrimento", "La clip esce verso il basso.", 0.7),
+    "dissolve": ("Dissolve", "Classic", "One fades into the other.", 1.0),
+    "iris": ("Iris", "Classic", "A circle opening from the centre.", 1.0),
+    "wipe_right": ("Wipe ▸", "Wipe", "Reveals from left to right.", 0.8),
+    "wipe_left": ("Wipe ◂", "Wipe", "Reveals from right to left.", 0.8),
+    "wipe_down": ("Wipe ▾", "Wipe", "Reveals from the top.", 0.8),
+    "wipe_up": ("Wipe ▴", "Wipe", "Reveals from the bottom.", 0.8),
+    "slide_left": ("Slide ◂", "Slide", "The clip exits to the left.", 0.7),
+    "slide_right": ("Slide ▸", "Slide", "The clip exits to the right.", 0.7),
+    "slide_up": ("Slide ▴", "Slide", "The clip exits upwards.", 0.7),
+    "slide_down": ("Slide ▾", "Slide", "The clip exits downwards.", 0.7),
 }
 
 
@@ -240,7 +240,7 @@ def transitions() -> list[dict]:
     """Transizioni del motore con nome leggibile, gruppo e durata consigliata."""
     out = []
     for t in TRANSITIONS:
-        name, group, desc, dur = _TR_META.get(t, (t, "Altro", "", 1.0))
+        name, group, desc, dur = _TR_META.get(t, (t, "Other", "", 1.0))
         out.append({"id": t, "name": name, "group": group, "desc": desc, "duration": dur})
     return out
 

@@ -133,8 +133,8 @@ def install(progress=None, force: bool = False) -> dict:
         url = _ARCHIVI.get((sistema, _arch()))
         if not url:
             raise RuntimeError(
-                f"nessuna build pronta per {sistema}/{_arch()}: installa ffmpeg con il gestore "
-                "pacchetti del sistema, oppure indica i binari con VEDIT_FFMPEG / VEDIT_FFPROBE"
+                f"no ready build for {sistema}/{_arch()}: install ffmpeg with the system package "
+                "manager, or point at the binaries with VEDIT_FFMPEG / VEDIT_FFPROBE"
             )
         urls = [url]
 
@@ -149,7 +149,7 @@ def install(progress=None, force: bool = False) -> dict:
     mancanti = [n for n in NAMES if not local(n)]
     if mancanti:
         raise RuntimeError(
-            f"scaricato ma senza {', '.join(mancanti)}: l'archivio non conteneva il binario atteso"
+            f"downloaded but without {', '.join(mancanti)}: the archive did not contain the expected binary"
         )
     return {"stato": "installato", "cartella": str(dove), "estratti": presi, **installed()}
 

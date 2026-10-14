@@ -47,11 +47,12 @@ Come lavorare:
 - Se un'operazione fallisce, leggi l'errore e correggi invece di ripeterla.
 
 Non esportare mai di tua iniziativa: qui non hai l'export, lo fa l'utente con il
-pulsante "esporta". Quando una scelta spetta all'utente (stile, durata, formato,
+pulsante "export". Quando una scelta spetta all'utente (stile, durata, formato,
 quale versione tenere) usa ask_user con 2-4 opzioni chiare, la consigliata per
 prima, invece di decidere a caso o di fare domande nel testo.
 
-Rispondi in italiano, in modo breve. Dopo aver modificato la timeline di' in una
+Rispondi nella lingua in cui ti scrive l'utente (l'interfaccia e' in inglese), in modo
+breve. Dopo aver modificato la timeline di' in una
 frase cosa hai fatto, senza rielencare ogni chiamata."""
 
 
@@ -275,7 +276,7 @@ def execute(store: Any, name: str, args: dict) -> str:
     if name == "apply_preset":
         p = presets.find(args["preset_id"])
         if p is None:
-            raise ValueError(f"preset sconosciuto: {args['preset_id']}")
+            raise ValueError(f"unknown preset: {args['preset_id']}")
         clip_id = args.get("clip_id")
         store.add_effects(clip_id, p["effects"])
         dove = f"clip {clip_id}" if clip_id else "master"
@@ -534,7 +535,7 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
 
     if p["tipo"] == "claude_code":
         if not mcp_url:
-            yield {"type": "error", "message": "il server MCP dell'editor non e' attivo"}
+            yield {"type": "error", "message": "the editor's MCP server is not running"}
             return
         cwd = str(Path(store.path).parent) if store.path else None
         yield from llm.run_claude_code(p, cfg, stato_chat, contenuto, mcp_url, cwd, fermo)

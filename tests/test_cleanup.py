@@ -173,7 +173,7 @@ def test_tighten_accorcia_davvero(progetto, parlato):
 def test_tighten_rifiuta_una_clip_di_testo(tmp_path):
     s = Store.create("t", "1080p", path=str(tmp_path / "p.json"))
     c = s.add_text("ciao", duration=2)
-    with pytest.raises(ValueError, match="sorgente"):
+    with pytest.raises(ValueError, match="source"):
         cleanup.tighten(s, c.id)
 
 

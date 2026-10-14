@@ -136,7 +136,7 @@ def tighten(store, clip_id: str, min_silence: float = 0.5, pad: float = 0.12,
     """Stringe una clip parlata: via le pause lunghe e le esitazioni."""
     _, clip = store.clip_or_die(clip_id)
     if not clip.media:
-        raise ValueError(f"la clip {clip_id} non ha un file sorgente")
+        raise ValueError(f"clip {clip_id} has no source file")
     path = store.media_or_die(clip.media).path
     prima = clip.duration
 

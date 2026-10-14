@@ -64,7 +64,7 @@ def test_add_clips_atomico_se_una_voce_e_sbagliata(store):
 
 
 def test_add_clips_voce_senza_media(store):
-    with pytest.raises(EditError, match="manca 'media'"):
+    with pytest.raises(EditError, match="'media' is missing"):
         store.add_clips([{"start": 0.0, "duration": 1.0}])
 
 
@@ -139,7 +139,7 @@ def test_move_effect_su_una_clip(store):
 
 def test_move_effect_indice_fuori_range(store):
     store.add_effect(None, "grain", {})
-    with pytest.raises(EditError, match="fuori range"):
+    with pytest.raises(EditError, match="out of range"):
         store.move_effect(None, 3, 0)
 
 

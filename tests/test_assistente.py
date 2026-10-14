@@ -382,8 +382,9 @@ def test_domande_validate():
         domande.valida([{"domanda": "Una sola?", "opzioni": ["si"]}])
     with pytest.raises(ValueError):
         domande.valida([{"domanda": f"d{i}", "opzioni": ["a", "b"]} for i in range(5)])
+    assert domande.approvato({"risposte": {"q": "Yes, export"}})
     assert domande.approvato({"risposte": {"q": "Si', esporta"}})
-    assert not domande.approvato({"risposte": {"q": "No, non ancora"}})
+    assert not domande.approvato({"risposte": {"q": "No, not yet"}})
     assert not domande.approvato({"risposte": {"q": "esporta pure"}})   # solo un si' esplicito
     assert not domande.approvato({"annullata": True})
 
@@ -455,7 +456,7 @@ async def test_render_dentro_l_editor_vuole_il_si(tmp_path):
         with TestClient(api_mod.app) as c:
             c.post("/api/project/create", json={"path": str(tmp_path / "p.json"), "preset": "720p"})
             await srv.mcp.call_tool("add_color", {"color": "red", "duration": 1})
-            _rispondi_appena_chiede(lambda d: {d["domande"][0]["domanda"]: "No, non ancora"})
+            _rispondi_appena_chiede(lambda d: {d["domande"][0]["domanda"]: "No, not yet"})
             res = await srv.mcp.call_tool("render_video", {"output": str(out)})
             testo = json.dumps(res, default=str)
             assert "esportato" in testo and "false" in testo.lower()

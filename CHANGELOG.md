@@ -5,6 +5,13 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Interfaccia in inglese.** Tutti i testi della UI, i messaggi di errore che arrivano a
+  schermo e dagli strumenti MCP, e i cataloghi (effetti, look, catene audio, transizioni,
+  stili integrati, particelle, impostazioni del modello) sono in inglese. Codice e commenti
+  restano in italiano; l'assistente risponde nella lingua in cui gli si scrive. La conferma
+  dell'export accetta sia "Yes" sia "Si'".
+- **Istruzioni di stile fino a 20.000 caratteri** (prima 4.000): una guida di montaggio
+  dettagliata ci sta. L'editor dello stile mostra quanti caratteri restano.
 - **Mixer e audio 5.1.** Nuova scheda *mixer*: un canale per traccia che suona e il master,
   con fader in dB (doppio clic: 0 dB), muto/solo e misuratori di picco, RMS e tenuta del
   picco. I livelli li misura il server renderizzando ogni traccia da sola, con effetti e fader

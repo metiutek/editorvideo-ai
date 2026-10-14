@@ -29,7 +29,7 @@ def test_leggi_i_tre_formati():
                                                                  (3603.0, 3604.25, "due")]
     # la virgola dentro il testo resta: e' l'ultimo campo
     assert captions.leggi(ASS, "ass") == [{"start": 1.0, "end": 2.5, "text": "Ciao, a tutti\nfine"}]
-    with pytest.raises(ValueError, match="nessun sottotitolo"):
+    with pytest.raises(ValueError, match="no readable subtitles"):
         captions.leggi("niente qui", "srt")
 
 
@@ -38,14 +38,14 @@ def test_import_diventa_traccia_di_testi(tmp_path):
     passi = len(s._undo)
     r = s.import_subtitles(testo=SRT, fmt="srt", offset=1.0)
     t = s.track_or_die(r["track"])
-    assert t.name == "sottotitoli" and r["righe"] == 2 and len(s._undo) == passi + 1
+    assert t.name == "subtitles" and r["righe"] == 2 and len(s._undo) == passi + 1
     assert [(c.start, c.duration, c.text.text) for c in t.clips] == \
         [(1.5, 1.5, "Ciao mondo"), (3.5, 1.5, "seconda riga\ndue linee")]
     assert all(c.text.box and c.transform.y > 0 for c in t.clips)   # in basso, su riquadro
     # e si rileggono uguali
     assert [r["text"] for r in captions.da_traccia(s.project, t.id)] == ["Ciao mondo",
                                                                         "seconda riga\ndue linee"]
-    with pytest.raises(EditError, match="usa .srt"):
+    with pytest.raises(EditError, match="use .srt"):
         s.import_subtitles(testo="x", fmt="txt")
 
 
@@ -61,7 +61,7 @@ def test_formato_senza_sottotitoli_rifiutato(tmp_path):
     s = Store.create("s", "720p")
     s.add_color("#202020", duration=2)
     t = s.import_subtitles(testo=SRT, fmt="srt")["track"]
-    with pytest.raises(ValueError, match="non porta sottotitoli"):
+    with pytest.raises(ValueError, match="cannot carry a subtitle stream"):
         render.render(s.project, render.RenderOptions(output=str(tmp_path / "x.mxf"),
                                                       subtitle_track=t))
 

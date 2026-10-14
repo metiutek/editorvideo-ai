@@ -45,7 +45,7 @@ def _ass_color(hex_color: str, alpha: str = "00") -> str:
     """``#RRGGBB`` -> ``&HAABBGGRR``: ASS vuole i byte al contrario."""
     h = hex_color.lstrip("#")
     if len(h) != 6:
-        raise ValueError(f"colore non valido: {hex_color!r}, serve #RRGGBB")
+        raise ValueError(f"invalid colour: {hex_color!r}, #RRGGBB is needed")
     r, g, b = h[0:2], h[2:4], h[4:6]
     return f"&H{alpha}{b}{g}{r}".upper()
 
@@ -190,7 +190,7 @@ FORMATS = {"srt": to_srt, "vtt": to_vtt, "ass": to_ass}
 def write(path: str, righe: list[dict], fmt: str = "ass", **kw) -> str:
     """Scrive il file sottotitoli e ne ritorna il percorso."""
     if fmt not in FORMATS:
-        raise ValueError(f"formato {fmt!r} sconosciuto; scegli tra {sorted(FORMATS)}")
+        raise ValueError(f"unknown format {fmt!r}; choose from {sorted(FORMATS)}")
     testo = FORMATS[fmt](righe, **kw) if fmt == "ass" else FORMATS[fmt](righe)
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -246,7 +246,7 @@ def leggi(testo: str, fmt: str) -> list[dict]:
                 righe.append({"start": _secondi(ma), "end": _secondi(mb), "text": t})
     righe = [r for r in righe if r["text"] and r["end"] > r["start"]]
     if not righe:
-        raise ValueError("nessun sottotitolo leggibile in questo file")
+        raise ValueError("no readable subtitles in this file")
     return sorted(righe, key=lambda r: r["start"])
 
 
@@ -254,7 +254,7 @@ def da_traccia(project, track_id: str, start: float = 0.0, end: float | None = N
     """Le clip di testo di una traccia come righe di sottotitolo, nel tratto [start, end)."""
     t = next((x for x in project.tracks if x.id == track_id), None)
     if t is None:
-        raise ValueError(f"traccia sconosciuta {track_id!r}")
+        raise ValueError(f"unknown track {track_id!r}")
     fine = end if end is not None else float("inf")
     righe = []
     for c in sorted(t.clips, key=lambda x: x.start):
@@ -264,5 +264,5 @@ def da_traccia(project, track_id: str, start: float = 0.0, end: float | None = N
         if b - a > 1e-3:
             righe.append({"start": a - start, "end": b - start, "text": c.text.text})
     if not righe:
-        raise ValueError(f"la traccia {track_id} non ha testi da usare come sottotitoli")
+        raise ValueError(f"track {track_id} has no text to use as subtitles")
     return righe
