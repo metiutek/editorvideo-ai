@@ -141,7 +141,7 @@ const clip = root.querySelector('.clip')
 clip.dispatchEvent(new W.PointerEvent('pointerdown', { bubbles: true, clientX: 40, clientY: 40 }))
 W.document.dispatchEvent(new W.PointerEvent('pointerup', { bubbles: true }))
 await attesa(50)
-const tab = [...root.querySelectorAll('.tabs button')].find((b) => b.textContent.includes('proprieta'))
+const tab = [...root.querySelectorAll('.tabs button')].find((b) => b.textContent.includes('properties'))
 tab.click()
 await attesa(100)
 

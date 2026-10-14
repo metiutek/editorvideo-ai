@@ -118,21 +118,21 @@ function Avanzamento({ stato, onAnnulla }) {
       <div className="riga">
         <Icon name="attesa" className="spin" />
         <span>
-          {copia ? 'copio' : 'importo'} {stato.fatti}/{stato.file} file
-          {copia && stato.byte > 0 && <> · {misura(stato.inviati)} di {misura(stato.byte)}
+          {copia ? 'copying' : 'importing'} {stato.fatti}/{stato.file} files
+          {copia && stato.byte > 0 && <> · {misura(stato.inviati)} of {misura(stato.byte)}
             {' '}· {misura(stato.inviati / sec)}/s</>}
         </span>
         <span className="spacer" />
-        {onAnnulla && <button className="sm" onClick={onAnnulla}>ferma</button>}
+        {onAnnulla && <button className="sm" onClick={onAnnulla}>stop</button>}
       </div>
       <div className="barra"><i style={{ width: `${Math.min(100, quota * 100).toFixed(1)}%` }} /></div>
       {stato.scartati.length > 0 && (
-        <div className="hint">{stato.scartati.length} file non letti</div>
+        <div className="hint">{stato.scartati.length} files not read</div>
       )}
       {copia && stato.byte > 2 * GB && (
         <div className="hint">
-          I file trascinati vengono copiati accanto al progetto. Per usarli dove sono,
-          senza copia: <b>+</b> → «importa cartella».
+          Dropped files are copied next to the project. To use them where they are,
+          without copying: <b>+</b> → «import folder».
         </div>
       )}
     </div>
@@ -184,9 +184,9 @@ export default function MediaBin({
   const removeMedia = (m) => run('remove_media', { media_id: m.id }).catch((err) => {
     if (!err.message.includes('force')) { setError(err.message); return }
     ask({
-      title: 'Il media è in uso',
-      message: `${err.message}\n\nEliminando ${m.name} spariranno anche quelle clip dalla timeline.`,
-      ok: 'elimina comunque', danger: true,
+      title: 'The media is in use',
+      message: `${err.message}\n\nDeleting ${m.name} also removes those clips from the timeline.`,
+      ok: 'delete anyway', danger: true,
       onOk: () => run('remove_media', { media_id: m.id, force: true })
         .catch((e2) => setError(e2.message)),
     })
@@ -221,7 +221,7 @@ export default function MediaBin({
       }}
       onClick={() => apri(m)}
       onDoubleClick={() => accoda(m)}
-      title="clic: apri nel monitor · doppio clic: accoda in timeline · trascina: timeline o cartella"
+      title="click: open in the monitor · double-click: append to the timeline · drag: timeline or folder"
     >
       {/* finche' l'anteprima non e' arrivata resta l'icona: il riquadro ha
           comunque la sua misura, cosi' l'elenco non sobbalza quando arriva */}
@@ -234,7 +234,7 @@ export default function MediaBin({
           {m.duration ? `${fmt(m.duration)} ` : ''}{m.resolution || ''}{m.audio ? ' · audio' : ''}
         </div>
       </div>
-      <button className="icon sm danger" title="Togli dal progetto"
+      <button className="icon sm danger" title="Remove from the project"
         onClick={(e) => { e.stopPropagation(); removeMedia(m) }}>
         <Icon name="chiudi" size={13} />
       </button>
@@ -247,9 +247,9 @@ export default function MediaBin({
       <div className="section-title">
         media
         <span className="spacer" />
-        <button className="icon sm" disabled={!project} title="Nuova cartella"
+        <button className="icon sm" disabled={!project} title="New folder"
           onClick={() => setNewFolder('')}><Icon name="cartellaPiu" size={14} /></button>
-        <button className="icon sm" disabled={!project} title="Importa file dal disco"
+        <button className="icon sm" disabled={!project} title="Import files from disk"
           onClick={() => onImport(null)}><Icon name="piu" size={14} /></button>
       </div>
 
@@ -258,7 +258,7 @@ export default function MediaBin({
         {newFolder !== null && (
           <div className="folder">
             <Icon name="cartella" />
-            <input autoFocus value={newFolder} placeholder="nome della cartella"
+            <input autoFocus value={newFolder} placeholder="folder name"
               style={{ height: 20 }}
               onChange={(e) => setNewFolder(e.target.value)}
               onBlur={() => setNewFolder(null)}
@@ -290,7 +290,7 @@ export default function MediaBin({
         {Object.keys(open).filter((f) => !tree.folders.some(([n]) => n === f)).map((f) => (
           <div key={f} className={`folder vuota ${dragOver === f ? 'droptarget' : ''}`} {...dropTarget(f)}>
             <Icon name="cartella" /><span>{f}</span>
-            <span className="spacer" /><span className="hint">trascina qui</span>
+            <span className="spacer" /><span className="hint">drop here</span>
           </div>
         ))}
 
@@ -298,12 +298,12 @@ export default function MediaBin({
 
         {project && !media.length && (
           <div className="hint" style={{ padding: 16, textAlign: 'center' }}>
-            Nessun file.<br />Usa <b>+</b> oppure trascina qui i video dal desktop.
+            No files.<br />Use <b>+</b> or drop videos here from the desktop.
           </div>
         )}
         {!project && (
           <div className="hint" style={{ padding: 16, textAlign: 'center' }}>
-            Nessun progetto aperto.
+            No project open.
           </div>
         )}
         {uploading && <Avanzamento stato={uploading} onAnnulla={onAnnulla} />}

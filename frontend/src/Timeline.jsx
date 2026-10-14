@@ -207,7 +207,7 @@ export default function Timeline({
           // il bordo sinistro e' il taglio con la clip prima: si sposta quello
           const track = project.tracks.find((t) => t.id === d.trackId)
           const prima = track?.clips.find((c) => c.id !== d.id && Math.abs(c.end - d.start) < 1e-3)
-          if (!prima) { setError('roll: nessuna clip attaccata prima di questa'); return }
+          if (!prima) { setError('roll: no clip butted before this one'); return }
           run('roll_edit', { clip_id: prima.id, delta: round(d.newStart - d.start) }).catch(fallito)
         }
       } else {
@@ -302,31 +302,31 @@ export default function Timeline({
                         if (e.key === 'Escape') { e.currentTarget.dataset.annulla = '1'; setRenaming(null) }
                       }} />
                   ) : (
-                    <span className="tname" title="Doppio clic per rinominare"
+                    <span className="tname" title="Double-click to rename"
                       onDoubleClick={() => setRenaming(track.id)}>{track.name || track.id}</span>
                   )}
                   {track.kind === 'video' && nVideo > 1 && (
                     // chi copre chi non si indovina dal nome: la traccia in alto
                     // copre quelle sotto, come i livelli di un programma di grafica
                     <span className={`strato ${lanes[0]?.id === track.id ? 'davanti' : ''}`}
-                      title="Le tracce video in alto coprono quelle in basso">
-                      {lanes[0]?.id === track.id ? 'davanti' : track.id === lanes[nVideo - 1]?.id ? 'dietro' : ''}
+                      title="Video tracks at the top cover the ones below">
+                      {lanes[0]?.id === track.id ? 'front' : track.id === lanes[nVideo - 1]?.id ? 'back' : ''}
                     </span>
                   )}
                   <button className="icon sm"
-                    title={track.kind === 'video' ? 'Porta avanti: copre le tracce sotto' : 'Sposta in su'}
+                    title={track.kind === 'video' ? 'Bring forward: covers the tracks below' : 'Move up'}
                     disabled={lanes[0]?.id === track.id}
                     onClick={() => shiftTrack(track, true)}><Icon name="su" size={13} /></button>
                   <button className="icon sm"
-                    title={track.kind === 'video' ? 'Manda dietro: le tracce sopra la coprono' : 'Sposta in giù'}
+                    title={track.kind === 'video' ? 'Send backward: the tracks above cover it' : 'Move down'}
                     disabled={lanes[lanes.length - 1]?.id === track.id}
                     onClick={() => shiftTrack(track, false)}><Icon name="giu" size={13} /></button>
                 </div>
                 <div className="trow">
                   <button className={`icon sm ${off ? '' : 'on'}`}
                     title={track.kind === 'video'
-                      ? (track.hidden ? 'Traccia nascosta: clic per mostrarla' : 'Nascondi la traccia')
-                      : (track.muted ? 'Traccia silenziata: clic per riattivarla' : 'Silenzia la traccia')}
+                      ? (track.hidden ? 'Track hidden: click to show it' : 'Hide the track')
+                      : (track.muted ? 'Track muted: click to unmute it' : 'Mute the track')}
                     onClick={() => set(track.kind === 'video'
                       ? { hidden: !track.hidden } : { muted: !track.muted })}>
                     <Icon size={14} name={track.kind === 'video'
@@ -334,27 +334,27 @@ export default function Timeline({
                       : (track.muted ? 'altoparlanteNo' : 'altoparlante')} />
                   </button>
                   <button className={`icon sm ${track.solo ? 'solo' : ''}`}
-                    title={track.solo ? 'Solo attivo: clic per togliere' : 'Solo: isola questa traccia'}
+                    title={track.solo ? 'Solo on: click to turn it off' : 'Solo: isolate this track'}
                     onClick={() => set({ solo: !track.solo })}
                     style={{ fontSize: 10, fontWeight: 700 }}>S</button>
                   <button className={`icon sm ${track.locked ? 'lock' : ''}`}
-                    title={track.locked ? 'Traccia bloccata: clic per sbloccare'
-                      : 'Blocca: protegge le clip dalle modifiche'}
+                    title={track.locked ? 'Track locked: click to unlock'
+                      : 'Lock: protects the clips from changes'}
                     onClick={() => set({ locked: !track.locked })}>
                     <Icon size={14} name={track.locked ? 'lucchetto' : 'lucchettoAperto'} />
                   </button>
                   <span className="spacer" />
-                  <button className="icon sm danger" title="Elimina la traccia" disabled={track.locked}
+                  <button className="icon sm danger" title="Delete the track" disabled={track.locked}
                     onClick={() => {
                       if (!track.clips.length) {
                         run('remove_track', { track_id: track.id }).catch((e) => setError(e.message))
                         return
                       }
                       ask({
-                        title: 'Eliminare la traccia?',
-                        message: `${track.name || track.id} contiene ${track.clips.length} clip. `
-                          + 'Verranno eliminate insieme alla traccia.',
-                        ok: 'elimina', danger: true,
+                        title: 'Delete the track?',
+                        message: `${track.name || track.id} contains ${track.clips.length} clips. `
+                          + 'They will be deleted together with the track.',
+                        ok: 'delete', danger: true,
                         onOk: () => run('remove_track', { track_id: track.id })
                           .catch((e) => setError(e.message)),
                       })
@@ -363,7 +363,7 @@ export default function Timeline({
                 <input
                   className="tvol" type="range" min="0" max="2" step="0.05"
                   value={typeof track.volume === 'number' ? track.volume : 1}
-                  title={`volume traccia ${Math.round((track.volume ?? 1) * 100)}%`}
+                  title={`track volume ${Math.round((track.volume ?? 1) * 100)}%`}
                   onChange={(e) => set({ volume: +e.target.value })}
                 />
               </div>
@@ -429,7 +429,7 @@ export default function Timeline({
                         else onTransition?.(trans, parseFloat(e.dataTransfer.getData('text/duration')) || 1, clip.id)
                       }}
                     >
-                      <div className="handle l" title="Trascina: taglia · Maiusc: ripple · Ctrl: roll con la clip prima" onPointerDown={(e) =>
+                      <div className="handle l" title="Drag: trim · Shift: ripple · Ctrl: roll with the clip before" onPointerDown={(e) =>
                         startDrag(e, { ...clip, trackId: track.id, kind: track.kind }, 'trim-l')} />
 
                       {track.kind === 'audio' && media?.audio && (
@@ -464,12 +464,12 @@ export default function Timeline({
                       )}
                       {clip.transition?.duration > 0 && (
                         <div className="trans" style={{ width: clip.transition.duration * pxPerSec }}
-                          title={`transizione ${clip.transition.type}`}>
+                          title={`transition ${clip.transition.type}`}>
                           {clip.transition.duration * pxPerSec > 46 ? TR_LABEL[clip.transition.type] || '⤫' : '⤫'}
                         </div>
                       )}
 
-                      <div className="handle r" title="Trascina: taglia · Maiusc: ripple · Ctrl: roll con la clip dopo" onPointerDown={(e) =>
+                      <div className="handle r" title="Drag: trim · Shift: ripple · Ctrl: roll with the clip after" onPointerDown={(e) =>
                         startDrag(e, { ...clip, trackId: track.id, kind: track.kind }, 'trim-r')} />
                     </div>
                   )
@@ -482,7 +482,7 @@ export default function Timeline({
                     key={g.id}
                     className={`giunzione ${giunzione === g.id ? 'on' : ''}`}
                     style={{ left: g.t * pxPerSec }}
-                    title="lascia qui una transizione"
+                    title="drop a transition here"
                     onDragOver={(e) => {
                       if (!e.dataTransfer.types.includes('text/transition')) return
                       e.preventDefault()
@@ -519,10 +519,10 @@ export default function Timeline({
           <div className="track addtrack">
             <div className="track-head">
               <button onClick={() => run('add_track', { kind: 'video' })
-                .catch((e) => setError(e.message))} title="Aggiungi una traccia video">
+                .catch((e) => setError(e.message))} title="Add a video track">
                 <Icon name="piu" size={13} />video</button>
               <button onClick={() => run('add_track', { kind: 'audio' })
-                .catch((e) => setError(e.message))} title="Aggiungi una traccia audio">
+                .catch((e) => setError(e.message))} title="Add an audio track">
                 <Icon name="piu" size={13} />audio</button>
             </div>
             <div className="lane addhint hint">
@@ -562,11 +562,11 @@ export default function Timeline({
 }
 
 const TR_LABEL = {
-  dissolve: 'dissolvenza', iris: 'iris',
-  wipe_right: 'tendina ▸', wipe_left: '◂ tendina',
-  wipe_down: 'tendina ▾', wipe_up: 'tendina ▴',
-  slide_left: 'scorri ◂', slide_right: 'scorri ▸',
-  slide_up: 'scorri ▴', slide_down: 'scorri ▾',
+  dissolve: 'dissolve', iris: 'iris',
+  wipe_right: 'wipe ▸', wipe_left: '◂ wipe',
+  wipe_down: 'wipe ▾', wipe_up: 'wipe ▴',
+  slide_left: 'slide ◂', slide_right: 'slide ▸',
+  slide_up: 'slide ▴', slide_down: 'slide ▾',
 }
 
 /**

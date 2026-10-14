@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { api } from './api.js'
 
 // model.SURROUND, con il nome che si legge
-const INSTRADA = [['front', 'davanti'], ['center', 'centro'], ['surround', 'dietro'],
-  ['all', 'tutto'], ['lfe', 'LFE']]
+const INSTRADA = [['front', 'front'], ['center', 'centre'], ['surround', 'rear'],
+  ['all', 'all'], ['lfe', 'LFE']]
 const DB_MIN = -60
 const DB_MAX = 6
 const SCALA = [6, 0, -6, -12, -24, -36, -48, -60]
@@ -40,7 +40,7 @@ export default function Mixer({ project, playhead, revision, run, setError }) {
     return () => { vivo = false; clearTimeout(t) }
   }, [vuoto, revision, setError])
 
-  if (vuoto) return <div className="mixer"><div className="hint">La timeline e' vuota: niente da mixare.</div></div>
+  if (vuoto) return <div className="mixer"><div className="hint">The timeline is empty: nothing to mix.</div></div>
 
   const surround = project.settings?.audio_layout === '5.1'
   const i = livelli ? Math.floor(playhead / livelli.passo) : 0
@@ -50,12 +50,12 @@ export default function Mixer({ project, playhead, revision, run, setError }) {
   return (
     <div className="mixer">
       <div className="mixer-testa">
-        <select value={surround ? '5.1' : 'stereo'} title="Canali del mix e del file esportato"
+        <select value={surround ? '5.1' : 'stereo'} title="Channels of the mix and of the exported file"
           onChange={(e) => call('set_settings', { audio_layout: e.target.value })}>
           <option value="stereo">stereo</option>
           <option value="5.1">5.1 surround</option>
         </select>
-        {misuro && <span className="hint">misuro…</span>}
+        {misuro && <span className="hint">measuring…</span>}
       </div>
       <div className="mixer-canali">
         {tracce.map((t) => (
@@ -72,9 +72,9 @@ export default function Mixer({ project, playhead, revision, run, setError }) {
           onVolume={(v) => call('set_master_volume', { volume: v })} />
       </div>
       <div className="hint">
-        Picco (linea) e RMS (barra) sotto la testina, come usciranno nel file: ogni traccia con
-        i suoi effetti e il suo fader, il master col mix vero. Doppio clic sul fader: 0 dB.
-        {surround && ' In 5.1 ogni traccia va dove dice il suo instradamento: il dialogo al centro, la musica davanti.'}
+        Peak (line) and RMS (bar) under the playhead, as they will come out in the file: each track
+        with its effects and fader, the master with the real mix. Double-click a fader: 0 dB.
+        {surround && ' In 5.1 each track goes where its routing says: dialogue in the centre, music in front.'}
       </div>
     </div>
   )
@@ -93,7 +93,7 @@ function Canale({ nome, env, i, volume, muto, solo, onVolume, onMuto, onSolo, in
     <div className={`canale ${master ? 'master' : ''} ${muto ? 'muto' : ''}`}>
       <div className="canale-nome" title={nome}>{nome}</div>
       <div className="canale-corpo">
-        <div className="misuratore" title={`picco ${testoDb(picco)} dB · RMS ${testoDb(rms)} dB`}>
+        <div className="misuratore" title={`peak ${testoDb(picco)} dB · RMS ${testoDb(rms)} dB`}>
           <div className="misuratore-rms" style={{ height: `${altezza(rms) * 100}%` }} />
           <div className="misuratore-picco" style={{ bottom: `${altezza(picco) * 100}%` }} />
           <div className={`misuratore-tenuta ${tenuta > -0.5 ? 'rosso' : ''}`}
@@ -102,23 +102,23 @@ function Canale({ nome, env, i, volume, muto, solo, onVolume, onMuto, onSolo, in
         </div>
         <input type="range" className="fader" min={DB_MIN} max={DB_MAX} step={0.5}
           value={mostrato} disabled={animato || (!env && !master)}
-          title={animato ? 'volume a keyframe: si cambia dalle proprieta\' della traccia' : `${testoDb(mostrato)} dB`}
+          title={animato ? 'keyframed volume: change it from the track properties' : `${testoDb(mostrato)} dB`}
           onChange={(e) => setBozza(+e.target.value)}
           onPointerUp={() => { if (bozza != null) { onVolume(+daDb(bozza).toFixed(4)); setBozza(null) } }}
           onKeyUp={() => { if (bozza != null) { onVolume(+daDb(bozza).toFixed(4)); setBozza(null) } }}
           onDoubleClick={() => { setBozza(null); onVolume(1) }} />
       </div>
       <div className="canale-db">{animato ? 'kf' : testoDb(mostrato)}</div>
-      <div className="canale-max" title="picco massimo della traccia">{env ? testoDb(env.max_db) : '—'}</div>
+      <div className="canale-max" title="highest peak of the track">{env ? testoDb(env.max_db) : '—'}</div>
       {!master && (
         <div className="canale-tasti">
-          <button className={muto ? 'on' : ''} title="muto" onClick={onMuto}>M</button>
+          <button className={muto ? 'on' : ''} title="mute" onClick={onMuto}>M</button>
           <button className={solo ? 'on' : ''} title="solo" onClick={onSolo}>S</button>
         </div>
       )}
       {instrada && (
         <select className="canale-instrada" value={instrada} onChange={(e) => onInstrada(e.target.value)}
-          title="Dove va questa traccia nel 5.1">
+          title="Where this track goes in 5.1">
           {INSTRADA.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
         </select>
       )}

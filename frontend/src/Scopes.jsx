@@ -3,10 +3,10 @@ import { api } from './api.js'
 
 // review.SCOPI, con quello che serve sapere per leggerli
 const VISTE = [
-  ['waveform', 'waveform', 'Luminanza da sinistra a destra come nell\'immagine, in IRE: 0 nero, 100 bianco pieno. Sopra 100 e sotto 0 si perde dettaglio.'],
-  ['parade', 'parade RGB', 'Rosso, verde e blu affiancati: su un grigio neutro le tre colonne stanno alla stessa altezza; quella piu\' alta e\' la dominante.'],
-  ['vectorscope', 'vettorscopio', 'Tinta (angolo) e saturazione (distanza dal centro). La pelle cade sulla linea fra giallo e rosso; oltre i quadratini il colore e\' fuori gamma.'],
-  ['histogram', 'istogramma', 'Quanti pixel per ogni livello, su scala logaritmica: ammassati ai bordi vuol dire nero chiuso o bianco bruciato.'],
+  ['waveform', 'waveform', 'Luminance from left to right as in the picture, in IRE: 0 black, 100 full white. Above 100 and below 0 detail is lost.'],
+  ['parade', 'RGB parade', 'Red, green and blue side by side: on a neutral grey the three columns sit at the same height; the tallest one is the cast.'],
+  ['vectorscope', 'vectorscope', 'Hue (angle) and saturation (distance from the centre). Skin falls on the line between yellow and red; past the small boxes the colour is out of gamut.'],
+  ['histogram', 'histogram', 'How many pixels per level, on a log scale: piled at the edges means crushed blacks or clipped whites.'],
 ]
 
 /**
@@ -40,17 +40,17 @@ export default function Scopes({ project, playhead, playing, revision }) {
           <button key={k} className={vista === k ? 'on' : ''} onClick={() => setVista(k)}>{nome}</button>
         ))}
       </div>
-      {vuoto ? <div className="hint">Metti qualcosa in timeline: gli scope misurano il fotogramma sotto la testina.</div> : (
+      {vuoto ? <div className="hint">Put something in the timeline: the scopes measure the frame under the playhead.</div> : (
         <>
           <div className="scopes-img">
             {src && <img src={src} alt={info[1]} onLoad={() => setStato('')}
               style={vista === 'vectorscope' ? { maxWidth: 300 } : undefined}
-              onError={() => setStato('scope non disponibile per questo fotogramma')} />}
-            {playing && <div className="scopes-pausa">in pausa si aggiorna</div>}
+              onError={() => setStato('scope not available for this frame')} />}
+            {playing && <div className="scopes-pausa">updates when paused</div>}
           </div>
           {stato && <div className="hint errore">{stato}</div>}
           <div className="hint">{info[2]}</div>
-          <div className="hint">Misurati sugli originali, non sui proxy.</div>
+          <div className="hint">Measured on the originals, not the proxies.</div>
         </>
       )}
     </div>

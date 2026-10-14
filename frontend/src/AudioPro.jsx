@@ -10,12 +10,12 @@ import { rispostaEq } from './util.js'
 
 // etichette corte: il pannello e' stretto; il nome lungo sta nel suggerimento
 const TIPI = [
-  ['peak', 'campana', 'campana: alza o abbassa intorno a una frequenza'],
-  ['lowshelf', 'bassi', 'scaffale basso: tutto sotto la frequenza'],
-  ['highshelf', 'alti', 'scaffale alto: tutto sopra la frequenza'],
-  ['highpass', 'HP', 'passa-alto: taglia sotto la frequenza'],
-  ['lowpass', 'LP', 'passa-basso: taglia sopra la frequenza'],
-  ['notch', 'notch', 'notch: toglie una frequenza sola (ronzii)'],
+  ['peak', 'bell', 'bell: boosts or cuts around a frequency'],
+  ['lowshelf', 'low', 'low shelf: everything below the frequency'],
+  ['highshelf', 'high', 'high shelf: everything above the frequency'],
+  ['highpass', 'HP', 'high-pass: cuts below the frequency'],
+  ['lowpass', 'LP', 'low-pass: cuts above the frequency'],
+  ['notch', 'notch', 'notch: removes a single frequency (hum)'],
 ]
 const COLORI = ['#ff8a5c', '#6fa8ff', '#5fd6b4', '#b792ff', '#ffc65c', '#ff6b7d',
   '#8fd3ff', '#c8e86b', '#f7a8e0', '#9aa6ff']
@@ -106,32 +106,32 @@ export function EqGraph({ bands, onChange }) {
           </circle>
         ))}
       </svg>
-      <div className="hint">trascina i punti; la rotellina su un punto allarga o stringe la banda</div>
+      <div className="hint">drag the points; the scroll wheel on a point widens or narrows the band</div>
       <div className="eqbande">
         {lista.map((b, i) => (
           <div key={i} className="eqbanda">
             <span className="eqcolore" style={{ background: COLORI[i % COLORI.length] }} />
-            <input type="checkbox" checked={b.on !== false} title="Accesa"
+            <input type="checkbox" checked={b.on !== false} title="On"
               onChange={(e) => cambia(i, { on: e.target.checked })} />
             <select value={b.type} title={TIPI.find((t) => t[0] === b.type)?.[2]}
               onChange={(e) => cambia(i, { type: e.target.value })}>
               {TIPI.map(([v, l, d]) => <option key={v} value={v} title={d}>{l}</option>)}
             </select>
-            <input type="number" value={Math.round(b.freq)} min={20} max={20000} title="frequenza (Hz)"
+            <input type="number" value={Math.round(b.freq)} min={20} max={20000} title="frequency (Hz)"
               onChange={(e) => cambia(i, { freq: Math.max(20, Math.min(20000, +e.target.value || 20)) })} />
-            <input type="number" value={b.gain ?? 0} step={0.5} min={-24} max={24} title="guadagno (dB)"
+            <input type="number" value={b.gain ?? 0} step={0.5} min={-24} max={24} title="gain (dB)"
               disabled={!conGuadagno(b.type)}
               onChange={(e) => cambia(i, { gain: Math.max(-24, Math.min(24, +e.target.value || 0)) })} />
-            <input type="number" value={b.q ?? 1} step={0.1} min={0.1} max={18} title="larghezza (Q)"
+            <input type="number" value={b.q ?? 1} step={0.1} min={0.1} max={18} title="width (Q)"
               onChange={(e) => cambia(i, { q: Math.max(0.1, Math.min(18, +e.target.value || 1)) })} />
-            <button className="icon sm" title="Togli la banda"
+            <button className="icon sm" title="Remove the band"
               onClick={() => onChange(lista.filter((_, j) => j !== i))}><Icon name="chiudi" size={12} /></button>
           </div>
         ))}
-        <div className="eqintesta"><span>tipo</span><span>Hz</span><span>dB</span><span>Q</span></div>
+        <div className="eqintesta"><span>type</span><span>Hz</span><span>dB</span><span>Q</span></div>
         <button className="chip" disabled={lista.length >= 10}
           onClick={() => onChange([...lista, { type: 'peak', freq: 1000, gain: 0, q: 1, on: true }])}>
-          <Icon name="piu" size={12} />aggiungi banda</button>
+          <Icon name="piu" size={12} />add band</button>
       </div>
     </div>
   )
@@ -145,11 +145,11 @@ export function PluginFile({ value, onChange }) {
   return (
     <div className="pluginfile">
       <select value={noto ? value : ''} onChange={(e) => e.target.value && onChange(e.target.value)}>
-        <option value="">{installati == null ? 'cerco i plugin…' : installati.length
-          ? 'scegli un plugin installato' : 'nessun plugin VST3 trovato'}</option>
+        <option value="">{installati == null ? 'looking for plugins…' : installati.length
+          ? 'choose an installed plugin' : 'no VST3 plugins found'}</option>
         {(installati || []).map((p) => <option key={p.path} value={p.path}>{p.nome}</option>)}
       </select>
-      <input value={value || ''} placeholder="oppure il percorso del file .vst3"
+      <input value={value || ''} placeholder="or the path of the .vst3 file"
         onChange={(e) => onChange(e.target.value)} />
     </div>
   )
@@ -169,9 +169,9 @@ export function PluginParams({ file, values, onChange }) {
     api.pluginParams(file).then(setInfo).catch((e) => setErrore(e.message))
   }, [file])
 
-  if (!file) return <div className="hint">scegli un plugin per vederne i parametri</div>
+  if (!file) return <div className="hint">choose a plugin to see its parameters</div>
   if (errore) return <div className="hint warn">{errore}</div>
-  if (!info) return <div className="hint">leggo i parametri del plugin…</div>
+  if (!info) return <div className="hint">reading the plugin's parameters…</div>
 
   const vals = { ...(values || {}), ...bozza }
   const filtro = cerca.trim().toLowerCase()
@@ -186,7 +186,7 @@ export function PluginParams({ file, values, onChange }) {
     <div className="pluginparams">
       <div className="pluginnome"><Icon name="audio" size={13} />{info.nome}
         <span className="hint">{info.parametri.length} parametri</span></div>
-      <input className="cerca" placeholder="cerca un parametro" value={cerca}
+      <input className="cerca" placeholder="search a parameter" value={cerca}
         onChange={(e) => setCerca(e.target.value)} />
       {visibili.map((p) => {
         const v = vals[p.nome] ?? p.valore
@@ -224,7 +224,7 @@ export function PluginParams({ file, values, onChange }) {
         )
       })}
       {!tutti && !filtro && lista.length > 12 && (
-        <button className="chip" onClick={() => setTutti(true)}>mostra tutti ({lista.length})</button>
+        <button className="chip" onClick={() => setTutti(true)}>show all ({lista.length})</button>
       )}
     </div>
   )

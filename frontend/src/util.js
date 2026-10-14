@@ -84,16 +84,16 @@ export function dettaglioStrumento(nome, input, project) {
       parti.push(m ? m.name : a[k]); break
     }
   }
-  if (typeof a.track_id === 'string' || typeof a.track === 'string') parti.push(`traccia ${a.track_id || a.track}`)
+  if (typeof a.track_id === 'string' || typeof a.track === 'string') parti.push(`track ${a.track_id || a.track}`)
   const percorsi = a.paths || a.files || (typeof a.path === 'string' ? [a.path] : null)
     || (typeof a.file_path === 'string' ? [a.file_path] : null)
   if (Array.isArray(percorsi) && percorsi.length) parti.push(corto(percorsi.map(base).join(', ')))
-  if (Array.isArray(a.clips)) parti.push(`${a.clips.length} tagli`)
+  if (Array.isArray(a.clips)) parti.push(`${a.clips.length} cuts`)
   const t = [a.at, a.t, a.time, a.quando].find((v) => typeof v === 'number')
   if (t != null) parti.push(fmt(t))
   if (typeof a.start === 'number' && typeof a.duration === 'number') {
     parti.push(`${fmt(a.start)} → ${fmt(a.start + a.duration)}`)
-  } else if (typeof a.start === 'number') parti.push(`da ${fmt(a.start)}`)
+  } else if (typeof a.start === 'number') parti.push(`from ${fmt(a.start)}`)
   else if (typeof a.duration === 'number') parti.push(`${a.duration}s`)
   if (typeof a.effect === 'string') parti.push(a.effect)
   if (typeof a.preset_id === 'string') parti.push(a.preset_id)
@@ -101,7 +101,7 @@ export function dettaglioStrumento(nome, input, project) {
   if (typeof a.speed === 'number') parti.push(`${a.speed}x`)
   if (typeof a.text === 'string') parti.push(`«${corto(a.text, 28)}»`)
   if (typeof a.note === 'string') parti.push(`«${corto(a.note, 28)}»`)
-  if (typeof a.html === 'string') parti.push(`${a.html.length} caratteri`)
+  if (typeof a.html === 'string') parti.push(`${a.html.length} characters`)
   if (typeof a.kind === 'string') parti.push(a.kind)
   if (typeof a.color === 'string' && nome === 'add_color') parti.push(a.color)
   const tr = ['x', 'y', 'scale', 'rotation', 'opacity'].filter((k) => a[k] != null)
@@ -111,7 +111,7 @@ export function dettaglioStrumento(nome, input, project) {
   if (typeof a.output === 'string') parti.push(base(a.output))
   if (Array.isArray(a.domande) && a.domande.length) {
     const d = a.domande[0]
-    parti.push(a.domande.length > 1 ? `${a.domande.length} domande` : corto(String(d.titolo || d.domanda || ''), 40))
+    parti.push(a.domande.length > 1 ? `${a.domande.length} questions` : corto(String(d.titolo || d.domanda || ''), 40))
   }
   return parti.join(' · ')
 }

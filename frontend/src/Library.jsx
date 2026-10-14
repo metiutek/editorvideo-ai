@@ -30,18 +30,18 @@ export default function Library({ library, clip, onPreset, onTransition, setErro
 
   const apply = (item) => {
     if (isTransition) {
-      if (!clip) { setError('seleziona prima una clip: la transizione va in coda a quella'); return }
+      if (!clip) { setError('select a clip first: the transition goes at its end'); return }
       onTransition(item.id, item.duration)
       return
     }
     // senza clip selezionata i look video vanno sul master, cioe' su tutto il video
-    if (!clip && tab === 'audio') { setError('seleziona la clip audio a cui applicarlo'); return }
+    if (!clip && tab === 'audio') { setError('select the audio clip to apply it to'); return }
     onPreset(item.id, clip?.id ?? null)
   }
 
   const target = isTransition
-    ? (clip ? `in coda a ${clip.name || clip.id}` : 'nessuna clip selezionata')
-    : (clip ? `su ${clip.name || clip.id}` : tab === 'audio' ? 'nessuna clip selezionata' : 'su tutto il video')
+    ? (clip ? `at the end of ${clip.name || clip.id}` : 'no clip selected')
+    : (clip ? `on ${clip.name || clip.id}` : tab === 'audio' ? 'no clip selected' : 'on the whole video')
 
   return (
     <div className="side">
@@ -49,12 +49,12 @@ export default function Library({ library, clip, onPreset, onTransition, setErro
         <button className={tab === 'video' ? 'on' : ''} onClick={() => setTab('video')}>look</button>
         <button className={tab === 'audio' ? 'on' : ''} onClick={() => setTab('audio')}>audio</button>
         <button className={tab === 'transitions' ? 'on' : ''}
-          onClick={() => setTab('transitions')}>transizioni</button>
+          onClick={() => setTab('transitions')}>transitions</button>
       </div>
 
       <div className="libsearch">
         <Icon name="cerca" size={14} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="cerca…"
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="search…"
           onKeyDown={(e) => e.key === 'Escape' && setQ('')} />
       </div>
 
@@ -78,8 +78,8 @@ export default function Library({ library, clip, onPreset, onTransition, setErro
                 onMouseEnter={() => !isTransition && clip && onProva?.({ preset: p.id, label: p.name })}
                 onMouseLeave={() => onProva?.(null)}
                 title={`${p.desc || ''}`
-                  + (isTransition || !clip ? '' : '\npassa sopra per vedere l\'anteprima')
-                  + '\nclic: applica · trascina: lascia sulla clip'}
+                  + (isTransition || !clip ? '' : '\nhover to preview it')
+                  + '\nclick: apply · drag: drop on the clip'}
               >
                 {/* l'icona sta sull'id: e' lo stesso nome che usa il backend,
                     quindi non serve una tabella di conversione qui */}
@@ -92,7 +92,7 @@ export default function Library({ library, clip, onPreset, onTransition, setErro
             ))}
           </div>
         ))}
-        {!items.length && <div className="hint" style={{ padding: 12 }}>Nessun risultato.</div>}
+        {!items.length && <div className="hint" style={{ padding: 12 }}>No results.</div>}
       </div>
 
       <div className="libfoot hint">{target}</div>

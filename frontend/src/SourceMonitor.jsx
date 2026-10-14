@@ -44,12 +44,12 @@ export default function SourceMonitor({ media, tracks, run, setError, playhead, 
           onTimeUpdate={(e) => setT(e.target.currentTime)}
           onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
         />
-        <div className="badge">sorgente · {media.name}</div>
+        <div className="badge">source · {media.name}</div>
         <div className="badge tc" style={{ left: 'auto', right: 12 }}>{fmt(t)} / {fmt(dur)}</div>
       </div>
 
       <div className="srcbar">
-        <button className="icon" title="Riproduci / pausa" onClick={() => {
+        <button className="icon" title="Play / pause" onClick={() => {
           const v = ref.current
           if (!v) return
           v.paused ? v.play() : v.pause()
@@ -59,9 +59,9 @@ export default function SourceMonitor({ media, tracks, run, setError, playhead, 
           onChange={(e) => seek(+e.target.value)} style={{ flex: 1 }}
         />
         <button onClick={() => setMark((m) => ({ ...m, in: Math.min(t, m.out - 0.05) }))}
-          title="Segna il punto di attacco">attacco</button>
+          title="Mark the in point">in</button>
         <button onClick={() => setMark((m) => ({ ...m, out: Math.max(t, m.in + 0.05) }))}
-          title="Segna il punto di stacco">stacco</button>
+          title="Mark the out point">out</button>
         <span className="hint" style={{ fontVariantNumeric: 'tabular-nums' }}>
           {fmt(mark.in)}–{fmt(mark.out)} · {len.toFixed(2)}s
         </span>
@@ -74,9 +74,9 @@ export default function SourceMonitor({ media, tracks, run, setError, playhead, 
           }}
           onClick={() => insert(playhead)}
           className="primary"
-          title="Clic: inserisci alla testina · trascina: scegli il punto sulla timeline"
-        >inserisci</button>
-        <button className="icon" onClick={onClose} title="Chiudi il monitor sorgente">
+          title="Click: insert at the playhead · drag: pick the spot on the timeline"
+        >insert</button>
+        <button className="icon" onClick={onClose} title="Close the source monitor">
           <Icon name="chiudi" />
         </button>
       </div>

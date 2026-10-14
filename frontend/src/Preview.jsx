@@ -83,7 +83,7 @@ export default function Preview({
     if (v && segment && !loading) {
       // il browser puo' rifiutare l'avvio automatico: senza avviso sembra che il
       // pulsante play non faccia niente
-      v.play().catch(() => { setFailed('il browser ha bloccato la riproduzione'); setPlaying(false) })
+      v.play().catch(() => { setFailed('the browser blocked playback'); setPlaying(false) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segment, loading])
@@ -91,7 +91,7 @@ export default function Preview({
   /** Il player non dice perche' ha fallito: il motivo lo sa il server. */
   const onVideoError = () => {
     setPlaying(false)
-    setFailed('anteprima non disponibile')
+    setFailed('preview not available')
     if (!segment) return
     fetch(segment.url)
       .then((r) => (r.ok ? null : r.json().catch(() => null)))
@@ -119,7 +119,7 @@ export default function Preview({
     <div className="preview">
       {empty ? (
         <div className="empty">
-          Timeline vuota.<br />Importa dei file e trascinali qui sotto.
+          Empty timeline.<br />Import some files and drag them down here.
         </div>
       ) : diretta && !prova ? (
         <>
@@ -128,15 +128,15 @@ export default function Preview({
             esatto={esatto ? frame.url : null} />
           {approssimato && (
             esatto ? (
-              <div className="badge sottile" title="Fotogramma calcolato da ffmpeg, uguale all'export.">
-                fotogramma esatto
+              <div className="badge sottile" title="Frame computed by ffmpeg, identical to the export.">
+                exact frame
               </div>
             ) : (
               <div className="badge sottile" title={
-                'In riproduzione la composizione la fa il browser: glitch, warp, LUT,'
-                + ' chroma key, glow, curve, tendine e scorrimenti non si vedono.'
-                + '\nFermati per il fotogramma esatto, o passa a "fedele" per riprodurlo esatto.'}>
-                {playing ? 'approssimata: fermati per vedere gli effetti' : 'calcolo il fotogramma esatto…'}
+                'During playback the browser does the compositing: glitch, warp, LUTs,'
+                + ' chroma key, glow, curves, wipes and slides are not shown.'
+                + '\nPause for the exact frame, or switch to "exact" to play it exactly.'}>
+                {playing ? 'approximate: pause to see the effects' : 'computing the exact frame…'}
               </div>
             )
           )}
@@ -158,7 +158,7 @@ export default function Preview({
             onError={onVideoError}
             style={{ visibility: loading ? 'hidden' : 'visible' }}
           />
-          {loading && <div className="badge">preparo l'anteprima…</div>}
+          {loading && <div className="badge">preparing the preview…</div>}
         </>
       ) : (
         <>
@@ -166,13 +166,13 @@ export default function Preview({
           <Gizmo project={project} clip={clip} imgRef={imgRef} playhead={playhead}
             run={run} setError={setError} />
           {prova
-            ? <div className="badge prova">{prova.label} — anteprima, non applicato</div>
-            : frame.pending && <div className="badge sottile">aggiorno…</div>}
+            ? <div className="badge prova">{prova.label} — preview, not applied</div>
+            : frame.pending && <div className="badge sottile">updating…</div>}
         </>
       )}
       {pickArea && !empty && <AreaPicker onArea={onArea} onCancel={onCancelArea} />}
       {(failed || (frame.failed && !playing)) && (
-        <div className="badge">{failed || 'fotogramma non disponibile'}</div>
+        <div className="badge">{failed || 'frame not available'}</div>
       )}
       {!empty && (!playing || diretta) && (
         <div className="badge" style={{ left: 'auto', right: 12 }}>

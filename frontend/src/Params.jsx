@@ -18,7 +18,7 @@ export function Row({ label, children, extra, onReset, modificato }) {
         {extra}
         {onReset && (
           <button className={`icon sm reset ${modificato ? 'on' : ''}`} onClick={onReset}
-            disabled={!modificato} title="Rimetti il valore di partenza">
+            disabled={!modificato} title="Reset to the default value">
             <Icon name="annulla" size={12} />
           </button>
         )}
@@ -86,11 +86,11 @@ export function Num({ value, onChange, min, max, step = 0.01, disabled }) {
         }}
       />
       <div className="numfrecce">
-        <button tabIndex={-1} disabled={disabled} title="Aumenta"
+        <button tabIndex={-1} disabled={disabled} title="Increase"
           onPointerDown={(e) => { e.preventDefault(); ripeti(1) }}>
           <Icon name="su" size={10} />
         </button>
-        <button tabIndex={-1} disabled={disabled} title="Diminuisci"
+        <button tabIndex={-1} disabled={disabled} title="Decrease"
           onPointerDown={(e) => { e.preventDefault(); ripeti(-1) }}>
           <Icon name="giu" size={10} />
         </button>
@@ -177,13 +177,13 @@ export function Anim({ label, value, onChange, min, max, step, animatable, clipT
         onReset={def != null ? () => onChange(def) : undefined}
         extra={animatable && (
           <button className={`icon sm kf-btn ${animated ? 'on' : ''}`} onClick={toggle}
-            title={animated ? 'Torna a un valore fisso' : 'Anima con i keyframe'}>
+            title={animated ? 'Back to a fixed value' : 'Animate with keyframes'}>
             <Icon name="keyframe" size={13} />
           </button>
         )}
       >
         {animated
-          ? <input value={`${round(current)} (animato)`} readOnly />
+          ? <input value={`${round(current)} (animated)`} readOnly />
           : <Num value={current} onChange={onChange} min={min} max={max} step={step} />}
       </Row>
 
@@ -195,11 +195,11 @@ export function Anim({ label, value, onChange, min, max, step, animatable, clipT
               <Num value={k.t} step={0.05} min={0} onChange={(v) => setKey(i, { t: v })} />
               <Num value={k.v} step={step || 0.01} min={min} max={max}
                 onChange={(v) => setKey(i, { v })} />
-              <select value={k.ease || 'linear'} title="easing verso il prossimo"
+              <select value={k.ease || 'linear'} title="easing towards the next one"
                 onChange={(e) => setKey(i, { ease: e.target.value })}>
                 {EASINGS.map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
-              <button className="icon sm danger" title="Rimuovi il keyframe"
+              <button className="icon sm danger" title="Remove the keyframe"
                 disabled={value.kf.length <= 1}
                 onClick={() => onChange({ kf: value.kf.filter((_, j) => j !== i) })}>
                 <Icon name="chiudi" size={12} />
@@ -207,7 +207,7 @@ export function Anim({ label, value, onChange, min, max, step, animatable, clipT
             </div>
           ))}
           <button style={{ width: '100%', height: 22, fontSize: 11 }} onClick={addKey}>
-            <Icon name="piu" size={12} />keyframe alla testina
+            <Icon name="piu" size={12} />keyframe at the playhead
           </button>
         </div>
       )}

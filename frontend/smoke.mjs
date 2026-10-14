@@ -154,25 +154,25 @@ await new Promise((r) => setTimeout(r, 150))
 const afterClick = root.innerHTML
 
 const checks = [
-  ['selezione clip', afterClick.includes('posizione e scala')],
-  ['pannello transizione', afterClick.includes('transizione in uscita')],
-  ['tipi di transizione', afterClick.includes('tendina verso destra')],
+  ['selezione clip', afterClick.includes('position and scale')],
+  ['pannello transizione', afterClick.includes('out transition')],
+  ['tipi di transizione', afterClick.includes('wipe right')],
   // il riquadro di trasformazione dipende dal layout dell'immagine, che jsdom
   // non calcola: la sua geometria e' verificata a parte in test-util.mjs
-  ['editor keyframe', afterClick.includes('keyframe alla testina')],
+  ['editor keyframe', afterClick.includes('keyframe at the playhead')],
   ['effetti della clip', afterClick.includes('Correzione colore')],
-  ['catalogo effetti', afterClick.includes('aggiungi effetto')],
+  ['catalogo effetti', afterClick.includes('add effect')],
   // l'ordine della catena cambia il risultato: dalla UI si deve poter cambiare
-  ['ordine effetti', afterClick.includes('Sposta prima nella catena')
-    && afterClick.includes('Sposta dopo nella catena')],
-  ['barra strumenti', html.includes('esporta')],
+  ['ordine effetti', afterClick.includes('Move earlier in the chain')
+    && afterClick.includes('Move later in the chain')],
+  ['barra strumenti', html.includes('export')],
   ['elenco media', html.includes('clip.mp4')],
   ['tracce', html.includes('V1') && html.includes('A1')],
   ['clip in timeline', html.includes('class="clip')],
   ['trasporto', html.includes('zoom')],
-  ['pannello progetto', html.includes('normalizza') || html.includes('progetto')],
+  ['pannello progetto', html.includes('normalise') || html.includes('project')],
   ['cartelle nel bin', html.includes('colonna sonora')],
-  ['schede monitor', html.includes('sorgente')],
+  ['schede monitor', html.includes('source')],
   ['striscia fotogrammi', afterClick.includes('background-image')],
   ['forma d onda', afterClick.includes('class="wave"')],
   ['volume traccia', html.includes('tvol')],
@@ -233,8 +233,8 @@ const chiesteDopo = chiamate.slice(primaDiretta)
 const fotogrammiDopo = richieste().length - fotogrammiPrima
 
 checks.push(
-  ['diretta: l interruttore cambia modo', modoPrima === 'fedele'
-    && interruttore?.textContent.trim() === 'diretta'],
+  ['diretta: l interruttore cambia modo', modoPrima === 'exact'
+    && interruttore?.textContent.trim() === 'live'],
   ['diretta: compone con i media veri', conSorgente.length > 0],
   ['diretta: non renderizza niente', chiesteDopo.length === 0 && fotogrammiDopo === 0],
 )
@@ -288,11 +288,11 @@ const senzaIconaLib = []
 let voci = 0
 // il pannello sta dietro la scheda "libreria" del lato sinistro
 const schedaLib = [...root.querySelectorAll('.tabs button')]
-  .find((b) => b.textContent.trim() === 'libreria')
+  .find((b) => b.textContent.trim() === 'library')
 schedaLib?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
 await new Promise((r) => setTimeout(r, 60))
 for (const [scheda, quante] of [['look', lib.video.length], ['audio', lib.audio.length],
-  ['transizioni', lib.transitions.length]]) {
+  ['transitions', lib.transitions.length]]) {
   const bottone = [...root.querySelectorAll('.tabs button')].find((b) => b.textContent.trim() === scheda)
   bottone?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
   await new Promise((r) => setTimeout(r, 60))

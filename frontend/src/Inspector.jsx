@@ -39,64 +39,64 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
         <span className="hint">{clip.type}</span>
         <span className="spacer" />
         {onRif && (
-          <button className="chip" title="Aggiungi questa clip come riferimento nella chat"
+          <button className="chip" title="Add this clip as a reference in the chat"
             onClick={() => onRif(clip.id)}>
-            <Icon name="assistente" size={13} />chiedi
+            <Icon name="assistente" size={13} />ask
           </button>
         )}
       </div>
 
       <div className="group">
         <h4>clip</h4>
-        <Row label="nome"><Text value={clip.name} onChange={(v) => set({ name: v })} /></Row>
-        <Row label="inizio"><Num value={clip.start} step={0.05}
+        <Row label="name"><Text value={clip.name} onChange={(v) => set({ name: v })} /></Row>
+        <Row label="start"><Num value={clip.start} step={0.05}
           onChange={(v) => call('move_clip', { clip_id: clip.id, start: v })} /></Row>
-        <Row label="durata"><Num value={clip.duration} step={0.05} min={0.05}
+        <Row label="duration"><Num value={clip.duration} step={0.05} min={0.05}
           onChange={(v) => set({ duration: v })} /></Row>
         {clip.type === 'media' && (
-          <Row label="attacco"><Num value={clip.in ?? 0} step={0.05} min={0}
+          <Row label="in point"><Num value={clip.in ?? 0} step={0.05} min={0}
             onChange={(v) => set({ in_: v })} /></Row>
         )}
-        <Row label="attiva"><Check value={clip.enabled !== false} onChange={(v) => set({ enabled: v })} /></Row>
+        <Row label="enabled"><Check value={clip.enabled !== false} onChange={(v) => set({ enabled: v })} /></Row>
         {clip.type === 'media' && ha.video && (
-          <Row label="inquadra"><Select value={clip.fit || 'contain'} onChange={(v) => set({ fit: v })}
+          <Row label="fit"><Select value={clip.fit || 'contain'} onChange={(v) => set({ fit: v })}
             options={['contain', 'cover', 'stretch', 'none']} /></Row>
         )}
         {(ha.video || clip.type !== 'media') && (
-          <Row label="fusione"><Select value={clip.blend || 'normal'} onChange={(v) => set({ blend: v })}
+          <Row label="blend"><Select value={clip.blend || 'normal'} onChange={(v) => set({ blend: v })}
             options={BLEND} /></Row>
         )}
         {clip.type === 'color' && (
-          <Row label="colore"><Text value={clip.color} onChange={(v) => set({ color: v })} /></Row>
+          <Row label="colour"><Text value={clip.color} onChange={(v) => set({ color: v })} /></Row>
         )}
         {clip.type === 'media' && ha.video && (
           <div className="hint">
-            contain: tutto visibile · cover: riempie tagliando · none: dimensione originale
+            contain: all visible · cover: fills by cropping · none: original size
           </div>
         )}
       </div>
 
       {clip.type === 'media' && (
         <div className="group">
-          <h4>velocita'</h4>
-          <Row label="fattore">
+          <h4>speed</h4>
+          <Row label="factor">
             <Num value={clip.speed ?? 1} min={0.01} max={100} step={0.05}
               onChange={(v) => call('set_speed', { clip_id: clip.id, speed: v })} />
           </Row>
-          <Row label="al contrario">
+          <Row label="reverse">
             <Check value={!!clip.reverse}
               onChange={(v) => call('set_reverse', { clip_id: clip.id, reverse: v })} />
           </Row>
-          <div className="hint">2 = doppia velocita', 0.5 = slow motion</div>
+          <div className="hint">2 = double speed, 0.5 = slow motion</div>
         </div>
       )}
 
       {ha.video && (<>
       <div className="group">
-        <h4>dissolvenze</h4>
-        <Row label="entrata"><Num value={clip.fade_in || 0} min={0} step={0.05}
+        <h4>fades</h4>
+        <Row label="in"><Num value={clip.fade_in || 0} min={0} step={0.05}
           onChange={(v) => call('set_fades', { clip_id: clip.id, fade_in: v })} /></Row>
-        <Row label="uscita"><Num value={clip.fade_out || 0} min={0} step={0.05}
+        <Row label="out"><Num value={clip.fade_out || 0} min={0} step={0.05}
           onChange={(v) => call('set_fades', { clip_id: clip.id, fade_out: v })} /></Row>
       </div>
 
@@ -106,8 +106,8 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
 
       <div className="group">
         <h4>
-          posizione e scala
-          <button className="icon sm azzera" title="Rimetti tutti i valori di partenza"
+          position and scale
+          <button className="icon sm azzera" title="Reset every value"
             onClick={() => call('set_transform',
               { clip_id: clip.id, x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 })}>
             <Icon name="annulla" size={12} />
@@ -120,7 +120,7 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
             step={k === 'x' || k === 'y' || k === 'rotation' ? 1 : 0.05}
             onChange={(v) => call('set_transform', { clip_id: clip.id, [k]: v })} />
         ))}
-        <div className="hint">x/y in pixel dal centro, y negativo verso l'alto</div>
+        <div className="hint">x/y in pixels from the centre, negative y goes up</div>
       </div>
       </>)}
 
@@ -130,10 +130,10 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
 
       {clip.link && (
       <div className="group">
-        <h4>collegata</h4>
-        <div className="hint">video e audio della stessa ripresa: si spostano, si tagliano e si
-          cancellano insieme. Scollegali per spostare l'audio da solo (J/L cut).</div>
-        <button className="btn" onClick={() => call('unlink_clip', { clip_id: clip.id })}>scollega audio e video</button>
+        <h4>linked</h4>
+        <div className="hint">video and audio of the same shot: they move, split and get
+          deleted together. Unlink them to move the audio on its own (J/L cut).</div>
+        <button className="btn" onClick={() => call('unlink_clip', { clip_id: clip.id })}>unlink audio and video</button>
       </div>
       )}
 
@@ -141,7 +141,7 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
       <div className="group">
         <h4>
           audio
-          <button className="icon sm azzera" title="Rimetti tutti i valori di partenza"
+          <button className="icon sm azzera" title="Reset every value"
             onClick={() => call('set_audio',
               { clip_id: clip.id, gain_db: 0, mute: false, pan: 0, fade_in: 0, fade_out: 0 })}>
             <Icon name="annulla" size={12} />
@@ -150,7 +150,7 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
         <Anim label="volume dB" value={au.gain_db ?? 0} clipTime={clipTime} animatable
           def={0} min={-60} max={24} step={0.5}
           onChange={(v) => call('set_audio', { clip_id: clip.id, gain_db: v })} />
-        <Row label="muto"><Check value={!!au.mute}
+        <Row label="mute"><Check value={!!au.mute}
           onChange={(v) => call('set_audio', { clip_id: clip.id, mute: v })} /></Row>
         <Row label="pan"><Num value={au.pan ?? 0} min={-1} max={1} step={0.1}
           onChange={(v) => call('set_audio', { clip_id: clip.id, pan: v })} /></Row>
@@ -187,44 +187,44 @@ function Livello({ clip, project, call }) {
       && c.start < fine - 1e-3 && c.start + c.duration > clip.start + 1e-3)
     .map((c) => `${c.name || c.type} (${t.name || t.id})`))
   const muovi = (direction) => call('move_layer', { clip_id: clip.id, direction })
-  const dove = video.length === 1 ? 'unica traccia video'
-    : i === video.length - 1 ? 'davanti a tutto' : i === 0 ? 'in fondo, dietro a tutto' : `livello ${i + 1} di ${video.length}`
+  const dove = video.length === 1 ? 'only video track'
+    : i === video.length - 1 ? 'in front of everything' : i === 0 ? 'at the back, behind everything' : `layer ${i + 1} of ${video.length}`
   return (
     <div className="group">
-      <h4>davanti / dietro</h4>
+      <h4>front / back</h4>
       <div className="livello">
-        <div className="pila" title="Le tracce video: in alto quella davanti">
+        <div className="pila" title="The video tracks: the top one is in front">
           {video.map((t, k) => <i key={t.id} className={k === i ? 'qui' : ''} />)}
         </div>
         <div className="dove">
           <b>{video[i].name || video[i].id}</b> · {dove}
           {sopra.length > 0 && (
             <div className="hint coperta">
-              sopra, nello stesso momento: {sopra.slice(0, 3).join(', ')}{sopra.length > 3 ? '…' : ''}
-              {' '}— se riempiono l'inquadratura questa clip non si vede
+              above, at the same time: {sopra.slice(0, 3).join(', ')}{sopra.length > 3 ? '…' : ''}
+              {' '}— if they fill the frame this clip is not visible
             </div>
           )}
         </div>
       </div>
       <div className="livello-azioni">
-        <button onClick={() => muovi('up')} title="Sposta la clip sulla traccia sopra (ne crea una se serve)">
-          <Icon name="su" size={13} />porta avanti</button>
-        <button disabled={i === 0} onClick={() => muovi('down')} title="Sposta la clip sulla traccia sotto">
-          <Icon name="giu" size={13} />manda dietro</button>
+        <button onClick={() => muovi('up')} title="Move the clip to the track above (creates one if needed)">
+          <Icon name="su" size={13} />bring forward</button>
+        <button disabled={i === 0} onClick={() => muovi('down')} title="Move the clip to the track below">
+          <Icon name="giu" size={13} />send backward</button>
       </div>
       {sopra.length > 0 && (
-        <button className="ghost" onClick={() => muovi('top')}>porta davanti a tutto</button>
+        <button className="ghost" onClick={() => muovi('top')}>bring to front</button>
       )}
     </div>
   )
 }
 
 const TR_NAMES = {
-  dissolve: 'dissolvenza', iris: 'iris (cerchio)',
-  wipe_right: 'tendina verso destra', wipe_left: 'tendina verso sinistra',
-  wipe_down: 'tendina verso il basso', wipe_up: 'tendina verso l\'alto',
-  slide_left: 'scorre a sinistra', slide_right: 'scorre a destra',
-  slide_up: 'scorre in alto', slide_down: 'scorre in basso',
+  dissolve: 'dissolve', iris: 'iris (circle)',
+  wipe_right: 'wipe right', wipe_left: 'wipe left',
+  wipe_down: 'wipe down', wipe_up: 'wipe up',
+  slide_left: 'slide left', slide_right: 'slide right',
+  slide_up: 'slide up', slide_down: 'slide down',
 }
 
 function TransitionPanel({ clip, transitions, project, call }) {
@@ -249,28 +249,28 @@ function TransitionPanel({ clip, transitions, project, call }) {
 
   return (
     <div className="group">
-      <h4>transizione in uscita</h4>
-      <Row label="tipo">
+      <h4>out transition</h4>
+      <Row label="type">
         <select value={active} onChange={(e) => {
           if (!e.target.value) { call('set_transition', { clip_id: clip.id, duration: 0 }); return }
           apply(e.target.value, dur)
         }}>
-          <option value="">nessuna</option>
+          <option value="">none</option>
           {(transitions || []).map((t) => (
             <option key={t} value={t}>{TR_NAMES[t] || t}</option>
           ))}
         </select>
       </Row>
       {active && (
-        <Row label="durata"><Num value={dur} min={0.05} max={clip.duration} step={0.1}
+        <Row label="duration"><Num value={dur} min={0.05} max={clip.duration} step={0.1}
           onChange={(v) => apply(active, v)} /></Row>
       )}
       <div className="hint">
         {next && Math.abs(next.start - clip.end) < 1e-3
-          ? 'la clip successiva viene accostata e sovrapposta della durata scelta'
+          ? 'the next clip is moved up and overlapped by the chosen duration'
           : next
-            ? 'c\'e\' un buco prima della clip dopo: la transizione scopre lo sfondo. Attaccale per incrociarle.'
-            : 'nessuna clip dopo: la transizione scoprira\' lo sfondo'}
+            ? 'there is a gap before the next clip: the transition reveals the background. Butt them together to cross them.'
+            : 'no clip after: the transition will reveal the background'}
       </div>
     </div>
   )
@@ -281,26 +281,26 @@ function TextPanel({ clip, call }) {
   const set = (patch) => call('set_text', { clip_id: clip.id, ...patch })
   return (
     <div className="group">
-      <h4>testo</h4>
+      <h4>text</h4>
       <div className="row wide">
         <textarea rows={3} value={t.text || ''} onChange={(e) => set({ text: e.target.value })} />
       </div>
-      <Row label="corpo"><Num value={t.font_size ?? 64} min={8} max={400} step={2}
+      <Row label="size"><Num value={t.font_size ?? 64} min={8} max={400} step={2}
         onChange={(v) => set({ font_size: Math.round(v) })} /></Row>
-      <Row label="colore"><Text value={t.color} onChange={(v) => set({ color: v })} /></Row>
-      <Row label="allinea"><Select value={t.align || 'center'} onChange={(v) => set({ align: v })}
+      <Row label="colour"><Text value={t.color} onChange={(v) => set({ color: v })} /></Row>
+      <Row label="align"><Select value={t.align || 'center'} onChange={(v) => set({ align: v })}
         options={['left', 'center', 'right']} /></Row>
-      <Row label="riquadro"><Check value={!!t.box} onChange={(v) => set({ box: v })} /></Row>
+      <Row label="box"><Check value={!!t.box} onChange={(v) => set({ box: v })} /></Row>
       {t.box && (
         <>
-          <Row label="col. riq."><Text value={t.box_color} onChange={(v) => set({ box_color: v })} /></Row>
-          <Row label="opacita'"><Num value={t.box_opacity ?? 0.5} min={0} max={1} step={0.05}
+          <Row label="box col."><Text value={t.box_color} onChange={(v) => set({ box_color: v })} /></Row>
+          <Row label="opacity"><Num value={t.box_opacity ?? 0.5} min={0} max={1} step={0.05}
             onChange={(v) => set({ box_opacity: v })} /></Row>
         </>
       )}
-      <Row label="bordo"><Num value={t.border_width ?? 0} min={0} max={20} step={1}
+      <Row label="border"><Num value={t.border_width ?? 0} min={0} max={20} step={1}
         onChange={(v) => set({ border_width: Math.round(v) })} /></Row>
-      <Row label="font"><Text value={t.font_file} placeholder="percorso .ttf (facoltativo)"
+      <Row label="font"><Text value={t.font_file} placeholder=".ttf path (optional)"
         onChange={(v) => set({ font_file: v })} /></Row>
     </div>
   )
@@ -326,27 +326,27 @@ function ParticellePanel({ clip, call }) {
   const su = par.kind === 'custom'
   return (
     <div className="group">
-      <h4>particelle</h4>
-      <Row label="tipo">
+      <h4>particles</h4>
+      <Row label="type">
         <select value={par.kind} onChange={(e) => {
           if (e.target.value === 'custom') setEditor(true)
           else imposta({ kind: e.target.value })
         }}>
           {PARTICELLE.map(([k, nome]) => <option key={k} value={k}>{nome}</option>)}
-          <option value="custom">su misura</option>
+          <option value="custom">custom</option>
         </select>
       </Row>
       {['density', 'speed', 'size'].map((k) => (
-        <Row key={k} label={{ density: 'densità', speed: 'velocità', size: 'dimensione' }[k]}>
+        <Row key={k} label={{ density: 'density', speed: 'speed', size: 'size' }[k]}>
           <Num value={par[k] ?? 1} min={0.05} max={20} step={0.05} onChange={(v) => imposta({ [k]: v })} />
         </Row>
       ))}
-      <Row label="seme"><Num value={par.seed ?? 1} min={0} step={1}
+      <Row label="seed"><Num value={par.seed ?? 1} min={0} step={1}
         onChange={(v) => imposta({ seed: Math.round(v) })} /></Row>
       <button className="ghost" onClick={() => setEditor(true)}>
-        <Icon name="fx" size={13} />{su ? 'modifica forma e moto' : 'personalizza'}</button>
+        <Icon name="fx" size={13} />{su ? 'edit shape and motion' : 'customise'}</button>
       {editor && (
-        <EditorParticelle titolo="Modifica particelle" applica="applica alla clip"
+        <EditorParticelle titolo="Edit particles" applica="apply to the clip"
           iniziale={su ? par.custom : null}
           onClose={() => setEditor(false)}
           onApplica={(custom) => imposta({ kind: 'custom', custom })} />
@@ -398,13 +398,13 @@ function HtmlPanel({ clip, call }) {
             }
           }} />
       </div>
-      <Row label="cartella"><Text value={clip.html_base || ''}
-        placeholder="per immagini e font relativi (facoltativa)"
+      <Row label="folder"><Text value={clip.html_base || ''}
+        placeholder="for relative images and fonts (optional)"
         onChange={(v) => call('set_html', { clip_id: clip.id, base: v })} /></Row>
       <div className="hint">
-        Pagina grande quanto il progetto, sfondo trasparente. Animazioni CSS, GSAP,
-        requestAnimationFrame e setTimeout seguono la testina; per il controllo totale
-        definisci <code>window.veditRender = t =&gt; …</code>. Ctrl+Invio applica subito.
+        A page as big as the project, transparent background. CSS animations, GSAP,
+        requestAnimationFrame and setTimeout follow the playhead; for full control
+        define <code>window.veditRender = t =&gt; …</code>. Ctrl+Enter applies at once.
       </div>
     </div>
   )
@@ -432,7 +432,7 @@ function Catalogo({ kind, effects, onProva, onAdd }) {
         <button
           key={e.name} className="fxcard"
           title={`${e.label}${e.desc ? ` — ${e.desc}` : ''}`
-            + (kind === 'video' ? '\nPassa sopra per vedere l\'anteprima, clic per applicarlo.' : '\nClic per applicarlo.')}
+            + (kind === 'video' ? '\nHover to preview it, click to apply it.' : '\nClick to apply it.')}
           onMouseEnter={() => prova(e)}
           onMouseLeave={() => prova(null)}
           onFocus={() => prova(e)}
@@ -467,8 +467,8 @@ function Effects({ target, list, effects, clipTime, call, onProva, ha = { video:
 
   return (
     <div className="group">
-      <h4>effetti {list.length > 0 && <span className="hint">· {list.length} applicat{list.length === 1 ? 'o' : 'i'}, in ordine di catena</span>}</h4>
-      {!list.length && <div className="hint">Nessun effetto. Scegline uno qui sotto: comparira' qui con i suoi parametri.</div>}
+      <h4>effects {list.length > 0 && <span className="hint">· {list.length} applied, in chain order</span>}</h4>
+      {!list.length && <div className="hint">No effects. Pick one below: it will show up here with its parameters.</div>}
       {list.map((e) => {
         const spec = byName[e.type]
         if (!spec) return null
@@ -476,23 +476,23 @@ function Effects({ target, list, effects, clipTime, call, onProva, ha = { video:
           <div className={`effect ${nuovo === e.i ? 'appena' : ''}`} key={e.i}
             ref={(el) => { if (el) refs.current.set(e.i, el); else refs.current.delete(e.i) }}>
             <header>
-              <Check value={e.enabled !== false} title="Attiva o disattiva l'effetto"
+              <Check value={e.enabled !== false} title="Turn the effect on or off"
                 onChange={(v) => call('update_effect', args({ index: e.i, enabled: v }))} />
               <b>{spec.label}</b>
               <span className="spacer" />
               {/* l'ordine della catena cambia il risultato: denoise prima di
                   sharpen pulisce e poi incide, al contrario incide il rumore */}
-              <button className="icon sm" title="Sposta prima nella catena"
+              <button className="icon sm" title="Move earlier in the chain"
                 disabled={e.i === 0}
                 onClick={() => call('move_effect', args({ index: e.i, to: e.i - 1 }))}>
                 <Icon name="su" size={13} />
               </button>
-              <button className="icon sm" title="Sposta dopo nella catena"
+              <button className="icon sm" title="Move later in the chain"
                 disabled={e.i === list.length - 1}
                 onClick={() => call('move_effect', args({ index: e.i, to: e.i + 1 }))}>
                 <Icon name="giu" size={13} />
               </button>
-              <button className="icon sm danger" title="Rimuovi l'effetto"
+              <button className="icon sm danger" title="Remove the effect"
                 onClick={() => call('remove_effect', args({ index: e.i }))}>
                 <Icon name="chiudi" size={13} />
               </button>
@@ -501,20 +501,20 @@ function Effects({ target, list, effects, clipTime, call, onProva, ha = { video:
               onChange={(patch) => call('update_effect', args({ index: e.i, params: patch }))} />
             {spec.desc && <div className="hint">{spec.desc}</div>}
             {!ha[spec.kind] && (
-              <div className="hint">questa clip non ha {spec.kind === 'audio' ? 'suono' : 'immagine'}: l'effetto non cambia niente</div>
+              <div className="hint">this clip has no {spec.kind === 'audio' ? 'sound' : 'picture'}: the effect changes nothing</div>
             )}
           </div>
         )
       })}
-      <h4 className="fxtitolo">aggiungi effetto</h4>
+      <h4 className="fxtitolo">add effect</h4>
       {/* solo gli effetti che la clip puo' usare: un colore su una clip audio
           non cambierebbe niente, un compressore su un testo nemmeno */}
       {ha.video && (<>
-        <div className="hint fxnota">immagine — passa sopra per l'anteprima, clic per applicare</div>
+        <div className="hint fxnota">picture — hover to preview, click to apply</div>
         <Catalogo kind="video" effects={effects} onProva={onProva} onAdd={aggiungi} />
       </>)}
       {ha.audio && (<>
-        <div className="hint fxnota">suono — clic per applicare, si sente in riproduzione</div>
+        <div className="hint fxnota">sound — click to apply, you hear it on playback</div>
         <Catalogo kind="audio" effects={effects} onProva={onProva} onAdd={aggiungi} />
       </>)}
     </div>
@@ -525,10 +525,10 @@ function ProjectPanel({ project, effects, call, setBusy, setError, onProva }) {
   const s = project?.settings
   const ln = project?.master?.loudnorm || {}
   const [lufs, setLufs] = useState(ln.target_lufs ?? -14)
-  if (!project) return <div className="group hint">Nessun progetto aperto.</div>
+  if (!project) return <div className="group hint">No project open.</div>
 
   const measure = async () => {
-    setBusy('misuro il volume del mix…')
+    setBusy('measuring the mix loudness…')
     try {
       const res = await fetch('/api/loudness', { method: 'POST' }).then((r) => r.json())
       await call('set_loudnorm', { enabled: true, target_lufs: lufs, measured: res.measured })
@@ -537,27 +537,27 @@ function ProjectPanel({ project, effects, call, setBusy, setError, onProva }) {
 
   return (
     <>
-      <div className="section-title">progetto</div>
+      <div className="section-title">project</div>
       <div className="group">
         <h4>{project.name}</h4>
-        <Row label="risoluzione"><Text value={s.resolution} onChange={(v) => {
+        <Row label="resolution"><Text value={s.resolution} onChange={(v) => {
           const [w, h] = v.split('x').map((n) => parseInt(n, 10))
           if (w > 0 && h > 0) call('set_settings', { width: w, height: h })
         }} /></Row>
         <Row label="fps"><Num value={s.fps} min={1} max={240} step={1}
           onChange={(v) => call('set_settings', { fps: v })} /></Row>
-        <Row label="sfondo"><Text value={s.background} onChange={(v) => call('set_settings', { background: v })} /></Row>
-        <div className="hint">durata timeline: {project.duration.toFixed(2)}s</div>
+        <Row label="background"><Text value={s.background} onChange={(v) => call('set_settings', { background: v })} /></Row>
+        <div className="hint">timeline duration: {project.duration.toFixed(2)}s</div>
       </div>
 
       <div className="group">
-        <h4>volume generale</h4>
-        <Row label="normalizza"><Check value={!!ln.enabled}
+        <h4>overall loudness</h4>
+        <Row label="normalise"><Check value={!!ln.enabled}
           onChange={(v) => call('set_loudnorm', { enabled: v, target_lufs: lufs })} /></Row>
         <Row label="target LUFS"><Num value={lufs} min={-40} max={0} step={0.5} onChange={setLufs} /></Row>
-        <button onClick={measure}>misura il mix e applica</button>
+        <button onClick={measure}>measure the mix and apply</button>
         <div className="hint">
-          -14 YouTube/Spotify · -16 podcast · -23 TV. {ln.measured ? 'Misura presente.' : 'Nessuna misura: normalizzazione dinamica.'}
+          -14 YouTube/Spotify · -16 podcast · -23 TV. {ln.measured ? 'Measured.' : 'Not measured: dynamic normalisation.'}
         </div>
       </div>
 
@@ -583,33 +583,33 @@ function Sidechain({ project, call }) {
   const nome = (id) => tracce.find((t) => t.id === id)?.name || id
   return (
     <div className="group">
-      <h4>abbassa una traccia quando ne suona un'altra</h4>
+      <h4>duck a track when another one plays</h4>
       {attivi.map((t) => (
         <div key={t.id} className="row scattivo">
-          <span><b>{nome(t.id)}</b> si abbassa quando suona <b>{nome(t.sidechain.source)}</b>
-            <span className="hint"> · soglia {t.sidechain.threshold} dB</span></span>
+          <span><b>{nome(t.id)}</b> ducks when <b>{nome(t.sidechain.source)}</b> plays
+            <span className="hint"> · threshold {t.sidechain.threshold} dB</span></span>
           <button className="ghost" onClick={() => call('set_sidechain', { track_id: t.id, source: null })}>
-            spegni</button>
+            turn off</button>
         </div>
       ))}
-      <Row label="abbassa">
+      <Row label="duck">
         <select value={bersaglio} onChange={(e) => setBersaglio(e.target.value)}>
-          <option value="">scegli la traccia (es. musica)</option>
+          <option value="">choose the track (e.g. music)</option>
           {tracce.map((t) => <option key={t.id} value={t.id}>{t.name || t.id}</option>)}
         </select>
       </Row>
-      <Row label="quando suona">
+      <Row label="when plays">
         <select value={sorgente} onChange={(e) => setSorgente(e.target.value)}>
-          <option value="">scegli la traccia (es. voce)</option>
+          <option value="">choose the track (e.g. voice)</option>
           {tracce.filter((t) => t.id !== bersaglio).map((t) =>
             <option key={t.id} value={t.id}>{t.name || t.id}</option>)}
         </select>
       </Row>
-      <Row label="sensibilita'"><Num value={quanto} min={-60} max={0} step={1} onChange={setQuanto} /></Row>
+      <Row label="sensitivity"><Num value={quanto} min={-60} max={0} step={1} onChange={setQuanto} /></Row>
       <button disabled={!bersaglio || !sorgente}
         onClick={() => call('set_sidechain', { track_id: bersaglio, source: sorgente, threshold: quanto })}>
-        attiva</button>
-      <div className="hint">soglia in dB: piu' bassa, prima interviene. Va bene anche chiederlo all'assistente.</div>
+        turn on</button>
+      <div className="hint">threshold in dB: the lower it is, the sooner it kicks in. You can also ask the assistant.</div>
     </div>
   )
 }

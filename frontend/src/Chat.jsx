@@ -6,33 +6,33 @@ import Icon from './Icons.jsx'
 import { dettaglioStrumento, fmt } from './util.js'
 
 const TOOL_LABEL = {
-  project_info: 'guarda la timeline', import_media: 'importa file', add_clip: 'aggiunge una clip',
-  add_clips: 'monta i tagli', apply_style: 'applica lo stile', review_edit: 'controlla il montaggio',
-  create_style: 'crea uno stile', add_text: 'aggiunge un titolo', add_html: 'crea una grafica',
-  set_html: 'ritocca la grafica', split_clip: 'taglia', split: 'taglia', remove_clip: 'elimina una clip',
-  move_clip: 'sposta una clip', move: 'sposta una clip', trim_clip: 'ritaglia', trim: 'ritaglia',
-  set_speed: 'cambia velocita\'', set_fades: 'dissolvenze', crossfade: 'transizione',
-  set_transition: 'transizione', apply_preset: 'applica un preset', add_effect: 'applica un effetto',
-  set_transform: 'posizione e scala', set_audio: 'audio della clip', set_text: 'modifica il testo',
-  add_track: 'aggiunge una traccia', close_gaps: 'chiude i buchi', undo: 'annulla',
-  preview_frame: 'guarda un fotogramma', preview_grid: 'guarda il montaggio',
-  ask_user: 'ti fa una domanda', add_color: 'aggiunge un colore pieno', music_beats: 'ascolta il ritmo', Read: 'guarda un\'immagine', render_video: 'esporta',
-  marker: 'aggiunge un marker', remove_marker: 'toglie un marker', markers: 'legge i marker',
-  set_clip: 'modifica la clip', set_track: 'modifica la traccia', move_track: 'sposta la traccia',
-  remove_track: 'elimina una traccia', delete: 'elimina', redo: 'ripete', move_effect: 'riordina gli effetti',
-  update_effect: 'regola un effetto', remove_effect: 'toglie un effetto', list_effects: 'guarda gli effetti',
-  inspect_footage: 'guarda il girato', plan_edit: 'pianifica il montaggio', analyze_media: 'analizza un file',
-  transcribe: 'trascrive il parlato', make_captions: 'crea i sottotitoli', duck_music: 'abbassa la musica sotto la voce',
-  normalize_audio: 'normalizza l\'audio', audio_levels: 'misura i livelli', check_cuts: 'controlla i tagli',
-  verify_edit: 'controlla il montaggio', snapshot: 'salva una versione', match_color: 'uguaglia i colori',
-  Glob: 'cerca file', WebFetch: 'legge una pagina web',
+  project_info: 'looks at the timeline', import_media: 'imports files', add_clip: 'adds a clip',
+  add_clips: 'lays down the cuts', apply_style: 'applies the style', review_edit: 'reviews the edit',
+  create_style: 'creates a style', add_text: 'adds a title', add_html: 'creates a graphic',
+  set_html: 'touches up the graphic', split_clip: 'splits', split: 'splits', remove_clip: 'deletes a clip',
+  move_clip: 'moves a clip', move: 'moves a clip', trim_clip: 'trims', trim: 'trims',
+  set_speed: 'changes speed', set_fades: 'fades', crossfade: 'transition',
+  set_transition: 'transition', apply_preset: 'applies a preset', add_effect: 'applies an effect',
+  set_transform: 'position and scale', set_audio: 'clip audio', set_text: 'edits the text',
+  add_track: 'adds a track', close_gaps: 'closes the gaps', undo: 'undo',
+  preview_frame: 'looks at a frame', preview_grid: 'looks at the edit',
+  ask_user: 'asks you a question', add_color: 'adds a solid colour', music_beats: 'listens to the beat', Read: 'looks at an image', render_video: 'exports',
+  marker: 'adds a marker', remove_marker: 'removes a marker', markers: 'reads the markers',
+  set_clip: 'edits the clip', set_track: 'edits the track', move_track: 'moves the track',
+  remove_track: 'deletes a track', delete: 'deletes', redo: 'redo', move_effect: 'reorders the effects',
+  update_effect: 'adjusts an effect', remove_effect: 'removes an effect', list_effects: 'looks at the effects',
+  inspect_footage: 'looks at the footage', plan_edit: 'plans the edit', analyze_media: 'analyses a file',
+  transcribe: 'transcribes the speech', make_captions: 'creates the subtitles', duck_music: 'ducks the music under the voice',
+  normalize_audio: 'normalises the audio', audio_levels: 'measures the levels', check_cuts: 'checks the cuts',
+  verify_edit: 'checks the edit', snapshot: 'saves a version', match_color: 'matches the colours',
+  Glob: 'searches files', WebFetch: 'reads a web page',
 }
 
 /** Etichetta breve di un riferimento, per le pastiglie e per il messaggio. */
 export function rifLabel(r, project) {
   if (r.kind === 'time') return fmt(r.t)
   if (r.kind === 'range') return `${fmt(Math.min(r.a, r.b))} → ${fmt(Math.max(r.a, r.b))}`
-  if (r.kind === 'area') return `area a ${fmt(r.t)}`
+  if (r.kind === 'area') return `area at ${fmt(r.t)}`
   if (r.kind === 'file') return r.name
   if (r.kind === 'link') return r.name || r.url
   if (r.kind === 'folder') return r.name || r.path
@@ -93,10 +93,10 @@ export default function Chat({
     return (
       <div className="chat">
         <div className="section-title">
-          scegli il modello
+          choose the model
           <span className="spacer" />
           {available?.ok && (
-            <button className="icon sm" title="Torna alla chat" onClick={() => setSettings(false)}>
+            <button className="icon sm" title="Back to the chat" onClick={() => setSettings(false)}>
               <Icon name="chiudi" size={14} />
             </button>
           )}
@@ -177,7 +177,7 @@ export default function Chat({
           patch((m) => ({
             ...m, thinking: false,
             tools: m.tools.map((t) => (t.state === 'run' ? { ...t, state: 'err', message: 'fermato' } : t)),
-            note: 'Fermato. Le modifiche gia\' fatte restano: Ctrl+Z per annullarle.',
+            note: 'Stopped. The changes already made stay: Ctrl+Z to undo them.',
           }))
         } else if (ev.type === 'error') {
           patch((m) => ({ ...m, error: ev.message }))
@@ -215,23 +215,23 @@ export default function Chat({
         e.preventDefault(); e.stopPropagation(); setSopra(false)
         allega(e.dataTransfer.files)
       }}>
-      {sopra && <div className="chatdrop">rilascia per allegare al messaggio</div>}
+      {sopra && <div className="chatdrop">drop to attach to the message</div>}
       <div className="section-title">
-        <button className="modelpill" title="Cambia modello" onClick={() => setSettings(true)}>
+        <button className="modelpill" title="Change model" onClick={() => setSettings(true)}>
           <span className="dot" />
           {available.nome}{available.model ? ` · ${available.model}` : ''}
         </button>
         <span className="spacer" />
-        <button className={`stilepill ${stile ? 'on' : ''}`} title="Stile di montaggio"
+        <button className={`stilepill ${stile ? 'on' : ''}`} title="Editing style"
           onClick={() => {
             // l'agente puo' aver creato uno stile nel frattempo (create_style)
             if (!menuStili) api.stili().then((r) => onStili?.(r.stili)).catch(() => {})
             setMenuStili((v) => !v)
           }}>
           <Icon name="libreria" size={13} />
-          {stili.find((s) => s.id === stile)?.nome || 'stile'}
+          {stili.find((s) => s.id === stile)?.nome || 'style'}
         </button>
-        <button className="icon sm" onClick={reset} title="Ricomincia la conversazione">
+        <button className="icon sm" onClick={reset} title="Start the conversation over">
           <Icon name="cestino" size={14} />
         </button>
       </div>
@@ -248,10 +248,10 @@ export default function Chat({
                 setEditStile(null)
               }} />
           ) : (<>
-            <div className="hint">Lo stile guida l'assistente in ogni scelta: ritmo, transizioni, colore, testi.</div>
+            <div className="hint">The style guides the assistant in every choice: pace, transitions, colour, text.</div>
             <button className={`stilevoce ${!stile ? 'on' : ''}`}
               onClick={() => { setStile(''); setMenuStili(false) }}>
-              <b>Nessuno</b><span>decide l'assistente caso per caso</span>
+              <b>None</b><span>the assistant decides case by case</span>
             </button>
             {stili.filter((s) => !s.personale).map((s) => (
               <button key={s.id} className={`stilevoce ${stile === s.id ? 'on' : ''}`}
@@ -259,21 +259,21 @@ export default function Chat({
                 <b>{s.nome}</b><span>{s.breve}</span>
               </button>
             ))}
-            <div className="libgroup stiligruppo">i tuoi stili</div>
+            <div className="libgroup stiligruppo">your styles</div>
             {stili.filter((s) => s.personale).map((s) => (
               <div key={s.id} className="stilemio">
                 <button className={`stilevoce ${stile === s.id ? 'on' : ''}`}
                   onClick={() => { setStile(s.id); setMenuStili(false) }}>
                   <b>{s.nome}</b><span>{s.breve}</span>
                 </button>
-                <button className="icon sm" title="Modifica lo stile" onClick={() => setEditStile(s)}>
+                <button className="icon sm" title="Edit the style" onClick={() => setEditStile(s)}>
                   <Icon name="ingranaggio" size={14} />
                 </button>
               </div>
             ))}
             <button className="ghost stilenuovo"
               onClick={() => setEditStile({ nome: '', breve: '', guida: '', piano: 'vlog' })}>
-              <Icon name="piu" size={14} />crea il tuo stile
+              <Icon name="piu" size={14} />create your own style
             </button>
           </>)}
         </div>
@@ -282,20 +282,20 @@ export default function Chat({
       <div className="chatlog">
         {!turns.length && (
           <div className="chatempty">
-            <b>Chiedi in italiano, l'assistente monta per te.</b>
+            <b>Just ask, the assistant edits for you.</b>
             <div className="esempi">
-              {['togli i primi 2 secondi della prima clip',
-                'metti una dissolvenza tra le due riprese',
-                'crea un sottopancia animato con il mio nome',
-                'rendi il video piu\' cinematografico'].map((e) => (
+              {['cut the first 2 seconds of the first clip',
+                'put a dissolve between the two shots',
+                'make an animated lower third with my name',
+                'make the video more cinematic'].map((e) => (
                 <button key={e} className="esempio" onClick={() => setInput(e)}>{e}</button>
               ))}
             </div>
             <div className="hint">
-              Vuoi indicare un punto preciso? Usa i pulsanti qui sotto: istante, tratto, clip,
-              un'area disegnata sull'inquadratura, un file (anche trascinandolo qui o
-              incollando uno screenshot), un link o una cartella. Un link incollato da solo
-              diventa un riferimento da se'. Ogni modifica si annulla con Ctrl+Z.
+              Want to point at something precise? Use the buttons below: a moment, a range,
+              a clip, an area drawn on the frame, a file (also by dropping it here or pasting
+              a screenshot), a link or a folder. A link pasted on its own becomes a reference by
+              itself. Every change can be undone with Ctrl+Z.
             </div>
           </div>
         )}
@@ -320,7 +320,7 @@ export default function Chat({
                   <Passo key={j} passo={t} project={project} />
                 ))}
                 {m.thinking && !m.text && (
-                  <div className="toolrow"><Icon size={13} name="attesa" className="spin" />sto pensando…</div>
+                  <div className="toolrow"><Icon size={13} name="attesa" className="spin" />thinking…</div>
                 )}
                 {m.note && <div className="hint">{m.note}</div>}
                 {m.text}
@@ -351,7 +351,7 @@ export default function Chat({
                   }}>
                   <b>{j + 1}</b><span className="riftesto">{rifLabel(r, project)}</span>
                 </button>
-                <button className="rifx" title="Togli"
+                <button className="rifx" title="Remove"
                   onClick={() => setRefs((xs) => xs.filter((_, k) => k !== j))}>
                   <Icon name="chiudi" size={11} />
                 </button>
@@ -360,63 +360,63 @@ export default function Chat({
           </div>
         )}
         <div className="rifbar">
-          <span className="hint">indica:</span>
-          <button className="chip" disabled={!project} title="L'istante sotto la testina"
+          <span className="hint">point at:</span>
+          <button className="chip" disabled={!project} title="The moment under the playhead"
             onClick={() => addRef({ kind: 'time', t: playhead })}>
-            <Icon name={RIF_ICON.time} size={13} />istante</button>
+            <Icon name={RIF_ICON.time} size={13} />moment</button>
           <button className={`chip ${tratto != null ? 'on' : ''}`} disabled={!project}
-            title={tratto == null ? 'Segna l\'inizio, sposta la testina, poi segna la fine'
-              : 'Sposta la testina alla fine del tratto e premi di nuovo'}
+            title={tratto == null ? 'Mark the start, move the playhead, then mark the end'
+              : 'Move the playhead to the end of the range and press again'}
             onClick={() => {
               if (tratto == null) { setTratto(playhead); return }
               addRef({ kind: 'range', a: tratto, b: playhead })
               setTratto(null)
             }}>
             <Icon name={RIF_ICON.range} size={13} />
-            {tratto == null ? 'tratto' : `fine (da ${fmt(tratto)})`}</button>
-          <button className="chip" disabled={!selected} title="La clip selezionata in timeline"
+            {tratto == null ? 'range' : `end (from ${fmt(tratto)})`}</button>
+          <button className="chip" disabled={!selected} title="The clip selected in the timeline"
             onClick={() => addRef({ kind: 'clip', id: selected })}>
             <Icon name={RIF_ICON.clip} size={13} />clip</button>
           <button className={`chip ${pickArea ? 'on' : ''}`} disabled={!project}
-            title="Disegna un riquadro sull'inquadratura"
+            title="Draw a box on the frame"
             onClick={() => setPickArea((v) => !v)}>
-            <Icon name={RIF_ICON.area} size={13} />{pickArea ? 'disegna…' : 'area'}</button>
+            <Icon name={RIF_ICON.area} size={13} />{pickArea ? 'draw…' : 'area'}</button>
           <button className="chip" disabled={caricando > 0}
-            title="Allega immagini, PDF, testi, video o audio (anche trascinandoli qui o con Ctrl+V)"
+            title="Attach images, PDFs, text, video or audio (also by dropping them here or with Ctrl+V)"
             onClick={() => fileRef.current?.click()}>
-            <Icon name={RIF_ICON.file} size={13} />{caricando ? 'carico…' : 'file'}</button>
+            <Icon name={RIF_ICON.file} size={13} />{caricando ? 'uploading…' : 'file'}</button>
           <input ref={fileRef} type="file" multiple hidden
             onChange={(e) => { allega(e.target.files); e.target.value = '' }} />
           <button className={`chip ${linkAperto ? 'on' : ''}`} disabled={caricando > 0}
-            title="Una pagina web, un'immagine, un video o un audio da internet"
+            title="A web page, an image, a video or an audio file from the internet"
             onClick={() => setLinkAperto((v) => !v)}>
             <Icon name={RIF_ICON.link} size={13} />link</button>
-          <button className="chip" title="Una cartella del computer: l'assistente ne vede i file"
+          <button className="chip" title="A folder on this computer: the assistant sees its files"
             onClick={() => setSceltaCartella(true)}>
-            <Icon name={RIF_ICON.folder} size={13} />cartella</button>
+            <Icon name={RIF_ICON.folder} size={13} />folder</button>
         </div>
         {linkAperto && (
           <div className="linkbar">
-            <input autoFocus value={linkTesto} placeholder="incolla un link e premi Invio"
+            <input autoFocus value={linkTesto} placeholder="paste a link and press Enter"
               onChange={(e) => setLinkTesto(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') { e.preventDefault(); aggiungiLink(linkTesto) }
                 if (e.key === 'Escape') setLinkAperto(false)
               }} />
             <button className="chip" disabled={!linkTesto.trim() || caricando > 0}
-              onClick={() => aggiungiLink(linkTesto)}>{caricando ? 'leggo…' : 'aggiungi'}</button>
+              onClick={() => aggiungiLink(linkTesto)}>{caricando ? 'reading…' : 'add'}</button>
           </div>
         )}
         {sceltaCartella && (
-          <FileBrowser title="Scegli una cartella da indicare all'assistente" cartella
+          <FileBrowser title="Choose a folder to show the assistant" cartella
             memoria="chat-cartelle" onClose={() => setSceltaCartella(false)}
             onPick={([p]) => addRef({ kind: 'folder', path: p, name: p.split(/[\\/]/).filter(Boolean).pop() })} />
         )}
         <div className="chatbar">
           <textarea
             rows={2} value={input} disabled={busy}
-            placeholder={busy ? 'sto lavorando…'
-              : refs.length ? 'cosa vuoi cambiare? (puoi scrivere "in 1", "nel 2"…)' : 'chiedi una modifica…'}
+            placeholder={busy ? 'working…'
+              : refs.length ? 'what should change? (you can write "in 1", "at 2"…)' : 'ask for a change…'}
             onChange={(e) => setInput(e.target.value)}
             onPaste={(e) => {
               // un'immagine copiata (uno screenshot) si incolla come allegato
@@ -431,11 +431,11 @@ export default function Chat({
             }}
           />
           {busy ? (
-            <button className="primary icon ferma" title="Ferma l'assistente"
+            <button className="primary icon ferma" title="Stop the assistant"
               onClick={() => api.chatStop().catch(() => {})}><Icon name="ferma" /></button>
           ) : (
             <button className="primary icon" disabled={caricando > 0 || !input.trim()} onClick={send}
-              title="Invia (Invio)"><Icon name="invia" /></button>
+              title="Send (Enter)"><Icon name="invia" /></button>
           )}
         </div>
       </div>
@@ -472,7 +472,7 @@ function DomandaCard({ domanda, onRisposta }) {
 
   return (
     <div className="domande">
-      <div className="domtesta"><Icon name="assistente" size={14} />L'assistente ti chiede</div>
+      <div className="domtesta"><Icon name="assistente" size={14} />The assistant asks you</div>
       {lista.map((d, i) => (
         <div key={i} className="domanda">
           {d.titolo && <span className="domtitolo">{d.titolo}</span>}
@@ -489,16 +489,16 @@ function DomandaCard({ domanda, onRisposta }) {
               )
             })}
           </div>
-          <input className="altro" placeholder="altro: scrivi la tua risposta" value={altro[i] || ''}
+          <input className="altro" placeholder="other: write your answer" value={altro[i] || ''}
             onChange={(e) => setAltro((a) => ({ ...a, [i]: e.target.value }))}
             onKeyDown={(e) => { if (e.key === 'Enter' && pronta) invia() }} />
-          {d.multipla && <div className="hint">puoi sceglierne piu' d'una</div>}
+          {d.multipla && <div className="hint">you can pick more than one</div>}
         </div>
       ))}
       <div className="domazioni">
         <button className="primary" disabled={!pronta} onClick={invia}>
-          <Icon name="invia" />rispondi</button>
-        <button className="ghost" onClick={() => onRisposta({ __annulla__: true })}>non rispondere</button>
+          <Icon name="invia" />answer</button>
+        <button className="ghost" onClick={() => onRisposta({ __annulla__: true })}>don't answer</button>
       </div>
     </div>
   )
@@ -513,7 +513,7 @@ function Passo({ passo, project }) {
   const haInput = passo.input && Object.keys(passo.input).length > 0
   return (
     <div className={`toolrow ${passo.state} ${aperto ? 'aperto' : ''}`}>
-      <button className="toolhead" disabled={!haInput} title={haInput ? 'Mostra i parametri' : ''}
+      <button className="toolhead" disabled={!haInput} title={haInput ? 'Show the parameters' : ''}
         onClick={() => setAperto((v) => !v)}>
         <Icon size={13} className={passo.state === 'run' ? 'spin' : ''}
           name={passo.state === 'run' ? 'attesa' : passo.state === 'ok' ? 'spunta' : 'chiudi'} />
@@ -580,16 +580,16 @@ function ModelSettings({ available, setError, onSaved }) {
           {p.nota && <div className="hint">{p.nota}</div>}
           {p.vuole_chiave && (
             <label className="campo">
-              <span>chiave API</span>
+              <span>API key</span>
               <input type="password" autoComplete="off" value={chiave}
-                placeholder={p.chiave ? `salvata (${p.chiave})${p.chiave_da_ambiente ? ' dall\'ambiente' : ''}` : 'incolla qui la chiave'}
+                placeholder={p.chiave ? `saved (${p.chiave})${p.chiave_da_ambiente ? ' from the environment' : ''}` : 'paste the key here'}
                 onChange={(e) => setChiave(e.target.value)} />
             </label>
           )}
           <label className="campo">
-            <span>modello</span>
+            <span>model</span>
             <input list={`modelli-${p.id}`} value={modello}
-              placeholder={p.tipo === 'claude_code' ? 'quello predefinito di Claude Code' : 'nome del modello'}
+              placeholder={p.tipo === 'claude_code' ? 'the Claude Code default' : 'model name'}
               onChange={(e) => setModello(e.target.value)} />
             <datalist id={`modelli-${p.id}`}>
               {p.modelli.filter(Boolean).map((m) => <option key={m} value={m} />)}
@@ -597,30 +597,30 @@ function ModelSettings({ available, setError, onSaved }) {
           </label>
           {p.indirizzo_modificabile && (
             <label className="campo">
-              <span>indirizzo</span>
+              <span>address</span>
               <input value={indirizzo} placeholder="https://…/v1"
                 onChange={(e) => setIndirizzo(e.target.value)} />
             </label>
           )}
           {p.tipo === 'claude_code' && (
             <div className="hint">
-              Claude Code lavora su questo progetto attraverso il server MCP dell'editor
-              {available?.mcp ? <> (<code>{available.mcp}</code>)</> : ''}: ogni modifica
-              la vedi comparire in timeline mentre la fa.
+              Claude Code works on this project through the editor's MCP server
+              {available?.mcp ? <> (<code>{available.mcp}</code>)</> : ''}: you see every change
+              appear in the timeline as it makes it.
             </div>
           )}
           {!p.pronto && p.motivo && <div className="hint warn">{p.motivo}</div>}
           <div className="azioni">
             <button className="primary" disabled={saving} onClick={save}>
-              <Icon name="spunta" />{saving ? 'salvo…' : 'usa questo'}
+              <Icon name="spunta" />{saving ? 'saving…' : 'use this'}
             </button>
             {p.chiave && !p.chiave_da_ambiente && (
               <button className="ghost" onClick={() => { setChiave(''); api.setLlm({ provider: pid, chiave: '', attiva: false }).then(onSaved) }}>
-                dimentica la chiave
+                forget the key
               </button>
             )}
           </div>
-          <div className="hint">Le chiavi restano su questo computer (~/.vedit/llm.json), mai nel progetto.</div>
+          <div className="hint">Keys stay on this computer (~/.vedit/llm.json), never in the project.</div>
         </div>
       )}
     </div>
@@ -628,10 +628,10 @@ function ModelSettings({ available, setError, onSaved }) {
 }
 
 const PIANI = [
-  ['vlog', 'medio — vlog, racconto personale'],
-  ['shortform', 'veloce — social, tagli brevi'],
-  ['documentary', 'calmo — guidato dal parlato'],
-  ['cinematic', 'lento — inquadrature tenute'],
+  ['vlog', 'medium — vlog, personal story'],
+  ['shortform', 'fast — social, short cuts'],
+  ['documentary', 'calm — driven by speech'],
+  ['cinematic', 'slow — held shots'],
 ]
 
 /**
@@ -651,32 +651,32 @@ function EditorStile({ stile, setError, onClose, onSalvato, onEliminato }) {
   }
   return (
     <div className="editorstile">
-      <b>{f.id ? 'Modifica stile' : 'Nuovo stile'}</b>
-      <label>nome<input value={f.nome} onChange={set('nome')} placeholder="es. Il mio canale" autoFocus /></label>
-      <label>in breve<input value={f.breve} onChange={set('breve')} placeholder="una riga che lo descrive (facoltativa)" /></label>
-      <label>come deve montare l'assistente
+      <b>{f.id ? 'Edit style' : 'New style'}</b>
+      <label>name<input value={f.nome} onChange={set('nome')} placeholder="e.g. My channel" autoFocus /></label>
+      <label>in short<input value={f.breve} onChange={set('breve')} placeholder="one line describing it (optional)" /></label>
+      <label>how the assistant should edit
         <textarea rows={8} value={f.guida} onChange={set('guida')}
-          placeholder={'Scrivilo come lo diresti a un montatore. Es.:\n'
-            + 'Apri sempre con la frase piu\' forte. Tagli di 1-2 s, mai dissolvenze. '
-            + 'Sottotitoli gialli grandi in basso. Colore caldo e saturo. '
-            + 'Musica che sale nel finale, chiudi con il logo.'} />
+          placeholder={'Write it as you would tell an editor. E.g.:\n'
+            + 'Always open with the strongest line. Cuts of 1-2 s, never dissolves. '
+            + 'Big yellow subtitles at the bottom. Warm, saturated colour. '
+            + 'Music rising at the end, close on the logo.'} />
       </label>
-      <label>ritmo di base
+      <label>base pace
         <select value={f.piano} onChange={set('piano')}>
           {PIANI.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </label>
-      <div className="hint">Le istruzioni arrivano all'assistente a ogni messaggio, come un prompt di sistema. Il ritmo di base sceglie quanto durano i tagli quando prepara un montaggio dal girato.</div>
+      <div className="hint">The instructions reach the assistant with every message, like a system prompt. The base pace sets how long the cuts are when it plans an edit from the footage.</div>
       <div className="editorstile-azioni">
         {f.id && (
           <button className="ghost danger" onClick={() => api.eliminaStile(f.id)
             .then((r) => onEliminato(r, f.id)).catch((e) => setError(e.message))}>
-            <Icon name="cestino" size={13} />elimina</button>
+            <Icon name="cestino" size={13} />delete</button>
         )}
         <span className="spacer" />
-        <button className="ghost" onClick={onClose}>annulla</button>
+        <button className="ghost" onClick={onClose}>cancel</button>
         <button className="primary" disabled={salvo || !f.nome.trim() || !f.guida.trim()} onClick={salva}>
-          salva e usa</button>
+          save and use</button>
       </div>
     </div>
   )

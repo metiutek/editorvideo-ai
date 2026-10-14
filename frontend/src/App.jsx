@@ -138,17 +138,17 @@ export default function App() {
       if (ev.type === 'proxies') {
         // anche in caso di errore: altrimenti l'avviso "genero i proxy" resta li' per sempre
         setBusy(null)
-        if (ev.state === 'error') setError(`proxy non riusciti: ${ev.error}`)
+        if (ev.state === 'error') setError(`proxies failed: ${ev.error}`)
         else aggiorna()   // i media adesso hanno il proxy: le anteprime lo usano
       }
       if (ev.type === 'proxy_auto') {
         // file che il browser non sa riprodurre (DNxHR, ProRes, H.265...): il
         // server ne prepara da solo una copia leggera, intanto si vede nero
         if (ev.state === 'running') {
-          setBusy(`preparo l'anteprima di ${ev.nome} (${ev.fatti + 1}/${ev.totale})`)
+          setBusy(`preparing the preview of ${ev.nome} (${ev.fatti + 1}/${ev.totale})`)
         } else {
           setBusy(null)
-          if (ev.state === 'error') setError(`anteprima non riuscita${ev.nome ? ` per ${ev.nome}` : ''}: ${ev.error}`)
+          if (ev.state === 'error') setError(`preview failed${ev.nome ? ` for ${ev.nome}` : ''}: ${ev.error}`)
         }
       }
       // l'evento porta solo il numero: se e' piu' nuovo di quello che si vede,
@@ -202,7 +202,7 @@ export default function App() {
    */
   const applyTransition = useCallback((type, duration, clipId) => {
     const id = clipId ?? selected
-    if (!project || !id) { setError('seleziona prima una clip'); return }
+    if (!project || !id) { setError('select a clip first'); return }
     const clip = findClip(project, id)
     if (!clip) return
     const track = project.tracks.find((t) => t.clips.some((c) => c.id === id))
@@ -229,7 +229,7 @@ export default function App() {
     return r
   } }
   const lavoraImport = async (lavoro) => {
-    if (fermaImport.current) { setError("c'e' gia' un import in corso: aspetta che finisca o fermalo"); return }
+    if (fermaImport.current) { setError('an import is already running: wait for it to finish or stop it'); return }
     const ctrl = new AbortController()
     fermaImport.current = ctrl
     try {
@@ -237,7 +237,7 @@ export default function App() {
       const n = fine.scartati.length
       if (n) {
         const nome = (p) => p.split(/[\\/]/).pop()
-        setError(`${n} file non importati: ${fine.scartati.slice(0, 3)
+        setError(`${n} files not imported: ${fine.scartati.slice(0, 3)
           .map((s) => `${nome(s.path)} (${s.errore})`).join(', ')}${n > 3 ? '…' : ''}`)
       }
     } catch (e) {
@@ -251,12 +251,12 @@ export default function App() {
   // dal disco: per riferimento, i file restano dove sono
   const timelineImportata = (r) => {
     applyState(r)
-    const msg = `timeline ${r.formato}: ${r.clip} clip${r.transizioni ? `, ${r.transizioni} transizioni` : ''} da ${fmt(r.da)}`
+    const msg = `${r.formato} timeline: ${r.clip} clips${r.transizioni ? `, ${r.transizioni} transitions` : ''} from ${fmt(r.da)}`
     if (r.avvisi?.length) setError(`${msg}. ${r.avvisi.join(' · ')}`)
     else flash(msg, 4000)
   }
   const sottotitoliImportati = (r) =>
-    flash(`${r.righe} sottotitoli sulla traccia ${r.track}, da ${fmt(r.da)} a ${fmt(r.a)}`, 4000)
+    flash(`${r.righe} subtitles on track ${r.track}, from ${fmt(r.da)} to ${fmt(r.a)}`, 4000)
   const importPaths = (paths) => {
     for (const p of paths.filter((x) => SUB_EXT.test(x))) {
       run('import_subtitles', { path: p }).then(sottotitoliImportati).catch((e) => setError(e.message))
@@ -273,7 +273,7 @@ export default function App() {
   // una cartella intera, sottocartelle comprese: nel bin diventa una cartella col suo nome
   const importFolder = (path) => lavoraImport(async (o) => {
     const r = await api.scan(path)
-    if (!r.files.length) throw new Error(`nessun file multimediale in ${r.path}`)
+    if (!r.files.length) throw new Error(`no media files in ${r.path}`)
     const voci = r.files.map((f) => ({ ...f, cartella: [r.nome, f.cartella].filter(Boolean).join('/') }))
     return importaPercorsi(apiImport, voci, o)
   })
@@ -291,27 +291,27 @@ export default function App() {
           testo, fmt: v.file.name.split('.').pop().toLowerCase(),
         })).then(sottotitoliImportati).catch((e) => setError(e.message))
       }
-    } else if (sub.length) setError('apri o crea un progetto prima di importare i sottotitoli')
+    } else if (sub.length) setError('open or create a project before importing subtitles')
     if (timeline.length && project) {
       for (const v of timeline) {
         v.file.text().then((testo) => api.importaTimeline(v.file.name, testo))
           .then(timelineImportata).catch((e) => setError(e.message))
       }
-    } else if (timeline.length) setError('apri o crea un progetto prima di importare una timeline')
+    } else if (timeline.length) setError('open or create a project before importing a timeline')
     const voci = tutte
       .filter((v) => MEDIA_EXT.test(v.file.name))
       // ogni sottocartella trascinata resta tale nel bin, dentro quella su cui si e' lasciato
       .map((v) => ({ file: v.file, cartella: [folder, v.cartella].filter(Boolean).join('/') }))
     if (!voci.length) {
-      if (!timeline.length && !sub.length) setError('nessun file multimediale riconosciuto')
+      if (!timeline.length && !sub.length) setError('no media files recognised')
       return
     }
     if (!project) {
       // trascinare dei file e' il primo gesto naturale: senza progetto se ne
       // crea uno nella cartella proposta, col nome del primo file
-      if (!sys?.home) { setError('crea prima un progetto'); return }
+      if (!sys?.home) { setError('create a project first'); return }
       const sep = sys.home.includes('\\') ? '\\' : '/'
-      const nome = voci[0].file.name.replace(/\.[^.]+$/, '') || 'progetto'
+      const nome = voci[0].file.name.replace(/\.[^.]+$/, '') || 'project'
       try {
         progettoNuovo(await api.createProject(`${sys.home}${sep}${nome}.json`, nome, '1080p'))
       } catch (e) { setError(e.message); return }
@@ -321,8 +321,8 @@ export default function App() {
     try {
       const { liberi, cartella } = await api.uploadSpazio()
       if (liberi < byte) {
-        setError(`servono ${(byte / 1e9).toFixed(1)} GB in ${cartella}, liberi ${(liberi / 1e9).toFixed(1)} GB. `
-          + 'Per usare i file dove sono, senza copiarli: + → «importa cartella».')
+        setError(`${(byte / 1e9).toFixed(1)} GB needed in ${cartella}, ${(liberi / 1e9).toFixed(1)} GB free. `
+          + 'To use the files where they are, without copying them: + → «import folder».')
         return
       }
     } catch { /* lo spazio non si sa: si prova lo stesso */ }
@@ -392,7 +392,7 @@ export default function App() {
       }
       if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        if (project) run('save', {}).then(() => flash('progetto salvato')).catch((err) => setError(err.message))
+        if (project) run('save', {}).then(() => flash('project saved')).catch((err) => setError(err.message))
         return
       }
       const fn = act[e.key] || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && act[e.key.toLowerCase()])
@@ -412,8 +412,8 @@ export default function App() {
     if (!job || job.state === 'running' || jobVisto.current === job.id) return
     jobVisto.current = job.id
     if (dialog === 'render') return
-    if (job.state === 'done') flash(`esportato: ${job.output}`, 6000)
-    else if (job.state === 'error') setError(`export fallito: ${job.error}`)
+    if (job.state === 'done') flash(`exported: ${job.output}`, 6000)
+    else if (job.state === 'error') setError(`export failed: ${job.error}`)
   }, [job, dialog, flash])
 
   /** Progetto appena creato o aperto: stato nuovo, testina e selezione a zero. */
@@ -469,48 +469,48 @@ export default function App() {
       <div className="topbar">
         <span className="name"><img src="/logo.svg" alt="" className="marchio" />vedit</span>
         <button className="ghost" onClick={() => setDialog('new')}>
-          <Icon name="nuovo" />nuovo</button>
+          <Icon name="nuovo" />new</button>
         <button className="ghost" onClick={() => setDialog('open')}>
-          <Icon name="apri" />apri</button>
+          <Icon name="apri" />open</button>
         <button className="ghost" disabled={!project} onClick={() => run('save', {})
-          .then(() => flash('progetto salvato')).catch((e) => setError(e.message))}>
-          <Icon name="salva" />salva</button>
+          .then(() => flash('project saved')).catch((e) => setError(e.message))}>
+          <Icon name="salva" />save</button>
 
         <span className="sep" />
-        <button className="icon" disabled={!project} title="Annulla (Ctrl+Z)"
+        <button className="icon" disabled={!project} title="Undo (Ctrl+Z)"
           onClick={() => run('undo').catch((e) => setError(e.message))}><Icon name="annulla" /></button>
-        <button className="icon" disabled={!project} title="Ripeti (Ctrl+Y)"
+        <button className="icon" disabled={!project} title="Redo (Ctrl+Y)"
           onClick={() => run('redo').catch((e) => setError(e.message))}><Icon name="ripeti" /></button>
 
         <span className="sep" />
-        <button className="ghost act sky" disabled={!project} title="Nuova traccia video"
+        <button className="ghost act sky" disabled={!project} title="New video track"
           onClick={() => run('add_track', { kind: 'video' }).catch((e) => setError(e.message))}>
-          <Icon name="video" />traccia video</button>
-        <button className="ghost act mint" disabled={!project} title="Nuova traccia audio"
+          <Icon name="video" />video track</button>
+        <button className="ghost act mint" disabled={!project} title="New audio track"
           onClick={() => run('add_track', { kind: 'audio' }).catch((e) => setError(e.message))}>
-          <Icon name="audio" />traccia audio</button>
-        <button className="ghost act grape" disabled={!project} title="Titolo alla testina"
-          onClick={() => run('add_text', { text: 'Testo', start: playhead, duration: 3 })
+          <Icon name="audio" />audio track</button>
+        <button className="ghost act grape" disabled={!project} title="Title at the playhead"
+          onClick={() => run('add_text', { text: 'Text', start: playhead, duration: 3 })
             .then((c) => setSelected(c.id)).catch((e) => setError(e.message))}>
-          <Icon name="testo" />titolo</button>
+          <Icon name="testo" />title</button>
         <button className="ghost act sun" disabled={!project}
-          title="Grafica animata in HTML/CSS/JS alla testina: si vede animata qui, dal vivo"
+          title="Animated HTML/CSS/JS graphics at the playhead: plays live right here"
           onClick={() => run('add_html', { start: playhead, duration: 4 })
             .then((c) => setSelected(c.id)).catch((e) => setError(e.message))}>
-          <Icon name="codice" />grafica html</button>
+          <Icon name="codice" />html graphics</button>
         <MenuParticelle disabled={!project}
           onAggiungi={(kind) => run('add_particles', { kind, start: playhead, duration: 5 })
             .then((c) => setSelected(c.id)).catch((err) => setError(err.message))}
           onSuMisura={() => setDialog('particelle')} />
 
         <span className="spacer" />
-        <span className="path" title={path || ''}>{path || 'nessun progetto'}</span>
+        <span className="path" title={path || ''}>{path || 'no project'}</span>
         <button className="ghost" disabled={!project}
-          title="Genera copie a bassa risoluzione: anteprime molto piu' rapide"
-          onClick={() => { setBusy('genero i proxy…'); api.buildProxies() }}>
+          title="Make low-resolution copies: much faster previews"
+          onClick={() => { setBusy('building proxies…'); api.buildProxies() }}>
           <Icon name="proxy" />proxy</button>
         <button className="primary" disabled={!project || !project.duration}
-          onClick={() => setDialog('render')}><Icon name="esporta" />esporta</button>
+          onClick={() => setDialog('render')}><Icon name="esporta" />export</button>
       </div>
 
       <div className="middle">
@@ -520,7 +520,7 @@ export default function App() {
               <button className={leftTab === 'media' ? 'on' : ''}
                 onClick={() => setLeftTab('media')}><Icon name="video" />media</button>
               <button className={leftTab === 'libreria' ? 'on' : ''}
-                onClick={() => setLeftTab('libreria')}><Icon name="libreria" />libreria</button>
+                onClick={() => setLeftTab('libreria')}><Icon name="libreria" />library</button>
             </div>
             {leftTab === 'media' ? (
               <MediaBin project={project} run={run} setError={setError} uploading={uploading}
@@ -542,18 +542,18 @@ export default function App() {
         <div className="center">
           <div className="tabs">
             <button className={tab === 'program' ? 'on' : ''} onClick={() => setTab('program')}>
-              programma
+              program
             </button>
             <button className={tab === 'source' ? 'on' : ''} disabled={!source}
               onClick={() => setTab('source')}>
-              sorgente{source ? `: ${source.name}` : ''}
+              source{source ? `: ${source.name}` : ''}
             </button>
             <span className="spacer" />
           </div>
 
           {!sys ? (
             <div className="preview"><div className="empty">
-              <Icon name="attesa" className="spin" /> collegamento al server…
+              <Icon name="attesa" className="spin" /> connecting to the server…
             </div></div>
           ) : !project ? (
             <Benvenuto recenti={sys.recenti} onNew={() => setDialog('new')}
@@ -574,9 +574,9 @@ export default function App() {
           )}
 
           <div className="transport">
-            <button className="icon" title="Torna all'inizio (Home)"
+            <button className="icon" title="Back to start (Home)"
               onClick={() => seek(0)} disabled={!project}><Icon name="inizio" /></button>
-            <button className="icon" title={playing ? 'Pausa (spazio)' : 'Riproduci (spazio)'}
+            <button className="icon" title={playing ? 'Pause (space)' : 'Play (space)'}
               onClick={() => setPlaying((p) => !p)} disabled={!project?.duration}>
               <Icon name={playing ? 'pausa' : 'play'} size={17} />
             </button>
@@ -587,20 +587,20 @@ export default function App() {
             <button
               className={`modo ${diretta ? 'on' : ''}`}
               title={diretta
-                ? 'Diretta: compone il browser, nessuna attesa. Alcuni effetti non si vedono.'
-                : 'Fedele: lo renderizza ffmpeg, identico al file finale, ma va preparato.'}
+                ? 'Live: the browser composites it, no waiting. Some effects are not shown.'
+                : 'Exact: rendered by ffmpeg, identical to the final file, but it needs preparing.'}
               onClick={() => setDiretta((d) => {
                 localStorage.setItem('vedit.diretta', d ? 'no' : 'si')
                 return !d
               })}>
-              {diretta ? 'diretta' : 'fedele'}
+              {diretta ? 'live' : 'exact'}
             </button>
 
             <span className="sep" />
-            <button className="icon" disabled={!selectedClip} title="Taglia alla testina (S)"
+            <button className="icon" disabled={!selectedClip} title="Split at the playhead (S)"
               onClick={() => run('split_clip', { clip_id: selected, at: playhead })
                 .catch((e) => setError(e.message))}><Icon name="taglia" /></button>
-            <button className="icon danger" disabled={!selectedClip} title="Elimina la clip (Canc)"
+            <button className="icon danger" disabled={!selectedClip} title="Delete the clip (Del)"
               onClick={() => run('remove_clip', { clip_id: selected })
                 .then(() => setSelected(null)).catch((e) => setError(e.message))}>
               <Icon name="cestino" /></button>
@@ -609,15 +609,15 @@ export default function App() {
             <span className="ctl">
               <span>zoom</span>
               <input type="range" min="8" max="400" value={pxPerSec} style={{ width: 120 }}
-                title="Scala dei tempi in timeline"
+                title="Timeline time scale"
                 onChange={(e) => setPxPerSec(+e.target.value)} />
             </span>
             <span className="ctl">
-              <span>tracce</span>
+              <span>tracks</span>
               {/* il minimo e' l'altezza sotto la quale i comandi della testata
                   non ci starebbero piu': due righe da 18px, spazi e margini */}
               <input type="range" min="44" max="140" step="2" value={sizes.trackH}
-                style={{ width: 84 }} title="Altezza delle tracce: abbassala per vederne di piu'"
+                style={{ width: 84 }} title="Track height: lower it to see more tracks"
                 onChange={(e) => setSizes((s) => ({ ...s, trackH: +e.target.value }))} />
             </span>
           </div>
@@ -637,12 +637,12 @@ export default function App() {
           <div className="panel">
             <div className="tabs destra">
               <button className={rightTab === 'chat' ? 'on' : ''}
-                onClick={() => setRightTab('chat')}><Icon name="assistente" />assistente</button>
+                onClick={() => setRightTab('chat')}><Icon name="assistente" />assistant</button>
               <button className={rightTab === 'props' ? 'on' : ''}
-                onClick={() => setRightTab('props')}><Icon name="proprieta" />proprieta'</button>
-              <button className={rightTab === 'scope' ? 'on' : ''} title="Waveform, parade, vettorscopio, istogramma"
+                onClick={() => setRightTab('props')}><Icon name="proprieta" />properties</button>
+              <button className={rightTab === 'scope' ? 'on' : ''} title="Waveform, parade, vectorscope, histogram"
                 onClick={() => setRightTab('scope')}><Icon name="color" />scope</button>
-              <button className={rightTab === 'mixer' ? 'on' : ''} title="Fader, muto/solo, misuratori, stereo o 5.1"
+              <button className={rightTab === 'mixer' ? 'on' : ''} title="Faders, mute/solo, meters, stereo or 5.1"
                 onClick={() => setRightTab('mixer')}><Icon name="altoparlante" />mixer</button>
             </div>
             {rightTab === 'mixer' ? (
@@ -684,28 +684,28 @@ export default function App() {
             .then(progettoNuovo).catch((e) => setError(e.message))} />
       )}
       {dialog === 'particelle' && (
-        <EditorParticelle titolo="Particelle su misura" applica="aggiungi alla timeline"
+        <EditorParticelle titolo="Custom particles" applica="add to the timeline"
           setError={setError} onClose={() => setDialog(null)}
           onApplica={(custom) => run('add_particles', { kind: 'custom', custom, start: playhead, duration: 5 })
             .then((c) => setSelected(c.id)).catch((err) => setError(err.message))} />
       )}
       {dialog === 'open' && (
-        <FileBrowser title="Apri progetto" multiple={false} onClose={() => setDialog(null)}
+        <FileBrowser title="Open project" multiple={false} onClose={() => setDialog(null)}
           memoria="progetti" recenti={sys?.recenti}
           filter={(n) => n.toLowerCase().endsWith('.json')}
           onPick={([p]) => openProject(p)} />
       )}
       {dialog === 'import' && (
-        <FileBrowser title="Importa file" onClose={() => setDialog(null)} memoria="media"
+        <FileBrowser title="Import files" onClose={() => setDialog(null)} memoria="media"
           filter={(n) => MEDIA_EXT.test(n) || TIMELINE_EXT.test(n) || SUB_EXT.test(n)}
           onPick={importPaths} onPickFolder={importFolder} />
       )}
       {dialog === 'render' && (
         <RenderDialog project={project} path={path} job={job} onStart={startRender}
           onSottotitoli={(track, out) => api.esportaSottotitoli(track, out)
-            .then((r) => flash(`${r.righe} sottotitoli in ${r.file}`, 4000)).catch((e) => setError(e.message))}
+            .then((r) => flash(`${r.righe} subtitles in ${r.file}`, 4000)).catch((e) => setError(e.message))}
           onTimeline={(out) => api.esportaTimeline(out).then((r) => {
-            const msg = `${r.formato}: ${r.clip} clip in ${r.file}`
+            const msg = `${r.formato}: ${r.clip} clips in ${r.file}`
             if (r.avvisi.length) setError(`${msg}. ${r.avvisi.join(' · ')}`)
             else flash(msg, 4000)
           }).catch((e) => setError(e.message))}
@@ -716,14 +716,14 @@ export default function App() {
         <Confirm {...confirm} onClose={() => setConfirm(null)} />
       )}
 
-      {dropping && <div className="dropzone">rilascia qui i file da importare</div>}
+      {dropping && <div className="dropzone">drop the files to import here</div>}
       {busy && (
         <div className="toast ok"><Icon name="attesa" className="spin" />{busy}</div>
       )}
       {error && (
         <div className="toast">
           <span>{error}</span>
-          <button className="icon sm" title="Chiudi" onClick={() => setError(null)}>
+          <button className="icon sm" title="Close" onClick={() => setError(null)}>
             <Icon name="chiudi" size={13} />
           </button>
         </div>
@@ -742,19 +742,19 @@ function Benvenuto({ recenti, onNew, onOpen, onRecent }) {
     <div className="preview benvenuto">
       <div className="benvenuto-box">
         <img src="/logo.svg" alt="vedit" className="benvenuto-logo" />
-        <div className="benvenuto-titolo">Ciao! Facciamo un video.</div>
+        <div className="benvenuto-titolo">Hi! Let's make a video.</div>
         <div className="passi">
-          <div className="passo"><b>1</b><span>Crea un progetto</span><small>o riaprine uno</small></div>
-          <div className="passo"><b>2</b><span>Trascina i tuoi file</span><small>video, foto, musica</small></div>
-          <div className="passo"><b>3</b><span>Monta e esporta</span><small>da solo o con l'assistente</small></div>
+          <div className="passo"><b>1</b><span>Create a project</span><small>or reopen one</small></div>
+          <div className="passo"><b>2</b><span>Drop your files</span><small>video, photos, music</small></div>
+          <div className="passo"><b>3</b><span>Edit and export</span><small>on your own or with the assistant</small></div>
         </div>
         <div className="benvenuto-azioni">
-          <button className="primary" onClick={onNew}><Icon name="nuovo" />nuovo progetto</button>
-          <button onClick={onOpen}><Icon name="apri" />apri…</button>
+          <button className="primary" onClick={onNew}><Icon name="nuovo" />new project</button>
+          <button onClick={onOpen}><Icon name="apri" />open…</button>
         </div>
         {recenti?.length > 0 && (
           <div className="benvenuto-recenti">
-            <div className="hint">recenti</div>
+            <div className="hint">recent</div>
             {recenti.slice(0, 6).map((r) => (
               <button key={r.path} className="ghost recente" title={r.path}
                 onClick={() => onRecent(r.path)}>
@@ -765,7 +765,7 @@ function Benvenuto({ recenti, onNew, onOpen, onRecent }) {
             ))}
           </div>
         )}
-        <div className="hint">Puoi anche trascinare qui dei file: il progetto si crea da solo.</div>
+        <div className="hint">You can also drop files here: the project is created for you.</div>
       </div>
     </div>
   )

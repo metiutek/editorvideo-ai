@@ -107,7 +107,7 @@ const fail = (area, msg) => problems.push(`${area}: ${msg}`)
 // ------------------------------------------- 0. si parte dall'assistente
 // e' il cuore dell'app: senza una scelta salvata la scheda aperta a destra e' la chat
 const schedaAttiva = [...root.querySelectorAll('.tabs button.on')].map((b) => b.textContent.trim())
-if (!schedaAttiva.includes('assistente')) {
+if (!schedaAttiva.includes('assistant')) {
   fail('pannello destro', `all'avvio e' aperta "${schedaAttiva.join(', ')}" invece dell'assistente`)
 }
 
@@ -175,7 +175,7 @@ key('Escape')
 const trackWithClips = [...root.querySelectorAll('.track')]
   .find((t) => t.querySelector('.clip') && !t.classList.contains('locked'))
 const delBtn = [...(trackWithClips?.querySelectorAll('.track-head button') || [])]
-  .find((b) => (b.getAttribute('title') || '').includes('Elimina la traccia'))
+  .find((b) => (b.getAttribute('title') || '').includes('Delete the track'))
 if (!delBtn) fail('tracce', 'nessun comando di eliminazione sulla traccia piena')
 if (delBtn?.disabled) fail('tracce', 'eliminazione disattivata su una traccia non bloccata')
 click(delBtn)

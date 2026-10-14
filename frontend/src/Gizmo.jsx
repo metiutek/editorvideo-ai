@@ -107,7 +107,7 @@ export default function Gizmo({ project, clip, imgRef, playhead, run, setError }
       className={`gizmo ${animated ? 'locked' : ''}`}
       style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
       onPointerDown={(e) => start(e, 'move')}
-      title={animated ? 'parametro animato: modificalo dai keyframe' : 'trascina per spostare'}
+      title={animated ? 'animated parameter: edit it from the keyframes' : 'drag to move'}
     >
       {!animated && ['tl', 'tr', 'bl', 'br'].map((c) => (
         <div key={c} className={`gh ${c}`} onPointerDown={(e) => start(e, c)} />
