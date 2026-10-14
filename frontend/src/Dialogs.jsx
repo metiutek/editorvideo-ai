@@ -273,7 +273,7 @@ const PROFILI = {
  * Esporta. Il file di uscita viene proposto accanto al progetto, con il suo
  * nome: si preme "esporta" e basta, il percorso si cambia solo se si vuole.
  */
-export function RenderDialog({ project, path, job, onStart, onClose, onTimeline }) {
+export function RenderDialog({ project, path, job, onStart, onClose, onTimeline, onSottotitoli }) {
   const proposto = (codec) => {
     if (!path) return ''
     const base = path.replace(/\.json$/i, '')
@@ -287,6 +287,13 @@ export function RenderDialog({ project, path, job, onStart, onClose, onTimeline 
   const [range, setRange] = useState(false)
   const [start, setStart] = useState(0)
   const [end, setEnd] = useState(project?.duration || 0)
+  // tracce fatte di testi: possono uscire come sottotitoli del file (render.SOTTOTITOLI_CODEC)
+  const testi = (project?.tracks || []).filter(
+    (t) => t.kind === 'video' && t.clips.length && t.clips.every((c) => c.type === 'text'))
+  const [subTrack, setSubTrack] = useState(() => testi.find((t) => /sottotit/i.test(t.name))?.id || '')
+  const [subLang, setSubLang] = useState('ita')
+  const [subBurn, setSubBurn] = useState(false)
+  const subOk = /\.(mp4|mov|m4v|mkv|webm)$/i.test(output.trim())
 
   const running = job && job.state === 'running'
 
@@ -301,6 +308,9 @@ export function RenderDialog({ project, path, job, onStart, onClose, onTimeline 
               output: output.trim(), quality, codec,
               width: f.w, height: f.h,
               start: range ? start : null, end: range ? end : null,
+              ...(subTrack && (subOk || subBurn)
+                ? (subBurn ? {} : { subtitle_track: subTrack, subtitle_lang: subLang })
+                : {}),
             })
           }}>
           {running ? <><Icon name="attesa" className="spin" />in corso…</> : <><Icon name="esporta" />esporta</>}
@@ -340,6 +350,36 @@ export function RenderDialog({ project, path, job, onStart, onClose, onTimeline 
         <select value={formato} onChange={(e) => setFormato(e.target.value)}>
           {FORMATI.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
         </select><span /></div>
+      {testi.length > 0 && (<>
+        <div className="row"><label>sottotitoli</label>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select value={subTrack} onChange={(e) => setSubTrack(e.target.value)}>
+              <option value="">nessuna traccia</option>
+              {testi.map((t) => <option key={t.id} value={t.id}>{t.name || t.id} ({t.clips.length})</option>)}
+            </select>
+            {subTrack && <>
+              <input style={{ width: 56 }} value={subLang} title="lingua, codice ISO (ita, eng, fra...)"
+                onChange={(e) => setSubLang(e.target.value.trim().toLowerCase().slice(0, 3))} />
+              <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <input type="checkbox" checked={subBurn} onChange={(e) => setSubBurn(e.target.checked)} />
+                impressi</label>
+              {onSottotitoli && (
+                <button title="Salva la traccia come file .srt accanto all'uscita"
+                  onClick={() => onSottotitoli(subTrack, (output.trim() || path).replace(/\.[^./\\]+$/, '') + '.srt')}>
+                  salva .srt</button>
+              )}
+            </>}
+          </div><span /></div>
+        {subTrack && (
+          <div className="hint" style={{ margin: '-2px 0 8px' }}>
+            {subBurn
+              ? "Impressi nell'immagine, come in timeline: si vedono ovunque, non si spengono."
+              : subOk
+                ? "Traccia di sottotitoli nel file: il player li accende e spegne, YouTube li legge. Nell'immagine non si imprimono."
+                : 'Questo formato non porta sottotitoli come traccia: escono impressi. Per la traccia usa .mp4, .mov, .mkv o .webm.'}
+          </div>
+        )}
+      </>)}
       <div className="row"><label>solo parte</label>
         <input type="checkbox" checked={range} onChange={(e) => setRange(e.target.checked)} /><span /></div>
       {range && (

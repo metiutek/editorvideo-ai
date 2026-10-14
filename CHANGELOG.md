@@ -5,6 +5,14 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Sottotitoli: import e traccia nel file.** Un `.srt`, `.vtt` o `.ass` (scelto o trascinato
+  in *importa*, `import_subtitles`) diventa una traccia *sottotitoli* di clip di testo
+  modificabili, in basso su riquadro, in un solo passo di undo (`captions.leggi`,
+  `Store.import_subtitles`). All'export la traccia esce impressa oppure come traccia di
+  sottotitoli del file, con la lingua: `mov_text` in .mp4/.mov, SRT in .mkv, WebVTT in .webm,
+  con video e audio non ricodificati e i tempi riportati al tratto esportato
+  (`RenderOptions.subtitle_track`, `render_video(subtitle_track=...)`). In quel caso la traccia
+  non si imprime. *salva .srt* / `export_subtitles` la scrivono come file.
 - **Timeline per e da altri montaggi: FCPXML, OTIO, EDL.** Nuovo `interscambio.py`. Export
   dal dialogo *esporta*, da `export_timeline` e da `vedit export-timeline`: FCPXML 1.9 e OTIO
   con tutte le tracce e i percorsi dei file, EDL CMX3600 per una traccia. Escono tagli,
@@ -93,6 +101,8 @@ Le voci più recenti stanno in cima.
   `.wma`, `.aiff` e `.gif` trascinati.
 
 ### Corretto
+- **Export `.webm` con audio.** Prendeva l'AAC predefinito, che WebM non accetta, e ffmpeg
+  falliva: ora l'audio di un `.webm` è Opus.
 - **Un progetto nuovo parte senza stile di montaggio.** Lo stile scelto nella chat restava
   quello del progetto precedente (era salvato nel browser e basta): creare un progetto, dal
   dialogo o trascinando dei file senza progetto aperto, ora lo rimette su *nessuno*.

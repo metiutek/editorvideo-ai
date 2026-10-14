@@ -141,6 +141,10 @@ def build_tools() -> list[dict]:
         _tool("trim_clip",
               "Cambia attacco e durata di una clip senza spostarla.",
               {"clip_id": _STR, "in_": _NUM, "duration": _NUM}, ["clip_id"]),
+        _tool("import_subtitles",
+              "Un file .srt, .vtt o .ass dell'utente diventa una traccia di testi "
+              "modificabili. offset in secondi sposta tutto.",
+              {"path": _STR, "offset": _NUM}, ["path"]),
         _tool("ripple_trim",
               "Allunga o accorcia un bordo (edge start|end) e sposta tutto il seguito della "
               "traccia, senza lasciare buchi. delta in secondi: > 0 su end allunga, su start "

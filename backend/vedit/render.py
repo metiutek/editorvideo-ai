@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import effects as fx
-from . import ffmpeg, htmlclip, hw, plugins, probe, proxy
+from . import captions, ffmpeg, htmlclip, hw, plugins, probe, proxy
 from .graph import CompileOptions, compile_project
 from .model import Project
 
@@ -74,6 +74,13 @@ class RenderOptions:
     # render a pezzi paralleli: None = deciso da ``_pezzi_paralleli`` (o da
     # VEDIT_RENDER_JOBS), 1 = un grafo solo come prima
     jobs: int | None = None
+    # sottotitoli come traccia nel file (soft): da una traccia di testi o da un
+    # file .srt/.vtt/.ass. Di norma la traccia scelta non si imprime
+    # nell'immagine, se no si vedrebbero due volte; ``burn_subtitles`` la tiene
+    subtitle_track: str | None = None
+    subtitle_file: str | None = None
+    subtitle_lang: str = "ita"
+    burn_subtitles: bool = False
 
 
 @dataclass
@@ -233,6 +240,9 @@ def _codec_audio(opts: RenderOptions, ext: str, def_a: str) -> str:
     # accanto a un mezzanine l'audio resta non compresso, come se lo aspetta chi lo riceve
     if opts.codec in hw.MEZZANINE or ext == ".mxf":
         return "pcm_s24le"
+    # WebM accetta solo Opus o Vorbis: l'AAC predefinito faceva fallire ogni .webm con audio
+    if ext == ".webm" and opts.audio_codec not in ("libopus", "libvorbis"):
+        return def_a
     return opts.audio_codec or def_a
 
 
@@ -389,12 +399,63 @@ def _passaggio(project: Project, opts: RenderOptions, workdir: Path, on_progress
     return args, duration, warnings, enc
 
 
+# contenitore -> codec dei sottotitoli soft; MXF e GIF non ne portano
+SOTTOTITOLI_CODEC = {".mp4": "mov_text", ".mov": "mov_text", ".m4v": "mov_text",
+                     ".mkv": "srt", ".webm": "webvtt"}
+
+
+def _righe_sottotitoli(project: Project, opts: RenderOptions) -> list[dict] | None:
+    """Le righe da mettere nel file, gia' riportate al tratto renderizzato."""
+    if not opts.subtitle_track and not opts.subtitle_file:
+        return None
+    ext = Path(opts.output).suffix.lower()
+    if ext not in SOTTOTITOLI_CODEC:
+        raise ValueError(f"un file {ext} non porta sottotitoli come traccia: usa .mp4, .mov, "
+                         ".mkv o .webm, oppure imprimili")
+    a = opts.start or 0.0
+    if opts.subtitle_track:
+        return captions.da_traccia(project, opts.subtitle_track, a, opts.end)
+    p = Path(opts.subtitle_file)
+    fmt = p.suffix.lower().lstrip(".")
+    righe = captions.leggi(p.read_text(encoding="utf-8-sig", errors="replace"),
+                           "ass" if fmt == "ssa" else fmt)
+    b = opts.end if opts.end is not None else float("inf")
+    return [{**r, "start": max(r["start"], a) - a, "end": min(r["end"], b) - a}
+            for r in righe if min(r["end"], b) - max(r["start"], a) > 1e-3]
+
+
+def _metti_sottotitoli(out_path: Path, righe: list[dict], lingua: str, workdir: Path) -> None:
+    """Rimuxa il file con i sottotitoli come traccia a se': video e audio non si ricodificano."""
+    srt = workdir / "sottotitoli.srt"
+    srt.write_text(captions.to_srt(righe), encoding="utf-8", newline="\n")
+    tmp = out_path.with_name(f"~sub_{out_path.name}")
+    args = [ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+            "-i", str(out_path), "-i", str(srt), "-map", "0", "-map", "1", "-c", "copy",
+            "-c:s", SOTTOTITOLI_CODEC[out_path.suffix.lower()],
+            "-metadata:s:s:0", f"language={lingua or 'und'}", "-disposition:s:0", "default"]
+    if out_path.suffix.lower() in (".mp4", ".mov", ".m4v"):
+        args += ["-movflags", "+faststart"]
+    args.append(str(tmp))
+    proc = ffmpeg.run(args, check=False, timeout=3600)
+    if proc.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        raise ffmpeg.FFmpegError(args, proc.returncode, (proc.stderr or "")[-2000:])
+    os.replace(tmp, out_path)
+
+
 def render(project: Project, opts: RenderOptions, on_progress: Progress | None = None) -> RenderResult:
     if not opts.output:
         raise ValueError("percorso di output mancante")
     controlla_codec(opts.codec, opts.output)
     out_path = Path(opts.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    righe = _righe_sottotitoli(project, opts)
+    if opts.subtitle_track and not opts.burn_subtitles:
+        # la traccia diventa sottotitoli del file: nell'immagine non si imprime
+        project = Project.from_obj(project.to_dict())
+        for t in project.tracks:
+            if t.id == opts.subtitle_track:
+                t.hidden = True
 
     workdir = Path(tempfile.mkdtemp(prefix="vedit_"))
     t0 = time.time()
@@ -406,6 +467,10 @@ def render(project: Project, opts: RenderOptions, on_progress: Progress | None =
         else:
             args, duration, warnings, enc = _passaggio(project, opts, workdir, on_progress, t0)
 
+        if righe:
+            _metti_sottotitoli(out_path, righe, opts.subtitle_lang, workdir)
+            warnings = [*warnings, f"{len(righe)} sottotitoli nel file come traccia "
+                        f"({opts.subtitle_lang})"]
         size = out_path.stat().st_size if out_path.exists() else 0
         if size == 0:
             raise RuntimeError(f"render terminato ma il file e' vuoto: {out_path}")

@@ -18,6 +18,8 @@ import { clamp, findClip, fmt } from './util.js'
 const round3 = (v) => Math.round(v * 1000) / 1000
 
 // timeline di un altro montaggio: si accodano a quella del progetto (interscambio.py)
+// sottotitoli esistenti: diventano una traccia di testi (Store.import_subtitles)
+const SUB_EXT = /\.(srt|vtt|ass|ssa)$/i
 const TIMELINE_EXT = /\.(edl|fcpxml|otio)$/i
 const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|flac|ogg|opus|wma|aiff?|png|jpe?g|webp|bmp|tiff?|gif)$/i
 
@@ -252,7 +254,13 @@ export default function App() {
     if (r.avvisi?.length) setError(`${msg}. ${r.avvisi.join(' · ')}`)
     else flash(msg, 4000)
   }
+  const sottotitoliImportati = (r) =>
+    flash(`${r.righe} sottotitoli sulla traccia ${r.track}, da ${fmt(r.da)} a ${fmt(r.a)}`, 4000)
   const importPaths = (paths) => {
+    for (const p of paths.filter((x) => SUB_EXT.test(x))) {
+      run('import_subtitles', { path: p }).then(sottotitoliImportati).catch((e) => setError(e.message))
+    }
+    paths = paths.filter((x) => !SUB_EXT.test(x))
     const tl = paths.filter((p) => TIMELINE_EXT.test(p))
     for (const p of tl) api.importaTimeline(p).then(timelineImportata).catch((e) => setError(e.message))
     const media = paths.filter((p) => !TIMELINE_EXT.test(p))
@@ -275,6 +283,14 @@ export default function App() {
     const tutte = fileList.then ? await fileList : [...fileList].map((file) => ({ file, cartella: '' }))
     // un .fcpxml / .otio / .edl trascinato e' una timeline, non un media
     const timeline = tutte.filter((v) => TIMELINE_EXT.test(v.file.name))
+    const sub = tutte.filter((v) => SUB_EXT.test(v.file.name))
+    if (sub.length && project) {
+      for (const v of sub) {
+        v.file.text().then((testo) => run('import_subtitles', {
+          testo, fmt: v.file.name.split('.').pop().toLowerCase(),
+        })).then(sottotitoliImportati).catch((e) => setError(e.message))
+      }
+    } else if (sub.length) setError('apri o crea un progetto prima di importare i sottotitoli')
     if (timeline.length && project) {
       for (const v of timeline) {
         v.file.text().then((testo) => api.importaTimeline(v.file.name, testo))
@@ -285,7 +301,10 @@ export default function App() {
       .filter((v) => MEDIA_EXT.test(v.file.name))
       // ogni sottocartella trascinata resta tale nel bin, dentro quella su cui si e' lasciato
       .map((v) => ({ file: v.file, cartella: [folder, v.cartella].filter(Boolean).join('/') }))
-    if (!voci.length) { if (!timeline.length) setError('nessun file multimediale riconosciuto'); return }
+    if (!voci.length) {
+      if (!timeline.length && !sub.length) setError('nessun file multimediale riconosciuto')
+      return
+    }
     if (!project) {
       // trascinare dei file e' il primo gesto naturale: senza progetto se ne
       // crea uno nella cartella proposta, col nome del primo file
@@ -673,10 +692,13 @@ export default function App() {
       )}
       {dialog === 'import' && (
         <FileBrowser title="Importa file" onClose={() => setDialog(null)} memoria="media"
-          filter={(n) => MEDIA_EXT.test(n) || TIMELINE_EXT.test(n)} onPick={importPaths} onPickFolder={importFolder} />
+          filter={(n) => MEDIA_EXT.test(n) || TIMELINE_EXT.test(n) || SUB_EXT.test(n)}
+          onPick={importPaths} onPickFolder={importFolder} />
       )}
       {dialog === 'render' && (
         <RenderDialog project={project} path={path} job={job} onStart={startRender}
+          onSottotitoli={(track, out) => api.esportaSottotitoli(track, out)
+            .then((r) => flash(`${r.righe} sottotitoli in ${r.file}`, 4000)).catch((e) => setError(e.message))}
           onTimeline={(out) => api.esportaTimeline(out).then((r) => {
             const msg = `${r.formato}: ${r.clip} clip in ${r.file}`
             if (r.avvisi.length) setError(`${msg}. ${r.avvisi.join(' · ')}`)

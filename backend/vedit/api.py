@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import (domande, ffmpeg, figli, htmlclip, hw, interscambio, llm, particelle, presets, proxy,
+from . import (captions, domande, ffmpeg, figli, htmlclip, hw, interscambio, llm, particelle, presets, proxy,
                render, review, stili)
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
@@ -67,7 +67,7 @@ OPS = {
     "import_media", "set_media", "remove_media", "rename_folder",
     "add_track", "set_track", "set_sidechain", "remove_track", "move_track",
     "add_clip", "add_text", "add_color", "add_html", "add_particles", "set_particles", "set_html", "remove_clip", "unlink_clip", "move_clip",
-    "ripple_trim", "roll_edit", "slip_clip", "slide_clip", "move_layer", "trim_clip",
+    "ripple_trim", "roll_edit", "slip_clip", "slide_clip", "import_subtitles", "move_layer", "trim_clip",
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
@@ -1206,6 +1206,9 @@ class RenderBody(BaseModel):
     # lati, contain lascia le bande.
     width: int | None = None
     height: int | None = None
+    subtitle_track: str | None = None
+    subtitle_lang: str = "ita"
+    burn_subtitles: bool = False
 
 
 @app.post("/api/render")
@@ -1214,6 +1217,8 @@ def render_start(body: RenderBody) -> dict:
     # codec e contenitore sbagliati si dicono subito, non dopo minuti di lavoro
     try:
         render.controlla_codec(body.codec, body.output)
+        if body.subtitle_track and Path(body.output).suffix.lower() not in render.SOTTOTITOLI_CODEC:
+            raise ValueError("i sottotitoli come traccia vanno in .mp4, .mov, .mkv o .webm")
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     job_id = uuid.uuid4().hex[:8]
@@ -1237,6 +1242,8 @@ def render_start(body: RenderBody) -> dict:
                 output=body.output, quality=body.quality, codec=body.codec,
                 bitrate=body.bitrate, start=body.start, end=body.end,
                 width=body.width, height=body.height,
+                subtitle_track=body.subtitle_track, subtitle_lang=body.subtitle_lang,
+                burn_subtitles=body.burn_subtitles,
             )
             res = render.render(project, opts, on_progress=on_progress)
             S.jobs[job_id].update(state="done", percent=100.0, output=res.output,
@@ -1496,6 +1503,25 @@ def timeline_export(body: TimelineBody) -> dict:
     S.need()
     try:
         return interscambio.esporta(_snapshot(), body.path, body.track)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class SottotitoliBody(BaseModel):
+    track: str
+    path: str
+
+
+@app.post("/api/subtitles/export")
+def subtitles_export(body: SottotitoliBody) -> dict:
+    """Una traccia di testi come .srt o .vtt."""
+    S.need()
+    fmt = Path(body.path).suffix.lower().lstrip(".")
+    if fmt not in ("srt", "vtt"):
+        raise HTTPException(400, "si scrive .srt o .vtt")
+    try:
+        righe = captions.da_traccia(_snapshot(), body.track)
+        return {"file": captions.write(body.path, righe, fmt), "righe": len(righe)}
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

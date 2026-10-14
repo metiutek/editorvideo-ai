@@ -15,6 +15,7 @@ resto: e' esattamente l'effetto dei sottotitoli di TikTok/Reels.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -196,3 +197,72 @@ def write(path: str, righe: list[dict], fmt: str = "ass", **kw) -> str:
     # ASS e SRT vogliono UTF-8 senza BOM: ffmpeg legge male il BOM
     p.write_text(testo, encoding="utf-8", newline="\n")
     return str(p.resolve())
+
+
+# --------------------------------------------------------------------------
+# leggere sottotitoli esistenti, e scriverli da una traccia di testi
+# --------------------------------------------------------------------------
+
+
+_TEMPO = re.compile(r"(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})")
+_TAG = re.compile(r"<[^>]+>|\{[^}]*\}")
+
+
+def _secondi(m: re.Match) -> float:
+    h, mi, s, ms = m.group(1), m.group(2), m.group(3), m.group(4)
+    return int(h or 0) * 3600 + int(mi) * 60 + int(s) + int(ms.ljust(3, "0")) / 1000
+
+
+def leggi(testo: str, fmt: str) -> list[dict]:
+    """Righe ``{start, end, text}`` da un file SRT, VTT o ASS (tag e stili tolti)."""
+    testo = testo.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    righe: list[dict] = []
+    if fmt == "ass":
+        formato: list[str] = []
+        for riga in testo.split("\n"):
+            if riga.startswith("Format:") and not formato and "Text" in riga:
+                formato = [x.strip().lower() for x in riga[7:].split(",")]
+            elif riga.startswith("Dialogue:"):
+                campi = riga[9:].split(",", max(len(formato) - 1, 9))
+                f = formato or ["layer", "start", "end", "style", "name", "marginl",
+                                "marginr", "marginv", "effect", "text"]
+                d = dict(zip(f, campi))
+                a, b = _TEMPO.match(d.get("start", "").strip()), _TEMPO.match(d.get("end", "").strip())
+                if a and b:
+                    t = _TAG.sub("", d.get("text", "")).replace("\\N", "\n").replace("\\n", "\n")
+                    righe.append({"start": _secondi(a), "end": _secondi(b), "text": t.strip()})
+    else:
+        for blocco in re.split(r"\n\s*\n", testo):
+            linee = [x for x in blocco.split("\n") if x.strip()]
+            i = next((k for k, x in enumerate(linee) if "-->" in x), None)
+            if i is None:
+                continue
+            a, _, b = linee[i].partition("-->")
+            ma, mb = _TEMPO.search(a), _TEMPO.search(b)
+            if not (ma and mb):
+                continue
+            t = _TAG.sub("", "\n".join(linee[i + 1:])).strip()
+            if t:
+                righe.append({"start": _secondi(ma), "end": _secondi(mb), "text": t})
+    righe = [r for r in righe if r["text"] and r["end"] > r["start"]]
+    if not righe:
+        raise ValueError("nessun sottotitolo leggibile in questo file")
+    return sorted(righe, key=lambda r: r["start"])
+
+
+def da_traccia(project, track_id: str, start: float = 0.0, end: float | None = None) -> list[dict]:
+    """Le clip di testo di una traccia come righe di sottotitolo, nel tratto [start, end)."""
+    t = next((x for x in project.tracks if x.id == track_id), None)
+    if t is None:
+        raise ValueError(f"traccia sconosciuta {track_id!r}")
+    fine = end if end is not None else float("inf")
+    righe = []
+    for c in sorted(t.clips, key=lambda x: x.start):
+        if c.type != "text" or not c.enabled or not c.text or not c.text.text.strip():
+            continue
+        a, b = max(c.start, start), min(c.end, fine)
+        if b - a > 1e-3:
+            righe.append({"start": a - start, "end": b - start, "text": c.text.text})
+    if not righe:
+        raise ValueError(f"la traccia {track_id} non ha testi da usare come sottotitoli")
+    return righe

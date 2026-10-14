@@ -344,6 +344,27 @@ def import_timeline(path: str, media_folder: str | None = None,
 
 
 @_strumento()
+def import_subtitles(path: str, offset: float = 0.0, font_size: int | None = None,
+                     project: str | None = None) -> dict:
+    """Un .srt, .vtt o .ass diventa una traccia "sottotitoli" di clip di testo, modificabili.
+
+    ``offset`` sposta tutto (secondi). Poi escono impressi, oppure come traccia
+    del file con render_video(subtitle_track=...). Un solo passo di undo.
+    """
+    return _store(project).import_subtitles(path, offset=offset, font_size=font_size)
+
+
+@_strumento()
+def export_subtitles(track: str, path: str, project: str | None = None) -> dict:
+    """Scrive le clip di testo di una traccia come .srt o .vtt (l'estensione decide)."""
+    righe = captions.da_traccia(_store(project).project, track)
+    fmt = Path(path).suffix.lower().lstrip(".")
+    if fmt not in ("srt", "vtt"):
+        raise EditError("export_subtitles scrive .srt o .vtt")
+    return {"file": captions.write(path, righe, fmt), "righe": len(righe)}
+
+
+@_strumento()
 def project_settings(width: int | None = None, height: int | None = None, fps: float | None = None,
                      background: str | None = None, sample_rate: int | None = None,
                      project: str | None = None) -> dict:
@@ -1776,6 +1797,8 @@ async def verify_edit(start: float | None = None, end: float | None = None,
 async def render_video(output: str, quality: str = "high", codec: str = "h264",
                        start: float | None = None, end: float | None = None,
                        preview: bool = False, bitrate: str | None = None,
+                       subtitle_track: str | None = None, subtitle_file: str | None = None,
+                       subtitle_lang: str = "ita", burn_subtitles: bool = False,
                        project: str | None = None) -> dict:
     """Renderizza il progetto in un file.
 
@@ -1787,6 +1810,11 @@ async def render_video(output: str, quality: str = "high", codec: str = "h264",
     preview=True rende a 960px con i proxy: utile per una verifica rapida.
     start/end limitano la porzione di timeline da rendere.
     L'estensione decide il contenitore: .mp4 .mov .mkv .mxf .webm .gif .mp3 .wav .m4a.
+    Sottotitoli come traccia del file (si accendono e spengono nel player, YouTube
+    li legge): subtitle_track = una traccia di testi (import_subtitles ne crea
+    una), oppure subtitle_file = un .srt/.vtt/.ass; subtitle_lang codice ISO
+    (ita, eng...). La traccia scelta non si imprime nell'immagine, a meno di
+    burn_subtitles=True. In .mp4 .mov .mkv .webm.
     """
     render.controlla_codec(codec, output)
     s = _store(project)
@@ -1803,6 +1831,8 @@ async def render_video(output: str, quality: str = "high", codec: str = "h264",
         output=output, quality="draft" if preview else quality, codec=codec,
         start=start, end=end, bitrate=bitrate,
         width=960 if preview else None, use_proxy=preview,
+        subtitle_track=subtitle_track, subtitle_file=subtitle_file,
+        subtitle_lang=subtitle_lang, burn_subtitles=burn_subtitles,
     )
     res = await _off(render.render, s.project, opts)
     return {"output": res.output, "durata": res.duration, "secondi_impiegati": res.seconds,

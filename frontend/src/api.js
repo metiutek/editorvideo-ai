@@ -161,6 +161,14 @@ export const api = {
     }),
   eliminaStile: (id) => req(`/api/stili/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  // una traccia di testi come .srt o .vtt
+  esportaSottotitoli: (track, path) =>
+    req('/api/subtitles/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track, path }),
+    }),
+
   // timeline per e da altri montaggi (interscambio.py): .edl .fcpxml .otio
   esportaTimeline: (path, track = null) =>
     req('/api/timeline/export', {

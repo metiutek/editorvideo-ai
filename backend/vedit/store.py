@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from . import effects as fx
-from . import htmlclip
+from . import captions, htmlclip
 from . import particelle
 from . import keyframes as kf
 from . import probe as probe_mod
@@ -519,6 +519,41 @@ class Store:
         track.clips.sort(key=lambda x: x.start)
         self._done()
         return c
+
+    def import_subtitles(self, path: str | None = None, testo: str | None = None,
+                         fmt: str | None = None, offset: float = 0.0,
+                         font_size: int | None = None) -> dict:
+        """Un file .srt, .vtt o .ass diventa una traccia di testi, uno per sottotitolo.
+
+        Sono clip di testo come le altre: si correggono, si spostano e si
+        tagliano in timeline, e al render escono impressi o come traccia di
+        sottotitoli nel file (``render`` con ``subtitle_track``). Traccia nuova
+        in cima, chiamata "sottotitoli"; un solo passo di undo.
+        """
+        if testo is None:
+            if not path:
+                raise EditError("serve il file dei sottotitoli")
+            testo = Path(path).read_text(encoding="utf-8-sig", errors="replace")
+        fmt = (fmt or Path(path or "").suffix.lstrip(".")).lower()
+        if fmt not in ("srt", "vtt", "ass", "ssa"):
+            raise EditError(f"sottotitoli .{fmt or '?'} non letti: usa .srt, .vtt o .ass")
+        try:
+            righe = captions.leggi(testo, "ass" if fmt == "ssa" else fmt)
+        except ValueError as e:
+            raise EditError(str(e)) from None
+        st = self.project.settings
+        # sopra il bordo basso, leggibili su qualunque ripresa: testo bianco su riquadro
+        dimensione = int(font_size or max(24, round(st.height * 0.05)))
+        y = round(st.height * 0.5 - dimensione * 2.2)
+        with self.batch():
+            track = self.add_track("video", name="sottotitoli")
+            for r in righe:
+                c = self.add_text(r["text"], track.id, max(0.0, r["start"] + float(offset)),
+                                  r["end"] - r["start"], font_size=dimensione, box=True,
+                                  box_opacity=0.55, box_padding=max(8, dimensione // 3))
+                c.transform.y = y
+        return {"track": track.id, "righe": len(righe),
+                "da": round(righe[0]["start"] + offset, 3), "a": round(righe[-1]["end"] + offset, 3)}
 
     def add_color(self, color: str = "black", track_id: str | None = None, start: float = 0.0,
                   duration: float = 2.0) -> Clip:

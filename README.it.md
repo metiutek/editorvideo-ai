@@ -440,6 +440,13 @@ uscito. Al contrario, scegliendo o trascinando un `.fcpxml`, `.otio` o `.edl` in
 quella timeline si accoda al progetto con le dissolvenze ricostruite, in un solo passo di undo
 (`export_timeline`, `import_timeline` per l'agente).
 
+**Sottotitoli.** Un `.srt`, `.vtt` o `.ass` già fatto, scelto o trascinato in *importa*,
+diventa una traccia *sottotitoli* di clip di testo da correggere, spostare e tagliare
+(`import_subtitles`). All'export quella traccia esce **impressa** oppure come **traccia di
+sottotitoli dentro il file** — il player li accende e spegne, YouTube li legge — con la sua
+lingua (`mov_text` in .mp4/.mov, SRT in .mkv, WebVTT in .webm); *salva .srt* la scrive come
+file a parte (`export_subtitles`).
+
 Il render finale usa **sempre gli originali**, mai i proxy.
 
 ---

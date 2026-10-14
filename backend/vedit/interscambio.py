@@ -428,7 +428,7 @@ def importa(store, path: str, cartella: str | None = None, testo: str | None = N
     if testo is None:
         testo = Path(path).read_text(encoding="utf-8-sig", errors="replace")
         cartella = cartella or str(Path(path).parent)
-    testo = testo.lstrip("﻿")
+    testo = testo.lstrip("\ufeff")
     avvisi: list[str] = []
     dissolvenze: list[Dissolvenza] = []
     rate = _rate(store.project.settings.fps)

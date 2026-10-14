@@ -412,6 +412,12 @@ effects, colour, titles and HTML graphics stay in vedit, and the warnings list w
 The other way round, picking or dropping an `.fcpxml`, `.otio` or `.edl` in *import* appends
 that timeline to the project, dissolves rebuilt, in one undo step (`export_timeline`,
 `import_timeline` for the agent).
+
+**Subtitles.** An existing `.srt`, `.vtt` or `.ass`, picked or dropped in *import*, becomes a
+*subtitles* track of text clips you can fix, move and cut (`import_subtitles`). On export that
+track can go out **burnt in** or as a **subtitle stream inside the file** — the player turns it
+on and off, YouTube reads it — with its language (`mov_text` in .mp4/.mov, SRT in .mkv, WebVTT
+in .webm); *save .srt* writes it as a separate file (`export_subtitles`).
 The final render **always uses the originals**, never the proxies.
 
 ---
