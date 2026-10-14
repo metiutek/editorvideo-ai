@@ -1101,3 +1101,10 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .particelle-val { min-width: 64px; font-size: 11px; color: var(--dim); text-align: right; }
 .nomeparticelle { width: 150px; }
 .hint.errore { color: var(--danger); }
+
+/* firma in fondo al pannello di sinistra */
+.firma {
+  margin-top: auto; flex: none; padding: 6px 12px; border-top: 1px solid var(--line);
+  font-size: 10px; color: var(--faint); text-decoration: none; text-align: center;
+}
+.firma:hover { color: var(--dim); }

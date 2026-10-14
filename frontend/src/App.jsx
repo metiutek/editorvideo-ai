@@ -448,6 +448,8 @@ export default function App() {
                 onPreset={applyPreset}
                 onTransition={(type, dur) => applyTransition(type, dur)} />
             )}
+            <a className="firma" href="https://metiu.xyz/" target="_blank" rel="noreferrer">
+              made by metiu.xyz</a>
           </div>
         </div>
         <Divider onDrag={(dx) => setSizes((s) => ({ ...s, bin: clamp(s.bin + dx, 170, 520) }))} />

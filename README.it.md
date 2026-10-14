@@ -703,3 +703,7 @@ strumenti MCP, API della UI, riga di comando.
 - Se due processi tengono aperto lo stesso `.json` (per esempio interfaccia e server MCP), il
   salvataggio automatico dell'uno può sovrascrivere il lavoro dell'altro. Non c'è ancora un
   lock sul file di progetto.
+
+---
+
+made by https://metiu.xyz/

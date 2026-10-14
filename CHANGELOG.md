@@ -5,6 +5,8 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Firma nell'editor.** In fondo al pannello di sinistra c'è *made by metiu.xyz*, con il
+  link al sito; la stessa riga chiude `README.md` e `README.it.md`.
 - **Particelle su misura.** Oltre ai tipi pronti, `add_particles(kind="custom")` prende una
   ricetta: forma (cerchio, quadrato, triangolo, stella, cuore, anello, trattino, testo o
   emoji), moto (cadono, salgono, vento, fluttuano, esplosione da un punto, ferme che
