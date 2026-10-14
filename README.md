@@ -457,7 +457,9 @@ frame interpolation for slow motion.
 vibrance, white balance (temperature and green–magenta tint) plus an automatic one,
 lift/gamma/gain per channel for shadows, midtones and highlights, levels, hue rotation,
 secondary correction of a single colour family (bluer sky, less yellow grass), curves, `.cube`
-LUTs, `match_color` between shots, `color_scopes`. Every colour tool is checked by a test that
+LUTs, `match_color` between shots, `color_scopes`. **Scopes** in the editor's *scope* tab —
+waveform in IRE, RGB parade, vectorscope, log histogram — measured on the originals, not the
+proxies (`scope_image` for the agent). Every colour tool is checked by a test that
 renders it and looks at which way the pixels moved.
 
 **Composition** — position, scale, rotation and opacity per clip, all animatable with keyframes

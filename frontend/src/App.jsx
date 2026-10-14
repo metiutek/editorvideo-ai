@@ -8,6 +8,7 @@ import Library from './Library.jsx'
 import MediaBin from './MediaBin.jsx'
 import { EditorParticelle, MenuParticelle } from './Particelle.jsx'
 import Preview from './Preview.jsx'
+import Scopes from './Scopes.jsx'
 import SourceMonitor from './SourceMonitor.jsx'
 import Timeline from './Timeline.jsx'
 import { caricaTrascinati, importaPercorsi } from './caricamento.js'
@@ -58,7 +59,10 @@ export default function App() {
   // L'assistente e' il cuore dell'app: e' la scheda aperta di default. Se
   // l'utente preferisce le proprieta' la scelta resta fra una sessione e l'altra.
   const [rightTab, setRightTabState] = useState(() => {
-    try { return localStorage.getItem('vedit.destra') === 'props' ? 'props' : 'chat' } catch { return 'chat' }
+    try {
+      const t = localStorage.getItem('vedit.destra')
+      return t === 'props' || t === 'scope' ? t : 'chat'
+    } catch { return 'chat' }
   })
   const setRightTab = useCallback((t) => {
     setRightTabState(t)
@@ -555,8 +559,12 @@ export default function App() {
                 onClick={() => setRightTab('chat')}><Icon name="assistente" />assistente</button>
               <button className={rightTab === 'props' ? 'on' : ''}
                 onClick={() => setRightTab('props')}><Icon name="proprieta" />proprieta'</button>
+              <button className={rightTab === 'scope' ? 'on' : ''} title="Waveform, parade, vettorscopio, istogramma"
+                onClick={() => setRightTab('scope')}><Icon name="color" />scope</button>
             </div>
-            {rightTab === 'props' ? (
+            {rightTab === 'scope' ? (
+              <Scopes project={project} playhead={playhead} playing={playing} revision={revision} />
+            ) : rightTab === 'props' ? (
               <Inspector project={project} effects={sys?.effects || []}
                 transitions={sys?.transitions || []} clip={selectedClip}
                 playhead={playhead} run={run} setError={setError} setBusy={setBusy}

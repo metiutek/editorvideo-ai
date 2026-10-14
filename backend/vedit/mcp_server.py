@@ -1554,6 +1554,19 @@ async def color_scopes(t: float, project: str | None = None) -> dict:
 
 
 @_strumento()
+async def scope_image(t: float, view: str = "waveform", project: str | None = None) -> Image:
+    """Scope grafico del fotogramma al tempo ``t``, dagli originali (non dai proxy).
+
+    view: waveform (luma in IRE, 0-100) | parade (R G B affiancati, per la
+    dominante) | vectorscope (tinta e saturazione: la pelle sta sulla linea fra
+    giallo e rosso) | histogram (R G B e luma, scala logaritmica). Per i numeri
+    usa color_scopes.
+    """
+    out = str(Path(tempfile.gettempdir()) / f"vedit_scope_{os.getpid()}_{view}.png")
+    return Image(path=await _off(review.scope_immagine, _store(project).project, t, view, out))
+
+
+@_strumento()
 def insert_clip(media: str, at: float, track: str | None = None,
                 duration: float | None = None, in_point: float = 0.0,
                 project: str | None = None) -> dict:

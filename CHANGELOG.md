@@ -5,6 +5,11 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Scope grafici.** Nuova scheda *scope* nel pannello di destra: waveform della luminanza in
+  IRE, parade RGB, vettorscopio, istogramma R/G/B e luma su scala logaritmica, del
+  fotogramma sotto la testina. Si aggiornano a riproduzione ferma e sono misurati sugli
+  originali, non sui proxy (`review.scope_immagine`, `GET /api/scope`). Per l'agente,
+  `scope_image` accanto ai numeri di `color_scopes`.
 - **Export ProRes e DNxHR, anche in MXF.** Nel dialogo *esporta*, da `render_video` e da
   `vedit render --codec`: `prores` e `dnxhr` in `.mov`, `.mxf` o `.mkv`, con audio PCM
   24 bit a 48 kHz. La qualità sceglie il profilo (ProRes Proxy/422/HQ/4444, DNxHR

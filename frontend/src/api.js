@@ -110,6 +110,9 @@ export const api = {
 
   // prova = {effect, clip}: il fotogramma esce come se quell'effetto fosse
   // applicato, ma il progetto non viene toccato
+  // scope grafico del fotogramma (review.SCOPI): la revisione invalida la cache
+  scopeUrl: (t, view, revision) =>
+    `/api/scope?t=${t.toFixed(3)}&view=${encodeURIComponent(view)}&r=${revision}`,
   frameUrl: (t, revision, width = 960, prova = null) =>
     `/api/frame?t=${t.toFixed(3)}&width=${width}&r=${revision}`
     + (prova?.effect ? `&effect=${encodeURIComponent(prova.effect)}` : '')

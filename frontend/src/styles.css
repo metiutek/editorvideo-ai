@@ -1108,3 +1108,18 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
   font-size: 10px; color: var(--faint); text-decoration: none; text-align: center;
 }
 .firma:hover { color: var(--dim); }
+
+/* scope del fotogramma sotto la testina */
+.scopes { padding: 10px 12px; overflow-y: auto; flex: 1; min-height: 0; }
+.scopes-scelta { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.scopes-scelta button { height: 24px; font-size: 11px; padding: 0 8px; }
+.scopes-scelta button.on { background: var(--accent); color: #111; border-color: var(--accent); }
+.scopes-img {
+  position: relative; background: #0b0d11; border: 1px solid var(--line);
+  border-radius: var(--r); min-height: 120px; display: grid; place-items: center; margin-bottom: 8px;
+}
+.scopes-img img { display: block; width: 100%; height: auto; image-rendering: auto; }
+.scopes-pausa {
+  position: absolute; right: 6px; top: 6px; font-size: 10px; color: var(--faint);
+  background: rgba(0,0,0,.6); padding: 2px 6px; border-radius: 4px;
+}

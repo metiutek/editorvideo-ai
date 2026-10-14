@@ -516,7 +516,9 @@ interpolazione di frame per lo slow motion.
 vividezza, bilanciamento del bianco (temperatura e tinta verde-magenta) e automatico,
 lift/gamma/gain per canale su ombre, mezzitoni e luci, livelli, rotazione della tonalità,
 correzione di una sola famiglia di colori (cielo più blu, erba meno gialla), curve, LUT
-`.cube`. Ogni strumento colore ha un test che lo renderizza e controlla in che direzione si
+`.cube`. **Scope** nella scheda *scope* dell'editor — waveform in IRE, parade RGB,
+vettorscopio, istogramma logaritmico — misurati sugli originali, non sui proxy (`scope_image`
+per l'agente). Ogni strumento colore ha un test che lo renderizza e controlla in che direzione si
 spostano i pixel.
 
 **Composizione** — posizione, scala, rotazione, opacità per clip, tutte animabili con keyframe

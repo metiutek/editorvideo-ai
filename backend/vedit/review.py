@@ -271,6 +271,69 @@ def scopes(project, t: float, width: int = 480) -> dict:
     }
 
 
+# scope -> filtro ffmpeg applicato al fotogramma (gia' ridotto a SCOPE_W). Il
+# fotogramma si stringe prima del filtro: la waveform e' larga quanto l'immagine
+# e la parade il triplo, senza riduzione uscivano nastri alti un dito
+SCOPE_W = 512
+SCOPI = {
+    "waveform": "format=yuv444p,waveform=intensity=0.2:graticule=green:flags=numbers+dots:scale=ire",
+    "parade": "scale=256:-2,format=gbrp,waveform=display=parade:components=7:intensity=0.2"
+              ":graticule=green:flags=numbers+dots",
+    "vectorscope": "format=yuv444p,vectorscope=mode=color3:graticule=color:flags=name"
+                   ":envelope=instant,scale=360:360",
+    "histogram": None,     # disegnato qui: quello di ffmpeg in sovrapposizione e' illeggibile
+}
+
+
+def scope_immagine(project, t: float, tipo: str, output: str) -> str:
+    """Scope grafico del fotogramma al tempo ``t``: waveform, parade, vettorscopio, istogramma.
+
+    Il fotogramma viene dagli originali, non dai proxy: un proxy ricodificato
+    sposta il colore quanto basta a falsare la misura.
+    """
+    if tipo not in SCOPI:
+        raise ValueError(f"scope sconosciuto {tipo!r}; ammessi: {', '.join(SCOPI)}")
+    out = Path(output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix="vedit_scope_")) / "f.png"
+    render.render_frame(project, t, str(tmp), SCOPE_W, use_proxy=False)
+    if tipo == "histogram":
+        return _istogramma(tmp, out)
+    proc = ffmpeg.run([ffmpeg.binary("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y",
+                       "-i", str(tmp), "-vf", SCOPI[tipo], "-frames:v", "1", str(out)],
+                      check=False, timeout=60)
+    if proc.returncode != 0:
+        raise ffmpeg.FFmpegError([], proc.returncode, (proc.stderr or "")[-1000:])
+    return str(out)
+
+
+def _istogramma(frame: Path, out: Path) -> str:
+    """R, G, B e luma su scala logaritmica: i picchi non schiacciano il resto."""
+    import numpy as np
+    from PIL import Image as PILImage
+    from PIL import ImageDraw
+
+    img = np.asarray(PILImage.open(frame).convert("RGB")).astype(np.float32)
+    luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
+    W, H = 512, 200
+    tela = PILImage.new("RGB", (W, H), (12, 13, 17))
+    disegno = ImageDraw.Draw(tela, "RGBA")
+    for x in (W // 4, W // 2, 3 * W // 4):
+        disegno.line([(x, 0), (x, H)], fill=(255, 255, 255, 28))
+    canali = [(img[..., 0], (255, 70, 70)), (img[..., 1], (70, 230, 90)),
+              (img[..., 2], (80, 140, 255)), (luma, (235, 235, 235))]
+    for dati, colore in canali:
+        h, _ = np.histogram(dati, bins=256, range=(0, 256))
+        h = np.log1p(h)
+        h = h / (h.max() or 1.0)
+        punti = [(i * (W - 1) / 255, H - 1 - v * (H - 6)) for i, v in enumerate(h)]
+        if dati is not luma:      # il luma resta una linea: riempito copriva i canali
+            disegno.polygon([(0, H - 1), *punti, (W - 1, H - 1)], fill=(*colore, 26))
+        disegno.line(punti, fill=(*colore, 200 if dati is luma else 230), width=1)
+    tela.save(out)
+    return str(out)
+
+
 # --------------------------------------------------------------------------
 # forma d'onda
 # --------------------------------------------------------------------------

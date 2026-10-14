@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import domande, ffmpeg, figli, htmlclip, hw, llm, particelle, presets, proxy, render, stili
+from . import domande, ffmpeg, figli, htmlclip, hw, llm, particelle, presets, proxy, render, review, stili
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
 from .store import PRESETS, EditError, Store
@@ -1066,6 +1066,28 @@ def frame(t: float = 0.0, width: int = 960,
                 except Exception as exc:
                     raise HTTPException(500, f"anteprima fallita: {exc}") from exc
     return FileResponse(out, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/scope")
+def scope(t: float = 0.0, view: str = "waveform"):
+    """Scope grafico del fotogramma (review.scope_immagine), in cache per revisione."""
+    store = S.need()
+    if store.project.duration() <= 0:
+        raise HTTPException(400, "timeline vuota")
+    if view not in review.SCOPI:
+        raise HTTPException(400, f"scope sconosciuto: {view}")
+    key = f"s_{S.revision()}_{t:.3f}_{view}"
+    out = _preview_dir() / f"{key}.png"
+    if not _ready(out):
+        with _key_lock(key):
+            if not _ready(out):
+                snap = _snapshot()
+                try:
+                    _produce(out, lambda tmp: review.scope_immagine(snap, t, view, str(tmp)))
+                except Exception as exc:
+                    raise HTTPException(500, f"scope fallito: {exc}") from exc
+    return FileResponse(out, media_type="image/png",
                         headers={"Cache-Control": "public, max-age=86400"})
 
 
