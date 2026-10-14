@@ -5,6 +5,17 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Particelle su misura.** Oltre ai tipi pronti, `add_particles(kind="custom")` prende una
+  ricetta: forma (cerchio, quadrato, triangolo, stella, cuore, anello, trattino, testo o
+  emoji), moto (cadono, salgono, vento, fluttuano, esplosione da un punto, ferme che
+  compaiono), colori, quantità, dimensione e velocità da/a, direzione, ondeggio, rotazione,
+  opacità, bagliore, scintillio, e per l'esplosione origine, ventaglio, gravità, durata e
+  ritmo. Nell'editor, *+ particelle → su misura…* apre una finestra con l'anteprima dal vivo
+  (lo stesso documento del render); le ricette si salvano fra *le mie*
+  (`~/.vedit/particelle.json`) e tornano nel menu. Una clip di particelle già in timeline si
+  cambia dalle proprietà o con `set_particles`, senza perdere posizione, fusione ed effetti.
+  Per l'agente: `create_particles`, `delete_particles`; nella chat `add_particles` e
+  `set_particles`.
 - **Una clip con audio entra in timeline come negli editor desktop.** Trascinata dal
   pannello, inserita dal monitor sorgente o con doppio clic, il video va sulla traccia
   video e il suo audio su una traccia audio, come clip a parte con la sua forma d'onda.
@@ -51,6 +62,9 @@ Le voci più recenti stanno in cima.
   `.wma`, `.aiff` e `.gif` trascinati.
 
 ### Corretto
+- **Un progetto nuovo parte senza stile di montaggio.** Lo stile scelto nella chat restava
+  quello del progetto precedente (era salvato nel browser e basta): creare un progetto, dal
+  dialogo o trascinando dei file senza progetto aperto, ora lo rimette su *nessuno*.
 - **Video neri e muti nel monitor (DNxHR, ProRes, H.265, MXF...).** Il browser riproduce
   solo H.264/VP9/AV1 a 8 bit 4:2:0 con audio AAC/MP3/Opus: i .mov esportati da Resolve
   (DNxHR 4:2:2 con audio PCM) restavano neri e senza suono, mentre il render usciva

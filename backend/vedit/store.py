@@ -583,17 +583,82 @@ class Store:
 
     def add_particles(self, kind: str = "snow", track_id: str | None = None, start: float = 0.0,
                       duration: float = 5.0, color: str | None = None, density: float = 1.0,
-                      speed: float = 1.0, size: float = 1.0, seed: int = 1) -> Clip:
-        """Particelle (neve, scintille, coriandoli...) come clip html trasparente."""
-        if kind not in particelle.KINDS:
-            raise EditError(f"particelle sconosciute {kind!r}; scegli tra {', '.join(particelle.KINDS)}")
+                      speed: float = 1.0, size: float = 1.0, seed: int = 1,
+                      custom: dict | None = None) -> Clip:
+        """Particelle (neve, scintille, coriandoli...) come clip html trasparente.
+
+        ``kind`` e' un tipo integrato, ``custom`` con la ricetta in ``custom``
+        (vedi ``particelle.valida``) o l'id di particelle personali salvate.
+        """
+        kind, custom, nome = self._particelle(kind, custom)
+        doc = self._doc_particelle(kind, color, density, speed, size, seed, custom)
+        return self.add_html(html=doc, track_id=track_id, start=start, duration=duration,
+                             name=f"particelle {nome}")
+
+    def set_particles(self, clip_id: str, kind: str | None = None, color: str | None = None,
+                      density: float | None = None, speed: float | None = None,
+                      size: float | None = None, seed: int | None = None,
+                      custom: dict | None = None) -> Clip:
+        """Cambia le particelle di una clip creata da ``add_particles``.
+
+        Le voci assenti restano come sono; ``custom`` corregge solo le voci
+        della ricetta che nomina. ``color=""`` toglie il colore imposto.
+        """
+        _, clip = self.clip_for_edit(clip_id)
+        par = particelle.parametri(clip.html) if clip.type == "html" else None
+        if par is None:
+            raise EditError(f"la clip {clip_id} non e' fatta di particelle")
+        if kind is not None and kind != par["kind"]:
+            kind, ricetta, nome = self._particelle(kind, custom)
+        else:
+            kind, nome = par["kind"], None
+            ricetta = {**(par.get("custom") or {}), **(custom or {})} if kind == particelle.CUSTOM else None
+            if kind == particelle.CUSTOM:
+                try:
+                    ricetta = particelle.valida(ricetta)
+                except ValueError as e:
+                    raise EditError(str(e)) from None
+        val = lambda nuovo, vecchio: vecchio if nuovo is None else nuovo  # noqa: E731
+        doc = self._doc_particelle(
+            kind, val(color, par.get("color")) or None, val(density, par.get("density", 1.0)),
+            val(speed, par.get("speed", 1.0)), val(size, par.get("size", 1.0)),
+            val(seed, par.get("seed", 1)), ricetta)
+        self._touch()
+        clip.html = doc
+        if nome:
+            clip.name = f"particelle {nome}"
+        self._done()
+        return clip
+
+    def _particelle(self, kind: str, custom: dict | None) -> tuple[str, dict | None, str]:
+        """(tipo, ricetta, nome) da un tipo integrato, ``custom`` o un id personale."""
+        if kind in particelle.KINDS:
+            return kind, None, kind
+        if kind == particelle.CUSTOM:
+            try:
+                return kind, particelle.valida(custom or {}), "personalizzate"
+            except ValueError as e:
+                raise EditError(str(e)) from None
+        mie = particelle.trova(kind)
+        if mie is None:
+            nomi = [*particelle.KINDS, particelle.CUSTOM, *(p["id"] for p in particelle.personali())]
+            raise EditError(f"particelle sconosciute {kind!r}; scegli tra {', '.join(nomi)}")
+        try:
+            ricetta = particelle.valida({**mie["spec"], **(custom or {})})
+        except ValueError as e:
+            raise EditError(str(e)) from None
+        return particelle.CUSTOM, ricetta, mie["nome"]
+
+    def _doc_particelle(self, kind, color, density, speed, size, seed, custom) -> str:
         for nome, v in (("density", density), ("speed", speed), ("size", size)):
             if not 0 < float(v) <= 20:
                 raise EditError(f"{nome} deve stare tra 0 e 20")
         st = self.project.settings
-        doc = particelle.html(kind, st.width, st.height, color, density, speed, size, seed)
-        return self.add_html(html=doc, track_id=track_id, start=start, duration=duration,
-                             name=f"particelle {kind}")
+        try:
+            return particelle.html(kind, st.width, st.height, color, density, speed, size,
+                                   seed, custom)
+        except ValueError as e:
+            raise EditError(str(e)) from None
 
     def set_html(self, clip_id: str, html: str | None = None, path: str | None = None,
                  base: str | None = None) -> Clip:

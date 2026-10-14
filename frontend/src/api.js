@@ -158,6 +158,23 @@ export const api = {
     }),
   eliminaStile: (id) => req(`/api/stili/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  // particelle su misura: cosa si puo' scegliere, anteprima, quelle salvate
+  particelle: () => req('/api/particelle'),
+  anteprimaParticelle: (spec, signal) =>
+    req('/api/particelle/anteprima', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spec }),
+      signal,
+    }),
+  salvaParticelle: (body) =>
+    req('/api/particelle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  eliminaParticelle: (id) => req(`/api/particelle/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
   // modello dell'assistente: quale usare e con che chiave (resta su questo computer)
   llm: () => req('/api/llm'),
   setLlm: (body) =>

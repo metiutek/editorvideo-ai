@@ -28,7 +28,7 @@ from . import analyze, captions, cleanup, colormatch, ops
 # domande_mod: in ask_user il parametro si chiama domande
 from . import domande as domande_mod
 from . import effects as fx
-from . import ffmpeg, hw, probe, proxy, render, review, stili, story, versions, vision
+from . import ffmpeg, hw, particelle, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
 from .store import EditError, Store
 
@@ -75,7 +75,8 @@ intere): add_html con un documento HTML/CSS/JS su una traccia sopra la ripresa.
 Lo sfondo e' trasparente, il tempo della pagina e' quello della clip, e
 nell'interfaccia (open_ui) si vede animata dal vivo prima di renderizzare.
 
-Effetti speciali: add_particles (neve, scintille, coriandoli...), fusioni con
+Effetti speciali: add_particles (neve, scintille, coriandoli... o su misura con
+kind="custom": forma, moto, colori; create_particles le salva), fusioni con
 set_clip blend (screen per luci e particelle), add_effect con glitch, warp, shake,
 tilt3d, cielo e rimozione oggetti (list_effects), remove_background per scontornare senza green
 screen, pin_to_subject per agganciare una grafica a chi si muove. Ognuno deve
@@ -1366,17 +1367,68 @@ async def pin_to_subject(clip: str, target: str, classes: list[str] | None = Non
 def add_particles(kind: str = "snow", start: float = 0.0, duration: float = 5.0,
                   track: str | None = None, color: str | None = None, density: float = 1.0,
                   speed: float = 1.0, size: float = 1.0, seed: int = 1,
-                  project: str | None = None) -> dict:
+                  custom: dict | None = None, project: str | None = None) -> dict:
     """Particelle sopra la ripresa: snow, rain, sparks, confetti, dust, bokeh, stars, fireflies.
 
     Diventano una clip html trasparente (serve l'extra html, come add_html),
     deterministica: stesso seed, stesse particelle in anteprima e nel render.
     density/speed/size moltiplicano i valori tarati per il tipo (1 = normale).
     Per luci e scintille su una ripresa scura prova set_clip(blend="screen").
+
+    Particelle su misura: kind="custom" e la ricetta in ``custom`` (voci
+    assenti = predefinite), oppure kind = id di particelle salvate con
+    create_particles. Voci di ``custom``:
+
+      shape: circle | square | triangle | star | heart | ring | line | text
+      text: con shape=text, simboli o emoji separati da spazi ("❤ ✨ 🎉")
+      motion: fall | rise | drift (vento) | float | burst (esplosione) | still
+      colors: ["#ff3b5c", "#ffd23b"]  uno a caso per particella
+      count: quante a 1920x1080 (1-3000)       size: raggio [da, a] in px
+      speed: [da, a] px/s                       direction: gradi (inclinazione
+        per fall/rise, rotta per drift e burst; 0 = verso destra, 90 = giu')
+      wobble: ondeggio in px    spin: giri/s    opacity: [da, a] 0-1
+      glow: alone in px         twinkle: 0-1    fade: true/false
+      burst: origin [x, y] in frazioni, spread gradi, gravity px/s^2,
+        life s di ogni esplosione, interval s fra un'esplosione e l'altra
+      still: life s di ogni apparizione
     """
     c = _store(project).add_particles(kind, track, start, duration, color, density, speed,
-                                      size, seed)
-    return {**_clip_view(c), "kind": kind}
+                                      size, seed, custom)
+    return {**_clip_view(c), "kind": kind,
+            "parametri": particelle.parametri(c.html)}
+
+
+@_strumento()
+def set_particles(clip: str, kind: str | None = None, color: str | None = None,
+                  density: float | None = None, speed: float | None = None,
+                  size: float | None = None, seed: int | None = None,
+                  custom: dict | None = None, project: str | None = None) -> dict:
+    """Cambia le particelle di una clip fatta con add_particles, senza ricrearla.
+
+    Le voci assenti restano come sono; ``custom`` corregge solo le voci della
+    ricetta che nomina (stesse voci di add_particles).
+    """
+    c = _store(project).set_particles(clip, kind, color, density, speed, size, seed, custom)
+    return {**_clip_view(c), "parametri": particelle.parametri(c.html)}
+
+
+@_strumento()
+def create_particles(name: str, custom: dict, particles: str | None = None) -> dict:
+    """Salva particelle su misura (o con ``particles`` aggiorna quelle gia' salvate).
+
+    Restano su questo computer, compaiono nel menu particelle dell'editor e si
+    usano con add_particles(kind=<id>). ``custom``: le voci di add_particles.
+    """
+    nuove = particelle.salva(name, custom, particles)
+    return {"particelle": nuove,
+            "prossimo_passo": f"add_particles(kind='{nuove['id']}')"}
+
+
+@_strumento()
+def delete_particles(particles: str) -> dict:
+    """Elimina particelle personali salvate con create_particles."""
+    particelle.elimina(particles)
+    return {"eliminate": particles, "personali": [p["id"] for p in particelle.personali()]}
 
 
 @_strumento()

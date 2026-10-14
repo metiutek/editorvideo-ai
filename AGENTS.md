@@ -238,7 +238,10 @@ una traccia sopra, muta, con lo scontorno: glow, tint o spotlight sulla sagoma v
 inquadratura). `pin_to_subject` porta la traccia del soggetto dal tempo della sorgente al
 tempo locale della clip agganciata (`Store.pin_to_subject`). `add_particles` genera una clip
 html da `particelle.py`, con le posizioni in forma chiusa del tempo: niente simulazione a
-passi, quindi anteprima e render coincidono. Il glitch usa un hash di `sin`, mai `random()`:
+passi, quindi anteprima e render coincidono. `kind="custom"` prende la ricetta in `custom`,
+controllata da `particelle.valida`; i parametri con cui e' nata la clip viaggiano nel suo
+html (`particelle.parametri`) ed e' da li' che `set_particles` la rigenera. Le particelle
+salvate (`create_particles`) stanno in `~/.vedit/particelle.json`, come gli stili. Il glitch usa un hash di `sin`, mai `random()`:
 il render deve restare una funzione pura del progetto.
 
 ### Grafica in HTML

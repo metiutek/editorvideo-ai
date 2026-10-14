@@ -365,3 +365,27 @@ def test_tratto_su_piu_blocchi_uguale_alla_clip_intera(tmp_path):
     from PIL import Image
     r, g, b = Image.open(out).convert("RGB").getpixel((160, 60))
     assert b > 200 and r < 60          # pagina trasparente: sotto si vede il blu
+
+
+def test_api_particelle_su_misura(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path / "cache"))
+    info = client.get("/api/particelle").json()
+    assert "heart" in info["forme"] and "burst" in info["moti"] and info["personali"] == []
+    # anteprima anche senza progetto aperto: e' lo stesso documento del render
+    r = client.post("/api/particelle/anteprima", json={"spec": {"shape": "ring"}})
+    assert r.status_code == 200 and r.json()["width"] == 1920
+    assert '"shape": "ring"' in r.json()["html"]
+    assert client.post("/api/particelle/anteprima",
+                       json={"spec": {"shape": "drago"}}).status_code == 400
+    r = client.post("/api/particelle", json={"nome": "Anelli", "spec": {"shape": "ring"}})
+    pid = r.json()["particelle"]
+    assert [p["id"] for p in r.json()["personali"]] == [pid]
+
+    client.post("/api/project/create", json={"path": str(tmp_path / "p.json"), "preset": "720p"})
+    r = client.post("/api/op/add_particles", json={"kind": pid, "duration": 2})
+    assert r.status_code == 200, r.text
+    cid = r.json()["result"]["id"]
+    r = client.post("/api/op/set_particles", json={"clip_id": cid, "custom": {"spin": 1}})
+    assert r.status_code == 200, r.text
+    assert client.delete(f"/api/particelle/{pid}").json()["personali"] == []
+    assert client.delete(f"/api/particelle/{pid}").status_code == 404

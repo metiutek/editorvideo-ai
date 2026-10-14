@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import domande, ffmpeg, figli, htmlclip, hw, llm, presets, proxy, render, stili
+from . import domande, ffmpeg, figli, htmlclip, hw, llm, particelle, presets, proxy, render, stili
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
 from .store import PRESETS, EditError, Store
@@ -65,7 +65,7 @@ FRONTEND = _frontend_dir()
 OPS = {
     "import_media", "set_media", "remove_media", "rename_folder",
     "add_track", "set_track", "set_sidechain", "remove_track", "move_track",
-    "add_clip", "add_text", "add_color", "add_html", "add_particles", "set_html", "remove_clip", "unlink_clip", "move_clip", "move_layer", "trim_clip",
+    "add_clip", "add_text", "add_color", "add_html", "add_particles", "set_particles", "set_html", "remove_clip", "unlink_clip", "move_clip", "move_layer", "trim_clip",
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
@@ -355,6 +355,7 @@ def state() -> dict:
         "presets": list(PRESETS),
         "chat": chat_available(),
         "stili": stili.descrivi(),
+        "particelle": particelle.descrivi(),
         "system": {"ffmpeg": ffmpeg.version(), "encoders": info.encoders,
                    "hw": info.working},
     }
@@ -1451,6 +1452,58 @@ def stili_elimina(stile_id: str) -> dict:
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"stili": stili.descrivi()}
+
+
+class ParticelleBody(BaseModel):
+    nome: str
+    spec: dict
+    id: str | None = None
+
+
+class AnteprimaParticelleBody(BaseModel):
+    spec: dict
+    color: str | None = None
+    density: float = 1.0
+    speed: float = 1.0
+    size: float = 1.0
+    seed: int = 1
+
+
+@app.get("/api/particelle")
+def particelle_elenco() -> dict:
+    return particelle.descrivi()
+
+
+@app.post("/api/particelle/anteprima")
+def particelle_anteprima(body: AnteprimaParticelleBody) -> dict:
+    """Il documento di particelle personalizzate, per guardarle prima di metterle in timeline."""
+    st = S.store.project.settings if S.store else None
+    w, h = (st.width, st.height) if st else (1920, 1080)
+    try:
+        doc = particelle.html(particelle.CUSTOM, w, h, body.color, body.density, body.speed,
+                              body.size, body.seed, body.spec)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"html": doc, "width": w, "height": h}
+
+
+@app.post("/api/particelle")
+def particelle_salva(body: ParticelleBody) -> dict:
+    """Particelle personali: restano su questo computer (~/.vedit/particelle.json)."""
+    try:
+        nuove = particelle.salva(body.nome, body.spec, body.id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"particelle": nuove["id"], **particelle.descrivi()}
+
+
+@app.delete("/api/particelle/{pid}")
+def particelle_elimina(pid: str) -> dict:
+    try:
+        particelle.elimina(pid)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return particelle.descrivi()
 
 
 def _cartella_allegati() -> Path:

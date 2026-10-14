@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import { Anim, Check, EffectParams, Num, Row, Select, Text } from './Params.jsx'
+import { EditorParticelle, PARTICELLE, parametriParticelle } from './Particelle.jsx'
 import { natura } from './util.js'
 
 // come la clip si fonde con le tracce sotto (model.BLEND_MODES)
@@ -124,6 +125,7 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
       </>)}
 
       {clip.type === 'text' && <TextPanel clip={clip} call={call} />}
+      {clip.type === 'html' && parametriParticelle(clip.html) && <ParticellePanel clip={clip} call={call} />}
       {clip.type === 'html' && <HtmlPanel clip={clip} call={call} />}
 
       {clip.link && (
@@ -313,6 +315,46 @@ function TextPanel({ clip, call }) {
  * fuori — l'agente via MCP — e qui non c'e' niente in sospeso, si prende
  * quello nuovo.
  */
+/**
+ * Clip nata da add_particles: i parametri stanno nel suo html, e si cambiano
+ * con set_particles senza ricrearla (posizione, fusione ed effetti restano).
+ */
+function ParticellePanel({ clip, call }) {
+  const par = parametriParticelle(clip.html)
+  const [editor, setEditor] = useState(false)
+  const imposta = (args) => call('set_particles', { clip_id: clip.id, ...args })
+  const su = par.kind === 'custom'
+  return (
+    <div className="group">
+      <h4>particelle</h4>
+      <Row label="tipo">
+        <select value={par.kind} onChange={(e) => {
+          if (e.target.value === 'custom') setEditor(true)
+          else imposta({ kind: e.target.value })
+        }}>
+          {PARTICELLE.map(([k, nome]) => <option key={k} value={k}>{nome}</option>)}
+          <option value="custom">su misura</option>
+        </select>
+      </Row>
+      {['density', 'speed', 'size'].map((k) => (
+        <Row key={k} label={{ density: 'densità', speed: 'velocità', size: 'dimensione' }[k]}>
+          <Num value={par[k] ?? 1} min={0.05} max={20} step={0.05} onChange={(v) => imposta({ [k]: v })} />
+        </Row>
+      ))}
+      <Row label="seme"><Num value={par.seed ?? 1} min={0} step={1}
+        onChange={(v) => imposta({ seed: Math.round(v) })} /></Row>
+      <button className="ghost" onClick={() => setEditor(true)}>
+        <Icon name="fx" size={13} />{su ? 'modifica forma e moto' : 'personalizza'}</button>
+      {editor && (
+        <EditorParticelle titolo="Modifica particelle" applica="applica alla clip"
+          iniziale={su ? par.custom : null}
+          onClose={() => setEditor(false)}
+          onApplica={(custom) => imposta({ kind: 'custom', custom })} />
+      )}
+    </div>
+  )
+}
+
 function HtmlPanel({ clip, call }) {
   const [bozza, setBozza] = useState(clip.html || '')
   const sporca = useRef(false)

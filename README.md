@@ -467,8 +467,11 @@ aberration, warps (wave, ripple, swirl, bulge), fisheye/pincushion lens, camera 
 never reveals the edges, **3D card rotation** with real perspective (animatable yaw and
 pitch), sky replacement by keying the sky above a horizon line, object/logo removal
 (animatable rectangle). **Particles** — `add_particles`: snow, rain, sparks, confetti, dust,
-bokeh, stars, fireflies, as a transparent HTML clip computed in closed form, so preview and
-render match frame for frame. *(extra `vision`)* **AI background removal without a green
+bokeh, stars, fireflies, or **custom particles** (`kind="custom"`: shape — circle, star,
+heart, ring, emoji… —, motion — fall, rise, wind, float, burst, still —, colours, size,
+speed, spin, glow), designed in the editor with a live preview and saved for reuse
+(`create_particles`); `set_particles` changes them on a clip already in the timeline. A
+transparent HTML clip computed in closed form, so preview and render match frame for frame. *(extra `vision`)* **AI background removal without a green
 screen** — `remove_background` segments the subject frame by frame (any COCO class, or
 inverted to keep only the background); **motion tracking** — `pin_to_subject` pins a title
 or graphic to a moving subject. **Highlighting** — `track_mask` follows a subject with a blur,

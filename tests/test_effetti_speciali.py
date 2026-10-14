@@ -114,6 +114,73 @@ def test_particelle_deterministiche_e_validate(tmp_path):
         s.add_particles("snow", density=0)
 
 
+def test_particelle_su_misura(tmp_path):
+    ricetta = {"shape": "heart", "motion": "burst", "colors": ["#ff3366", "#ffffff"],
+               "size": [20, 8], "origin": [0.3, 0.7]}
+    spec = particelle.valida(ricetta)
+    # le voci assenti prendono il predefinito, le coppie si mettono in ordine
+    assert spec["size"] == [8.0, 20.0] and spec["origin"] == [0.3, 0.7]
+    assert spec["spin"] == particelle.PREDEFINITA["spin"]
+    a = particelle.html("custom", 1920, 1080, seed=3, custom=ricetta)
+    assert a == particelle.html("custom", 1920, 1080, seed=3, custom=ricetta)
+    assert "Math.random" not in a
+    assert particelle.parametri(a)["custom"] == spec
+    for sbagliata, msg in (({"shape": "drago"}, "forma"), ({"motion": "salta"}, "moto"),
+                           ({"colors": ["rosso"]}, "colore"), ({"shape": "text"}, "text"),
+                           ({"size": [1, 9999]}, "size"), ({"vento": 1}, "sconosciute"),
+                           ({"opacity": [0.5]}, "coppia")):
+        with pytest.raises(ValueError, match=msg):
+            particelle.valida(sbagliata)
+    # "</" dentro un testo non chiude il blocco dei parametri
+    t = particelle.html("custom", 320, 180, custom={"shape": "text", "text": "</script> ★"})
+    assert particelle.parametri(t)["custom"]["text"] == "</script> ★"
+
+    s = _progetto(tmp_path)
+    c = s.add_particles("custom", custom=ricetta, duration=2)
+    assert c.name == "particelle personalizzate"
+    with pytest.raises(EditError, match="forma"):
+        s.add_particles("custom", custom={"shape": "drago"})
+
+
+def test_set_particles_cambia_senza_ricreare(tmp_path):
+    s = _progetto(tmp_path)
+    c = s.add_particles("snow", start=1, duration=2)
+    s.set_clip(c.id, blend="screen")
+    s.set_particles(c.id, density=2, seed=9)
+    par = particelle.parametri(c.html)
+    assert (par["kind"], par["density"], par["seed"]) == ("snow", 2.0, 9)
+    s.set_particles(c.id, kind="custom", custom={"shape": "star", "motion": "rise"})
+    assert c.name == "particelle personalizzate" and c.blend == "screen" and c.start == 1
+    # custom corregge solo le voci che nomina
+    s.set_particles(c.id, custom={"colors": ["#00ff00"]})
+    par = particelle.parametri(c.html)
+    assert par["custom"]["shape"] == "star" and par["custom"]["colors"] == ["#00ff00"]
+    assert par["density"] == 2.0
+    s.undo()
+    assert particelle.parametri(s.clip_or_die(c.id)[1].html)["custom"]["colors"] == ["#ffffff"]
+    t = s.add_text("ciao")
+    with pytest.raises(EditError, match="non e' fatta di particelle"):
+        s.set_particles(t.id, density=2)
+
+
+def test_particelle_personali_salvate(tmp_path, monkeypatch):
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path / "cache"))
+    mie = particelle.salva("Cuori rosa", {"shape": "heart", "colors": ["#ff66aa"]})
+    assert mie["id"] == "mie-cuori-rosa"
+    assert particelle.salva("Cuori rosa", {"shape": "star"})["id"] == "mie-cuori-rosa-2"
+    particelle.salva("Cuori", {"shape": "heart", "count": 40}, mie["id"])
+    assert particelle.trova(mie["id"])["spec"]["count"] == 40
+    s = _progetto(tmp_path)
+    c = s.add_particles(mie["id"], duration=1)
+    assert c.name == "particelle Cuori"
+    assert particelle.parametri(c.html)["custom"]["count"] == 40
+    particelle.elimina(mie["id"])
+    with pytest.raises(EditError, match="sconosciute"):
+        s.add_particles(mie["id"])
+    with pytest.raises(ValueError, match="inesistenti"):
+        particelle.elimina(mie["id"])
+
+
 # --------------------------------------------------------------------------
 # render veri
 # --------------------------------------------------------------------------
@@ -198,3 +265,24 @@ def test_rimuovi_oggetto_cancella_il_riquadro(tmp_path):
     s.set_transform(q.id, scale=0.2)
     s.add_effect(None, "remove_object", {"x": 120, "y": 60, "w": 80, "h": 60})
     assert _vicino(_pixel(s, 0.5, (160, 90), tmp_path), (0, 255, 0), 60)
+
+
+@pytest.mark.slow
+def test_particelle_su_misura_si_vedono_nel_render(tmp_path):
+    """Esplosione ferma al centro: i quadrati rossi coprono il fondo blu solo li'."""
+    pytest.importorskip("playwright")
+    from vedit import htmlclip
+
+    s = _progetto(tmp_path)
+    s.add_color("#0000ff", duration=1)
+    t2 = s.add_track("video")
+    s.add_particles("custom", track_id=t2.id, duration=1, custom={
+        "shape": "square", "motion": "burst", "colors": ["#ff0000"], "count": 30,
+        "size": [60, 60], "speed": [0, 0], "gravity": 0, "life": 5, "interval": 5,
+        "fade": False, "opacity": [1, 1]})
+    try:
+        centro = _pixel(s, 0.5, (160, 90), tmp_path)
+    except htmlclip.HtmlNonDisponibile as exc:
+        pytest.skip(str(exc))
+    assert _vicino(centro, (255, 0, 0), 40)
+    assert _vicino(_pixel(s, 0.5, (10, 10), tmp_path), SFONDO, 40)

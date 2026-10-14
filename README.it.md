@@ -528,7 +528,11 @@ fisheye o a cuscino, tremolio di camera che non scopre mai i bordi, **rotazione 
 con prospettiva vera (yaw e pitch animabili), sostituzione del cielo togliendolo sopra una linea
 d'orizzonte, rimozione di oggetti e loghi (rettangolo animabile). **Particelle** —
 `add_particles`: neve, pioggia, scintille, coriandoli, pulviscolo, bokeh, stelle, lucciole,
-come clip HTML trasparente calcolata in forma chiusa, quindi anteprima e render coincidono
+oppure **particelle su misura** (`kind="custom"`: forma — cerchio, stella, cuore, anello,
+emoji… —, moto — cadono, salgono, vento, fluttuano, esplosione, ferme —, colori, dimensioni,
+velocità, rotazione, bagliore), disegnate nell'editor con l'anteprima dal vivo e salvate per
+riusarle (`create_particles`); `set_particles` le cambia su una clip già in timeline. Clip
+HTML trasparente calcolata in forma chiusa, quindi anteprima e render coincidono
 fotogramma per fotogramma. *(extra `vision`)* **Scontorno con l'IA senza green screen** —
 `remove_background` segmenta il soggetto fotogramma per fotogramma (qualunque classe COCO, o
 al contrario per tenere solo lo sfondo); **motion tracking** — `pin_to_subject` aggancia un

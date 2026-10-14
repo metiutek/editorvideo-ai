@@ -276,7 +276,28 @@ async def test_effetti_speciali_da_mcp(tmp_path):
     part = await call("add_particles", kind="sparks", duration=2.0)
     assert part["type"] == "html" and part["kind"] == "sparks"
     nomi = {t.name for t in await srv.mcp.list_tools()}
-    assert {"remove_background", "pin_to_subject", "add_particles"} <= nomi
+    assert {"remove_background", "pin_to_subject", "add_particles", "set_particles",
+            "create_particles", "delete_particles"} <= nomi
+
+
+@pytest.mark.anyio
+async def test_particelle_su_misura_dall_agente(tmp_path, monkeypatch):
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path / "cache"))
+    await call("project_create", path=str(tmp_path / "pp.json"), preset="720p")
+    c = await call("add_particles", kind="custom", duration=2.0,
+                   custom={"shape": "star", "motion": "rise", "colors": ["#ffd23b"]})
+    assert c["parametri"]["custom"]["shape"] == "star"
+    v = await call("set_particles", clip=c["id"], custom={"motion": "float"}, density=1.5)
+    assert v["parametri"]["custom"]["motion"] == "float" and v["parametri"]["density"] == 1.5
+    with pytest.raises(ToolError, match="forma"):
+        await call("add_particles", kind="custom", custom={"shape": "drago"})
+    salvate = await call("create_particles", name="Oro", custom={"shape": "star"})
+    pid = salvate["particelle"]["id"]
+    assert pid in salvate["prossimo_passo"]
+    assert (await call("add_particles", kind=pid))["parametri"]["custom"]["shape"] == "star"
+    await call("delete_particles", particles=pid)
+    with pytest.raises(ToolError, match="inesistenti"):
+        await call("delete_particles", particles=pid)
 
 
 @pytest.mark.anyio

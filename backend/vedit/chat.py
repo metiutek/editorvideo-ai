@@ -104,6 +104,25 @@ def build_tools() -> list[dict]:
         _tool("set_html",
               "Sostituisce il documento HTML di una clip html.",
               {"clip_id": _STR, "html": _STR}, ["clip_id", "html"]),
+        _tool("add_particles",
+              "Particelle sopra la ripresa, come clip html trasparente. kind: snow, rain, "
+              "sparks, confetti, dust, bokeh, stars, fireflies, l'id di particelle salvate "
+              "dall'utente, oppure custom con la ricetta in custom: shape (circle square "
+              "triangle star heart ring line text), text (emoji separate da spazi, per "
+              "shape=text), motion (fall rise drift float burst still), colors [#rrggbb], "
+              "count, size [da,a] px, speed [da,a] px/s, direction gradi, wobble px, spin "
+              "giri/s, opacity [da,a], glow px, twinkle 0-1, fade, e per burst origin [x,y] "
+              "in frazioni, spread gradi, gravity, life, interval. density/speed/size "
+              "moltiplicano (1 = normale).",
+              {"kind": _STR, "custom": {"type": "object"}, "start": _NUM, "duration": _NUM,
+               "track_id": _STR, "color": _STR, "density": _NUM, "speed": _NUM,
+               "size": _NUM, "seed": {"type": "integer"}}, ["kind"]),
+        _tool("set_particles",
+              "Cambia le particelle di una clip fatta con add_particles: le voci assenti "
+              "restano, custom corregge solo le voci che nomina.",
+              {"clip_id": _STR, "kind": _STR, "custom": {"type": "object"}, "color": _STR,
+               "density": _NUM, "speed": _NUM, "size": _NUM, "seed": {"type": "integer"}},
+              ["clip_id"]),
         _tool("set_sidechain",
               "Abbassa da sola una traccia quando ne suona un'altra (compressore sidechain): "
               "per esempio la musica (track_id) quando parla la voce (source). source vuoto "

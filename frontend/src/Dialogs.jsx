@@ -8,7 +8,7 @@ import Icon from './Icons.jsx'
  * Il fuoco entra nella finestra all'apertura e non ne esce con Tab: senza,
  * si tabula dentro l'editor sotto senza vederlo, e Esc non chiude niente.
  */
-function Modal({ title, children, onClose, actions, narrow }) {
+export function Modal({ title, children, onClose, actions, narrow }) {
   const box = useRef(null)
 
   useEffect(() => {

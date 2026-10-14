@@ -1081,3 +1081,23 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .avanzamento .riga { display: flex; gap: 7px; align-items: center; }
 .avanzamento .barra { height: 3px; background: var(--line-soft); border-radius: 2px; overflow: hidden; }
 .avanzamento .barra i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+
+/* editor delle particelle su misura */
+.particelle-anteprima {
+  margin-left: auto; margin-right: auto; max-width: 100%;
+  position: relative; overflow: hidden; margin-bottom: 12px; min-height: 120px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: radial-gradient(ellipse at 50% 30%, #2a3140, #0b0d11 70%);
+}
+.particelle-anteprima iframe {
+  position: absolute; left: 0; top: 0; border: 0; background: transparent;
+  transform-origin: 0 0; pointer-events: none;
+}
+.particelle-colori { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.particelle-colore { display: inline-flex; align-items: center; gap: 2px; }
+.particelle-colore input[type=color] { width: 30px; height: 24px; padding: 0; border: 0; background: none; }
+.particelle-coppia { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.particelle-num { width: 64px; }
+.particelle-val { min-width: 64px; font-size: 11px; color: var(--dim); text-align: right; }
+.nomeparticelle { width: 150px; }
+.hint.errore { color: var(--danger); }

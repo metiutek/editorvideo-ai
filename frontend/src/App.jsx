@@ -6,6 +6,7 @@ import Icon from './Icons.jsx'
 import Inspector from './Inspector.jsx'
 import Library from './Library.jsx'
 import MediaBin from './MediaBin.jsx'
+import { EditorParticelle, MenuParticelle } from './Particelle.jsx'
 import Preview from './Preview.jsx'
 import SourceMonitor from './SourceMonitor.jsx'
 import Timeline from './Timeline.jsx'
@@ -18,10 +19,6 @@ const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|
 // Le misure dei pannelli restano tra una sessione e l'altra. Vengono rilette
 // entro i limiti di adesso: una misura salvata da una versione precedente puo'
 // essere fuori scala e mandare i comandi fuori dalla loro riga.
-// particelle.KINDS, con il nome che si legge nel menu
-const PARTICELLE = [['snow', 'neve'], ['rain', 'pioggia'], ['sparks', 'scintille'],
-  ['confetti', 'coriandoli'], ['dust', 'pulviscolo'], ['bokeh', 'bokeh'], ['stars', 'stelle'],
-  ['fireflies', 'lucciole']]
 const LIMITS = { bin: [170, 520], inspector: [240, 600], timeline: [120, 1400], trackH: [44, 140] }
 
 const loadSizes = () => {
@@ -52,8 +49,9 @@ export default function App() {
   const [pxPerSec, setPxPerSec] = useState(70)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
-  const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render'
+  const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render' | 'particelle'
   const [job, setJob] = useState(null)
+  const [nuovi, setNuovi] = useState(0)          // progetti creati in questa sessione
   const [source, setSource] = useState(null)     // media aperto nel monitor
   const [tab, setTab] = useState('program')      // program | source
   const [leftTab, setLeftTab] = useState('media')      // media | libreria
@@ -266,7 +264,7 @@ export default function App() {
       const sep = sys.home.includes('\\') ? '\\' : '/'
       const nome = voci[0].file.name.replace(/\.[^.]+$/, '') || 'progetto'
       try {
-        progettoAperto(await api.createProject(`${sys.home}${sep}${nome}.json`, nome, '1080p'))
+        progettoNuovo(await api.createProject(`${sys.home}${sep}${nome}.json`, nome, '1080p'))
       } catch (e) { setError(e.message); return }
     }
     // meglio dirlo prima che a meta' copia: il disco pieno lascia file troncati
@@ -343,6 +341,13 @@ export default function App() {
     setTab('program')
     if (r.recenti) setSys((s) => (s ? { ...s, recenti: r.recenti } : s))
   }, [applyState])
+  // un progetto nuovo riparte senza stile di montaggio: quello del progetto
+  // prima non e' una scelta fatta per questo
+  const progettoNuovo = useCallback((r) => {
+    try { localStorage.removeItem('vedit.stile') } catch { /* senza storage basta il contatore */ }
+    setNuovi((n) => n + 1)
+    progettoAperto(r)
+  }, [progettoAperto])
 
   /** Aggiunge un riferimento e porta l'assistente in primo piano. */
   const aggiungiRif = useCallback((r) => {
@@ -408,17 +413,10 @@ export default function App() {
           onClick={() => run('add_html', { start: playhead, duration: 4 })
             .then((c) => setSelected(c.id)).catch((e) => setError(e.message))}>
           <Icon name="codice" />grafica html</button>
-        <select className="ghost act" disabled={!project} value=""
-          title="Particelle alla testina: neve, scintille, coriandoli... (clip html trasparente)"
-          onChange={(e) => {
-            const kind = e.target.value
-            if (!kind) return
-            run('add_particles', { kind, start: playhead, duration: 5 })
-              .then((c) => setSelected(c.id)).catch((err) => setError(err.message))
-          }}>
-          <option value="">+ particelle</option>
-          {PARTICELLE.map(([k, nome]) => <option key={k} value={k}>{nome}</option>)}
-        </select>
+        <MenuParticelle disabled={!project}
+          onAggiungi={(kind) => run('add_particles', { kind, start: playhead, duration: 5 })
+            .then((c) => setSelected(c.id)).catch((err) => setError(err.message))}
+          onSuMisura={() => setDialog('particelle')} />
 
         <span className="spacer" />
         <span className="path" title={path || ''}>{path || 'nessun progetto'}</span>
@@ -566,7 +564,7 @@ export default function App() {
               <Chat available={llmSt || sys?.chat} onAvailable={setLlmSt} setError={setError}
                 onProject={applyState} project={project} playhead={playhead} seek={seek}
                 selected={selected} refs={refs} setRefs={setRefs}
-                stili={sys?.stili || []} domanda={domanda}
+                stili={sys?.stili || []} domanda={domanda} nuovoProgetto={nuovi}
                 onStili={(l) => setSys((x) => (x ? { ...x, stili: l } : x))}
                 onRisposta={(risposte) => {
                   const d = domanda
@@ -588,7 +586,13 @@ export default function App() {
         <NewProject presets={sys?.presets || ['1080p']} home={sys?.home}
           onClose={() => setDialog(null)}
           onCreate={(p, name, preset) => api.createProject(p, name, preset)
-            .then(progettoAperto).catch((e) => setError(e.message))} />
+            .then(progettoNuovo).catch((e) => setError(e.message))} />
+      )}
+      {dialog === 'particelle' && (
+        <EditorParticelle titolo="Particelle su misura" applica="aggiungi alla timeline"
+          setError={setError} onClose={() => setDialog(null)}
+          onApplica={(custom) => run('add_particles', { kind: 'custom', custom, start: playhead, duration: 5 })
+            .then((c) => setSelected(c.id)).catch((err) => setError(err.message))} />
       )}
       {dialog === 'open' && (
         <FileBrowser title="Apri progetto" multiple={false} onClose={() => setDialog(null)}

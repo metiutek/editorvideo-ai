@@ -58,13 +58,14 @@ const URL_SOLO = /^https?:\/\/\S+$/i
  */
 export default function Chat({
   available, onAvailable, onProject, setError, project, playhead, seek, selected,
-  refs, setRefs, pickArea, setPickArea, stili = [], onStili, domanda, onRisposta,
+  refs, setRefs, pickArea, setPickArea, stili = [], onStili, domanda, onRisposta, nuovoProgetto = 0,
 }) {
   const [turns, setTurns] = useState([])   // {role, text, tools:[], refs}
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [settings, setSettings] = useState(false)
-  // stile di montaggio: resta scelto fra una sessione e l'altra
+  // stile di montaggio: resta scelto fra una sessione e l'altra, ma un
+  // progetto nuovo riparte da "nessuno"
   const [stile, setStileState] = useState(() => {
     try { return localStorage.getItem('vedit.stile') || '' } catch { return '' }
   })
@@ -72,6 +73,7 @@ export default function Chat({
     setStileState(v)
     try { localStorage.setItem('vedit.stile', v) } catch { /* senza storage resta per questa sessione */ }
   }
+  useEffect(() => { if (nuovoProgetto) setStileState('') }, [nuovoProgetto])
   const [menuStili, setMenuStili] = useState(false)
   const [editStile, setEditStile] = useState(null)   // stile personale in scrittura
   const [tratto, setTratto] = useState(null)   // inizio di un tratto in costruzione
