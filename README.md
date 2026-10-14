@@ -703,3 +703,7 @@ and Pillow.
 ## License
 
 MIT — see [LICENSE](https://github.com/metiutek/editorvideo-ai/blob/main/LICENSE).
+
+---
+
+made by https://metiu.xyz/
