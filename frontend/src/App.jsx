@@ -15,6 +15,8 @@ import { caricaTrascinati, importaPercorsi } from './caricamento.js'
 import { leggiTrascinati, useFineTrascinamento } from './trascina.js'
 import { clamp, findClip, fmt } from './util.js'
 
+const round3 = (v) => Math.round(v * 1000) / 1000
+
 const MEDIA_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv|flv|ts|mp3|wav|aac|m4a|flac|ogg|opus|wma|aiff?|png|jpe?g|webp|bmp|tiff?|gif)$/i
 
 // Le misure dei pannelli restano tra una sessione e l'altra. Vengono rilette
@@ -285,12 +287,48 @@ export default function App() {
   }
 
   // ---- scorciatoie da tastiera --------------------------------------------
+  // K tenuto premuto: con J e L si va di un fotogramma, come in Premiere e Avid
+  const kTenuto = useRef(false)
+  useEffect(() => {
+    const su = (e) => { if (e.key.toLowerCase() === 'k') kTenuto.current = false }
+    window.addEventListener('keyup', su)
+    window.addEventListener('blur', su)
+    return () => { window.removeEventListener('keyup', su); window.removeEventListener('blur', su) }
+  }, [])
   useEffect(() => {
     const onKey = (e) => {
       const tag = e.target.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       const step = 1 / (project?.settings?.fps || 30)
+      const fallito = (err) => setError(err.message)
+      const sel = selected ? findClip(project, selected) : null
+      // trim da tastiera sulla clip selezionata: Q/W ripple fino alla testina,
+      // , e . slip di un fotogramma (Maiusc: dieci), Ctrl+frecce slide
+      const trimTasto = {
+        q: () => run('ripple_trim', { clip_id: sel.id, edge: 'start', delta: round3(playheadRef.current - sel.start) })
+          .then(() => seek(sel.start)).catch(fallito),
+        w: () => run('ripple_trim', { clip_id: sel.id, edge: 'end', delta: round3(playheadRef.current - sel.end) })
+          .catch(fallito),
+        ',': () => run('slip_clip', { clip_id: sel.id, delta: round3(-step * (e.shiftKey ? 10 : 1)) }).catch(fallito),
+        '.': () => run('slip_clip', { clip_id: sel.id, delta: round3(step * (e.shiftKey ? 10 : 1)) }).catch(fallito),
+      }
+      // con Maiusc la tastiera italiana manda ; e :, quella americana < e >
+      trimTasto[';'] = trimTasto['<'] = () => run('slip_clip', { clip_id: sel.id, delta: round3(-step * 10) }).catch(fallito)
+      trimTasto[':'] = trimTasto['>'] = () => run('slip_clip', { clip_id: sel.id, delta: round3(step * 10) }).catch(fallito)
+      if ((e.ctrlKey || e.metaKey) && sel && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault()
+        run('slide_clip', { clip_id: sel.id, delta: round3((e.key === 'ArrowLeft' ? -1 : 1) * step * (e.shiftKey ? 10 : 1)) })
+          .catch(fallito)
+        return
+      }
+      if (sel && !e.ctrlKey && !e.metaKey && !e.altKey && trimTasto[e.key.toLowerCase()]) {
+        e.preventDefault(); trimTasto[e.key.toLowerCase()](); return
+      }
       const act = {
+        // J/K/L: L avanti, K ferma, J indietro di un secondo; con K tenuto, un fotogramma
+        k: () => { kTenuto.current = true; setPlaying(false) },
+        l: () => (kTenuto.current ? seek(playheadRef.current + step) : setPlaying(true)),
+        j: () => { setPlaying(false); seek(playheadRef.current - (kTenuto.current ? step : 1)) },
         ' ': () => setPlaying((p) => !p),
         ArrowLeft: () => seek(playheadRef.current - (e.shiftKey ? 1 : step)),
         ArrowRight: () => seek(playheadRef.current + (e.shiftKey ? 1 : step)),
@@ -314,7 +352,7 @@ export default function App() {
         if (project) run('save', {}).then(() => flash('progetto salvato')).catch((err) => setError(err.message))
         return
       }
-      const fn = act[e.key]
+      const fn = act[e.key] || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && act[e.key.toLowerCase()])
       if (fn) { e.preventDefault(); fn() }
     }
     window.addEventListener('keydown', onKey)

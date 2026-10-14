@@ -188,6 +188,12 @@ accodare media *interi*, senza punto d'attacco.
  {"media": "m9155", "start": 1.5,   "in": 98.5,  "duration": 0.75}]
 ```
 
+Per ritoccare i tagli gia' fatti c'e' `trim_edit` (`Store.ripple_trim`, `roll_edit`,
+`slip_clip`, `slide_clip`): spostano bordi senza aprire buchi ne' creare sovrapposizioni. Tutti
+passano da `Store._bordo`, che traduce lo scarto in timeline in attacco e durata tenendo conto
+di velocita' e reverse, e da `Store._tutto_o_niente`: se un passo e' impossibile il progetto
+torna com'era, anche dentro un `batch()`.
+
 ### Montare a tempo di musica
 
 `music_beats` dà BPM, durata di battito e battuta, scostamento del primo battito e il profilo

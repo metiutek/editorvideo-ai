@@ -418,6 +418,16 @@ The final render **always uses the originals**, never the proxies.
 | `Del` | delete the clip (with `shift`: close the gap) |
 | `Ctrl+Z` / `Ctrl+Y` | undo / redo |
 | `+` `-` | timeline zoom |
+| `J` `K` `L` | back one second / stop / play; holding `K`, `J` and `L` step one frame |
+| `Q` / `W` | ripple the selected clip to the playhead: trim head / tail and close the gap |
+| `,` `.` | slip by one frame (with `shift`: ten) |
+| `Ctrl+←` `Ctrl+→` | slide by one frame (with `shift`: ten) |
+
+Dragging in the timeline: an edge with `shift` is a **ripple** (the rest of the track
+follows), with `Ctrl` a **roll** (moves the cut with the neighbouring clip); the clip body with
+`Ctrl` is a **slip** (same place, another stretch of the source), with `shift` a **slide**
+(it glides between its neighbours). Mode and offset show on the clip while dragging. `Alt`
+turns snapping off.
 
 ---
 

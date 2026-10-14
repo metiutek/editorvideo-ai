@@ -446,6 +446,15 @@ Il render finale usa **sempre gli originali**, mai i proxy.
 | `Canc` | elimina la clip (con `shift`: chiude il buco) |
 | `Ctrl+Z` / `Ctrl+Y` | annulla / ripeti |
 | `+` `-` | zoom della timeline |
+| `J` `K` `L` | indietro di un secondo / ferma / play; con `K` tenuto, `J` e `L` vanno di un fotogramma |
+| `Q` / `W` | ripple della clip selezionata fino alla testina: toglie la testa / la coda e chiude il buco |
+| `,` `.` | slip di un fotogramma (con `shift`: dieci) |
+| `Ctrl+←` `Ctrl+→` | slide di un fotogramma (con `shift`: dieci) |
+
+Trascinando in timeline: un bordo con `shift` fa il **ripple** (il seguito della traccia
+segue), con `Ctrl` il **roll** (sposta il taglio con la clip vicina); la clip con `Ctrl` fa lo
+**slip** (stesso posto, altro tratto della sorgente), con `shift` lo **slide** (scivola fra le
+vicine). Il modo e lo scarto compaiono sulla clip mentre si trascina. `Alt` toglie l'aggancio.
 
 ---
 

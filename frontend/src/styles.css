@@ -1123,3 +1123,10 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
   position: absolute; right: 6px; top: 6px; font-size: 10px; color: var(--faint);
   background: rgba(0,0,0,.6); padding: 2px 6px; border-radius: 4px;
 }
+
+/* modo del trascinamento (ripple, roll, slip, slide) sopra la clip */
+.clip .dragmodo {
+  position: absolute; top: 2px; right: 6px; z-index: 3; pointer-events: none;
+  font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 4px;
+  background: var(--accent); color: #111;
+}

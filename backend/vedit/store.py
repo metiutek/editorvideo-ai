@@ -843,6 +843,180 @@ class Store:
         self._done()
         return clip
 
+    # ---- trim da montatore: ripple, roll, slip, slide ---------------------
+    #
+    # Tutti passano da ``_bordo``, che sposta un bordo di una clip di ``d``
+    # secondi di timeline (positivo = verso destra) e sa cosa vuol dire per la
+    # sorgente: velocita', reverse e lunghezza del media. Le collegate seguono
+    # con ``_allinea``. Ogni operazione e' un solo passo di undo.
+
+    MIN_DUR = 1.0 / 60
+
+    @contextmanager
+    def _tutto_o_niente(self):
+        """Una modifica a piu' passi che, se un passo e' impossibile, non lascia niente a meta'."""
+        prima, redo = self.project.to_dict(), list(self._redo)
+        self._touch()
+        try:
+            yield
+        except Exception:
+            self.project = Project.from_obj(prima)
+            if not self._batch:
+                self._undo.pop()
+            self._redo = redo
+            raise
+        self._done()
+
+    def _bordo(self, clip: Clip, lato: str, d: float, fermo: bool = False) -> None:
+        """Sposta il bordo ``lato`` ("start"/"end") di ``d`` s, rifiutando l'impossibile.
+
+        ``fermo``: la clip resta al suo posto e cambia solo cosa contiene (il
+        ripple della testa), quindi l'inizio della timeline non e' un limite.
+        """
+        k = abs(clip.speed or 1.0)
+        start, dur, inp = clip.start, clip.duration, clip.in_
+        if lato == "end":
+            dur += d
+            if clip.reverse:          # all'indietro la fine in timeline e' l'inizio in sorgente
+                inp -= d * k
+        else:
+            start += d
+            dur -= d
+            if not clip.reverse:
+                inp += d * k
+        if dur < self.MIN_DUR - 1e-9:
+            raise EditError(f"la clip {clip.id} resterebbe senza durata")
+        if start < -1e-9 and not fermo:
+            raise EditError("prima dell'inizio della timeline non si va")
+        media = self.project.media_by_id(clip.media) if clip.type == "media" and clip.media else None
+        if media is not None:
+            if inp < -1e-6:
+                raise EditError(f"la clip {clip.id} non ha altro materiale prima del suo attacco")
+            if media.duration > 0 and media.kind != "image" and inp + dur * k > media.duration + 1e-3:
+                raise EditError(f"la clip {clip.id} non ha altro materiale dopo la sua fine")
+        clip.start, clip.duration, clip.in_ = max(0.0, start), dur, max(0.0, inp)
+
+    def _dopo(self, track: Track, clip: Clip) -> Clip | None:
+        """La clip che segue subito: attaccata, o sovrapposta per una transizione."""
+        cand = [c for c in track.clips if c is not clip and c.start > clip.start + 1e-6
+                and c.start <= clip.end + 1e-3]
+        return min(cand, key=lambda c: c.start) if cand else None
+
+    def _prima(self, track: Track, clip: Clip) -> Clip | None:
+        cand = [c for c in track.clips if c is not clip and c.start < clip.start - 1e-6
+                and c.end >= clip.start - 1e-3]
+        return max(cand, key=lambda c: c.start) if cand else None
+
+    def _libero(self, track: Track, a: float, b: float, escluse: set[int]) -> bool:
+        return all(c.end <= a + 1e-3 or c.start >= b - 1e-3
+                   for c in track.clips if id(c) not in escluse)
+
+    def ripple_trim(self, clip_id: str, edge: str, delta: float) -> Clip:
+        """Accorcia o allunga un bordo e sposta di conseguenza tutto quello che segue.
+
+        ``edge="end"``, ``delta`` > 0 allunga la coda e spinge avanti le clip
+        dopo; ``edge="start"``, ``delta`` > 0 toglie dalla testa e la clip resta
+        al suo posto, con tutto il seguito che arretra. Nessun buco, nessuna
+        sovrapposizione: e' il trim del montatore. Vale sulla traccia della
+        clip e su quelle delle sue collegate.
+        """
+        if edge not in ("start", "end"):
+            raise EditError("edge deve essere start o end")
+        track, clip = self.clip_for_edit(clip_id)
+        d = float(delta)
+        if abs(d) < 1e-9:
+            return clip
+        gruppo = [(track, clip), *self.collegate(clip)]
+        for t, _ in gruppo:
+            if t.locked:
+                raise EditError(f"la traccia {t.id} e' bloccata")
+        with self._tutto_o_niente():
+            for t, c in gruppo:
+                fine = c.end
+                if edge == "end":
+                    self._bordo(c, "end", d)
+                    spinta = d
+                else:
+                    tenuto = c.start
+                    self._bordo(c, "start", d, fermo=True)
+                    c.start = tenuto      # il contenuto si accorcia, la clip resta li'
+                    spinta = -d
+                for altra in t.clips:
+                    if altra is not c and altra.start >= fine - 1e-3:
+                        altra.start = max(0.0, altra.start + spinta)
+                t.clips.sort(key=lambda x: x.start)
+        return clip
+
+    def roll_edit(self, clip_id: str, delta: float) -> tuple[Clip, Clip]:
+        """Sposta il taglio fra la clip e quella che la segue, senza cambiare la durata totale.
+
+        La prima si allunga di quanto la seconda si accorcia (o il contrario):
+        niente si muove a valle. Serve a far cadere lo stacco un po' prima o un
+        po' dopo, su un battito o su una parola.
+        """
+        track, clip = self.clip_for_edit(clip_id)
+        dopo = self._dopo(track, clip)
+        if dopo is None:
+            raise EditError(f"la clip {clip_id} non ha una clip attaccata dopo: niente taglio da spostare")
+        d = float(delta)
+        with self._tutto_o_niente():
+            self._bordo(clip, "end", d)
+            self._bordo(dopo, "start", d)
+            track.clips.sort(key=lambda x: x.start)
+            self._allinea(clip)
+            self._allinea(dopo)
+        return clip, dopo
+
+    def slip_clip(self, clip_id: str, delta: float) -> Clip:
+        """Scorre il contenuto dentro la clip: stessa posizione e durata, altro tratto della sorgente.
+
+        ``delta`` in secondi di sorgente: positivo mostra un tratto piu' avanti.
+        """
+        track, clip = self.clip_for_edit(clip_id)
+        if clip.type != "media":
+            raise EditError("lo slip vale per le clip di un media: testi e grafica non hanno sorgente")
+        media = self.project.media_by_id(clip.media)
+        if media is not None and media.kind == "image":
+            raise EditError("un'immagine ferma non ha un tratto da far scorrere")
+        nuovo = clip.in_ + float(delta)
+        k = abs(clip.speed or 1.0)
+        if nuovo < -1e-6:
+            raise EditError("la sorgente non ha materiale prima di cosi'")
+        if media is not None and media.duration > 0 and nuovo + clip.duration * k > media.duration + 1e-3:
+            raise EditError("la sorgente non ha materiale dopo di cosi'")
+        self._touch()
+        clip.in_ = max(0.0, nuovo)
+        self._allinea(clip)
+        self._done()
+        return clip
+
+    def slide_clip(self, clip_id: str, delta: float) -> Clip:
+        """Fa scivolare la clip fra le vicine: lei resta uguale, le vicine cedono o prendono.
+
+        La clip prima si allunga (o accorcia) fino al nuovo attacco, quella dopo
+        parte piu' tardi (o prima): la durata totale non cambia. Senza vicine
+        da un lato, da quel lato serve spazio libero.
+        """
+        track, clip = self.clip_for_edit(clip_id)
+        d = float(delta)
+        prima, dopo = self._prima(track, clip), self._dopo(track, clip)
+        if clip.start + d < -1e-9:
+            raise EditError("prima dell'inizio della timeline non si va")
+        with self._tutto_o_niente():
+            if prima is not None:
+                self._bordo(prima, "end", d)
+            if dopo is not None:
+                self._bordo(dopo, "start", d)
+            clip.start += d
+            fuori = {id(clip), *(id(c) for c in (prima, dopo) if c is not None)}
+            if not self._libero(track, clip.start, clip.end, fuori):
+                raise EditError("la clip finirebbe sopra un'altra: lasciale spazio o avvicina le vicine")
+            track.clips.sort(key=lambda x: x.start)
+            for c in (clip, prima, dopo):
+                if c is not None:
+                    self._allinea(c)
+        return clip
+
     def split_clip(self, clip_id: str, at: float) -> tuple[Clip, Clip]:
         """Taglia in due al tempo di timeline ``at``. Le clip collegate si tagliano insieme."""
         track, clip = self.clip_for_edit(clip_id)

@@ -5,6 +5,13 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Trim da montatore: ripple, roll, slip, slide, e J/K/L.** In `Store` (`ripple_trim`,
+  `roll_edit`, `slip_clip`, `slide_clip`), che tengono conto di velocità, reverse e lunghezza
+  della sorgente, portano con sé le clip collegate e, se un passo è impossibile, non lasciano
+  niente a metà (un solo passo di undo). In timeline con i modificatori del trascinamento
+  (Maiusc/Ctrl su bordi e clip) e da tastiera: Q/W ripple fino alla testina, `,` `.` slip,
+  Ctrl+frecce slide, J/K/L. Per l'agente `trim_edit(mode=ripple|roll|slip|slide)`, nella chat
+  i quattro strumenti.
 - **Scope grafici.** Nuova scheda *scope* nel pannello di destra: waveform della luminanza in
   IRE, parade RGB, vettorscopio, istogramma R/G/B e luma su scala logaritmica, del
   fotogramma sotto la testina. Si aggiornano a riproduzione ferma e sono misurati sugli

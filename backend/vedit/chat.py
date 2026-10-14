@@ -141,6 +141,24 @@ def build_tools() -> list[dict]:
         _tool("trim_clip",
               "Cambia attacco e durata di una clip senza spostarla.",
               {"clip_id": _STR, "in_": _NUM, "duration": _NUM}, ["clip_id"]),
+        _tool("ripple_trim",
+              "Allunga o accorcia un bordo (edge start|end) e sposta tutto il seguito della "
+              "traccia, senza lasciare buchi. delta in secondi: > 0 su end allunga, su start "
+              "toglie dalla testa.",
+              {"clip_id": _STR, "edge": {"type": "string", "enum": ["start", "end"]},
+               "delta": _NUM}, ["clip_id", "edge", "delta"]),
+        _tool("roll_edit",
+              "Sposta il taglio fra la clip e quella attaccata dopo: una cresce quanto l'altra "
+              "cala, il resto non si muove. Per far cadere uno stacco su un battito.",
+              {"clip_id": _STR, "delta": _NUM}, ["clip_id", "delta"]),
+        _tool("slip_clip",
+              "Mostra un altro tratto della sorgente nella stessa clip, senza spostarla. "
+              "delta in secondi di sorgente.",
+              {"clip_id": _STR, "delta": _NUM}, ["clip_id", "delta"]),
+        _tool("slide_clip",
+              "Fa scivolare la clip fra le vicine, che si allungano o accorciano: la durata "
+              "totale non cambia.",
+              {"clip_id": _STR, "delta": _NUM}, ["clip_id", "delta"]),
         _tool("set_speed",
               "Cambia la velocita' di una clip. 2 = doppia, 0.5 = slow motion.",
               {"clip_id": _STR, "speed": _NUM}, ["clip_id", "speed"]),

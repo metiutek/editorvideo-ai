@@ -97,8 +97,14 @@ export default function Timeline({
     const laneRects = Array.from(document.querySelectorAll('[data-lane]')).map((el) => ({
       id: el.dataset.lane, kind: el.dataset.kind, rect: el.getBoundingClientRect(),
     }))
+    // modificatori come negli editor desktop: Maiusc sul bordo = ripple, Ctrl
+    // sul bordo = roll; Ctrl sulla clip = slip, Maiusc sulla clip = slide
+    const ctrl = e.ctrlKey || e.metaKey
+    const modo = type === 'move'
+      ? (ctrl ? 'slip' : e.shiftKey ? 'slide' : 'move')
+      : (e.shiftKey ? 'ripple' : ctrl ? 'roll' : 'trim')
     setDrag({
-      type, id: clip.id, trackId: clip.trackId, kind: clip.kind,
+      type, modo, id: clip.id, trackId: clip.trackId, kind: clip.kind,
       t0: timeAt(e.clientX),
       start: clip.start, duration: clip.duration, in: clip.in || 0,
       speed: clip.speed || 1,
@@ -149,7 +155,12 @@ export default function Timeline({
       setDrag((d) => {
         if (!d) return d
         const next = { ...d }
-        if (d.type === 'move') {
+        if (d.modo === 'slip') {
+          // come la pellicola sotto la finestra: trascinare a destra mostra fotogrammi prima
+          next.newIn = Math.max(0, d.in - dt * d.speed)
+        } else if (d.modo === 'slide') {
+          next.newStart = Math.max(0, snap(d.start + dt, libero))
+        } else if (d.type === 'move') {
           next.newStart = Math.max(0, snap(d.start + dt, libero))
           const lane = corsie().find(
             (l) => e.clientY >= l.rect.top && e.clientY <= l.rect.bottom && l.kind === d.kind)
@@ -176,12 +187,35 @@ export default function Timeline({
       const moved =
         Math.abs(d.newStart - d.start) > 1e-3 ||
         Math.abs(d.newDuration - d.duration) > 1e-3 ||
+        Math.abs(d.newIn - d.in) > 1e-3 ||
         d.newTrack !== d.trackId
       if (!moved) return
-      const args = d.type === 'move'
-        ? { clip_id: d.id, start: round(d.newStart), track_id: d.newTrack }
-        : { clip_id: d.id, start: round(d.newStart), duration: round(d.newDuration), in_: round(d.newIn) }
-      run(d.type === 'move' ? 'move_clip' : 'set_clip', args).catch((err) => setError(err.message))
+      const fallito = (err) => setError(err.message)
+      if (d.modo === 'slip') {
+        run('slip_clip', { clip_id: d.id, delta: round(d.newIn - d.in) }).catch(fallito)
+      } else if (d.modo === 'slide') {
+        run('slide_clip', { clip_id: d.id, delta: round(d.newStart - d.start) }).catch(fallito)
+      } else if (d.modo === 'ripple') {
+        const args = d.type === 'trim-r'
+          ? { clip_id: d.id, edge: 'end', delta: round(d.newDuration - d.duration) }
+          : { clip_id: d.id, edge: 'start', delta: round(d.newStart - d.start) }
+        run('ripple_trim', args).catch(fallito)
+      } else if (d.modo === 'roll') {
+        if (d.type === 'trim-r') {
+          run('roll_edit', { clip_id: d.id, delta: round(d.newDuration - d.duration) }).catch(fallito)
+        } else {
+          // il bordo sinistro e' il taglio con la clip prima: si sposta quello
+          const track = project.tracks.find((t) => t.id === d.trackId)
+          const prima = track?.clips.find((c) => c.id !== d.id && Math.abs(c.end - d.start) < 1e-3)
+          if (!prima) { setError('roll: nessuna clip attaccata prima di questa'); return }
+          run('roll_edit', { clip_id: prima.id, delta: round(d.newStart - d.start) }).catch(fallito)
+        }
+      } else {
+        const args = d.type === 'move'
+          ? { clip_id: d.id, start: round(d.newStart), track_id: d.newTrack }
+          : { clip_id: d.id, start: round(d.newStart), duration: round(d.newDuration), in_: round(d.newIn) }
+        run(d.type === 'move' ? 'move_clip' : 'set_clip', args).catch(fallito)
+      }
     }
 
     window.addEventListener('pointermove', onMove)
@@ -395,7 +429,7 @@ export default function Timeline({
                         else onTransition?.(trans, parseFloat(e.dataTransfer.getData('text/duration')) || 1, clip.id)
                       }}
                     >
-                      <div className="handle l" onPointerDown={(e) =>
+                      <div className="handle l" title="Trascina: taglia · Maiusc: ripple · Ctrl: roll con la clip prima" onPointerDown={(e) =>
                         startDrag(e, { ...clip, trackId: track.id, kind: track.kind }, 'trim-l')} />
 
                       {track.kind === 'audio' && media?.audio && (
@@ -410,6 +444,12 @@ export default function Timeline({
                       )}
 
                       <div className="label">{clip.name || clip.type}</div>
+                      {live && !['move', 'trim'].includes(drag.modo) && (
+                        <div className="dragmodo">{drag.modo} {segnato(
+                          drag.modo === 'slip' ? drag.newIn - drag.in
+                            : drag.modo === 'slide' || drag.type === 'trim-l' ? drag.newStart - drag.start
+                              : drag.newDuration - drag.duration)}</div>
+                      )}
                       <div className="tags">
                         {clip.speed && Math.abs(clip.speed - 1) > 1e-6 ? `${clip.speed}x ` : ''}
                         {clip.effects?.length ? `fx${clip.effects.length} ` : ''}
@@ -429,7 +469,7 @@ export default function Timeline({
                         </div>
                       )}
 
-                      <div className="handle r" onPointerDown={(e) =>
+                      <div className="handle r" title="Trascina: taglia · Maiusc: ripple · Ctrl: roll con la clip dopo" onPointerDown={(e) =>
                         startDrag(e, { ...clip, trackId: track.id, kind: track.kind }, 'trim-r')} />
                     </div>
                   )
@@ -565,3 +605,5 @@ function Wave({ peaks, media, inPoint, span, className = 'wave' }) {
 }
 
 const round = (v) => Math.round(v * 1000) / 1000
+/** Scarto con il segno davanti, in secondi: "+0.40s", "-1.20s". */
+const segnato = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}s`

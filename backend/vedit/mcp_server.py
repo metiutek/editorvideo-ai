@@ -579,6 +579,38 @@ def trim(clip: str, in_point: float | None = None, out_point: float | None = Non
 
 
 @_strumento()
+def trim_edit(clip: str, mode: str, delta: float, edge: str = "end",
+              project: str | None = None) -> dict:
+    """Trim da montatore, senza buchi e senza sovrapposizioni. delta in secondi.
+
+    mode:
+      ripple - allunga/accorcia il bordo ``edge`` (start|end) e sposta tutto il
+               seguito della traccia: delta > 0 su end allunga, su start toglie
+               dalla testa
+      roll   - sposta il taglio fra la clip e quella attaccata dopo: una cresce
+               quanto l'altra cala, niente si muove a valle
+      slip   - stessa posizione e durata, altro tratto della sorgente (delta in
+               secondi di sorgente, > 0 = piu' avanti)
+      slide  - la clip scivola fra le vicine, che cedono o prendono materiale
+    Le clip collegate (video e il suo audio) seguono. Un solo passo di undo; se
+    la sorgente non basta non cambia niente e l'errore dice perche'.
+    """
+    s = _store(project)
+    if mode == "ripple":
+        c = s.ripple_trim(clip, edge, delta)
+    elif mode == "roll":
+        c, dopo = s.roll_edit(clip, delta)
+        return {**_clip_view(c), "dopo": _clip_view(dopo)}
+    elif mode == "slip":
+        c = s.slip_clip(clip, delta)
+    elif mode == "slide":
+        c = s.slide_clip(clip, delta)
+    else:
+        raise EditError("mode deve essere ripple, roll, slip o slide")
+    return _clip_view(c)
+
+
+@_strumento()
 def move(clip: str, start: float | None = None, track: str | None = None,
          project: str | None = None) -> dict:
     """Sposta una clip nel tempo e/o su un'altra traccia."""

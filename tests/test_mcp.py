@@ -408,3 +408,19 @@ async def test_report_issue_scrive_il_registro(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         await srv.report_issue("boh", "x")
     assert "report_issue" in srv.ISTRUZIONI
+
+
+@pytest.mark.anyio
+async def test_trim_edit_dall_agente(assets, tmp_path):
+    await call("project_create", path=str(tmp_path / "te.json"), preset="720p")
+    m = (await call("import_media", paths=[assets["red"]]))[0]["id"]
+    a = await call("add_clip", media=m, duration=2.0)
+    b = await call("add_clip", media=m, duration=2.0, in_point=2.0)
+    r = await call("trim_edit", clip=a["id"], mode="roll", delta=0.5)
+    assert r["duration"] == 2.5 and r["dopo"]["start"] == 2.5
+    assert (await call("trim_edit", clip=b["id"], mode="slip", delta=-0.5))["in"] == 2.0
+    assert (await call("trim_edit", clip=a["id"], mode="ripple", edge="end",
+                       delta=-1.0))["duration"] == 1.5
+    assert (await call("trim_edit", clip=b["id"], mode="slide", delta=-0.5))["start"] == 1.0
+    with pytest.raises(ToolError, match="mode"):
+        await call("trim_edit", clip=a["id"], mode="zoom", delta=1)
