@@ -4,6 +4,8 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+## v0.1.4 — 2026-10-15 · Montaggio MCP con molti meno token, interfaccia in inglese, mixer
+
 ### Aggiunto
 - **Montare via MCP costa molti meno token.** Una sessione reale (due minuti di video, 402 giri,
   contesto medio 248k token) aveva esaurito un abbonamento Pro: il costo e' giri per lunghezza
