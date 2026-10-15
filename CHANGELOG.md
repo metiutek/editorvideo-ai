@@ -17,6 +17,19 @@ Le voci più recenti stanno in cima.
   in un foglio solo. `list_effects` e' compatto (`name=` per la scheda completa),
   `music_beats` da' il profilo come lista di numeri. Le istruzioni del server hanno una
   sezione *ECONOMIA*.
+- **Meno giri per guardare e per la grafica.** `preview_frame(t=[...])` mette fino a 16
+  istanti in un'immagine sola, `batch(look=[...])` modifica e restituisce i fotogrammi nello
+  stesso giro. `add_html`/`set_html` accettano `vars`: un file modello con segnaposto
+  `{{nome}}` per tanti cartelli diversi, invece di un documento intero per ognuno.
+  `add_clips` crea da sola le tracce `V<n>`/`A<n>` che nomina. `list_styles` non porta piu'
+  le guide degli stili personali (fino a 20.000 caratteri l'una: `list_styles(style=id)`), e
+  `project_info` riassume i keyframe come `kf xN` (`detail='full'` li da' per intero).
+
+### Corretto
+- **`make_captions` su piu' clip.** Senza `output` ogni clip scriveva lo stesso file e tutte
+  mostravano i sottotitoli dell'ultima; ora ogni clip ha il suo file accanto al progetto
+  (`<progetto>_sottotitoli/<clip>.ass`) e restano solo le righe del tratto montato.
+  `clips=[...]` le sottotitola tutte in una chiamata.
 - **Chat più leggera sul contesto.** La guida dello stile e lo stato del progetto entrano nella
   conversazione solo la prima volta e quando cambiano, invece di ripetersi a ogni messaggio.
   Col motore Anthropic, sistema, strumenti e cronologia passano dalla cache dei prompt

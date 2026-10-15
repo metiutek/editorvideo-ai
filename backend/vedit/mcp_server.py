@@ -73,7 +73,13 @@ numero di giri per lunghezza del contesto. Quindi:
   tutto il girato in una chiamata, non una per file;
 - project_info solo quando lo stato non lo conosci gia' (track= per una traccia
   sola); detail='full' e list_effects(name=...) solo se servono davvero;
-- guarda con preview_grid dopo un blocco di modifiche, non dopo ognuna;
+- guarda dopo un blocco di modifiche, non dopo ognuna: batch(look=[t...]) modifica
+  e mostra i fotogrammi nello stesso giro, preview_frame(t=[t1, t2, ...]) mette piu'
+  istanti in un'immagine sola;
+- add_clips crea da sola le tracce V2, A2... che nomini e che non esistono;
+- grafiche simili: un file html modello con {{segnaposto}} e add_html(vars=...),
+  non un documento intero per ogni cartello;
+- list_styles non riporta le guide degli stili personali: list_styles(style=id);
 - niente Bash/ffprobe/ffmpeg per lavoro che fa gia' uno strumento.
 
 Non esportare mai di tua iniziativa: render_video si usa solo quando l'utente lo
@@ -297,10 +303,14 @@ def _store(project: str | None = None) -> Store:
     return _stores[_current[0]]
 
 
+def _riassunto(x: Any) -> Any:
+    """Un blocco keyframe diventa "kf xN": i punti li ha scritti l'agente."""
+    return f"kf x{len(x['kf'])}" if isinstance(x, dict) and "kf" in x else x
+
+
 def _valori(v: Any) -> dict:
     """Campi di transform/audio senza ripetere i keyframe appena passati."""
-    return {k: (f"kf x{len(x['kf'])}" if isinstance(x, dict) and "kf" in x else x)
-            for k, x in vars(v).items()}
+    return {k: _riassunto(x) for k, x in (v if isinstance(v, dict) else vars(v)).items()}
 
 
 def _clip_view(c) -> dict:
@@ -358,9 +368,9 @@ def project_info(detail: str = "normal", track: str | None = None,
                  project: str | None = None) -> dict:
     """Stato della timeline: media, tracce, clip, effetti, durata.
 
-    ``track='V1'`` limita la risposta a una traccia. detail='full' aggiunge
-    transform, audio e percorsi dei file (molto piu' lungo: chiedilo solo
-    quando ti servono davvero).
+    ``track='V1'`` limita la risposta a una traccia. I keyframe compaiono come
+    "kf xN". detail='full' aggiunge transform, audio, percorsi dei file e i
+    keyframe per intero (molto piu' lungo: chiedilo solo quando ti servono).
     """
     info = _store(project).summary(detail)
     if detail != "full":
@@ -380,6 +390,12 @@ def project_info(detail: str = "normal", track: str | None = None,
                 t.pop("volume")
             for c in t["clips"]:
                 c.pop("end", None)   # start + duration
+                if "transform" in c:
+                    c["transform"] = _valori(c["transform"])
+                for e in c.get("effects", []):
+                    e["params"] = _valori(e["params"])
+                    if e.get("enabled"):
+                        e.pop("enabled")
                 if c.get("name") in (None, "", nomi.get(c.get("media"))):
                     c.pop("name", None)
     if track:
@@ -674,7 +690,7 @@ def add_color(color: str = "black", start: float = 0.0, duration: float = 2.0,
 @_strumento()
 def add_html(html: str | None = None, path: str | None = None, start: float = 0.0,
              duration: float = 4.0, track: str | None = None, base: str | None = None,
-             project: str | None = None) -> dict:
+             vars: dict | None = None, project: str | None = None) -> dict:
     """Grafica animata scritta in HTML/CSS/JS, sovrapposta al video con trasparenza.
 
     Passa il documento in ``html`` oppure un file in ``path`` (i percorsi
@@ -690,20 +706,29 @@ def add_html(html: str | None = None, path: str | None = None, start: float = 0.
     controllo totale definisci ``window.veditRender = t => {...}`` (t in
     secondi): viene chiamata a ogni fotogramma.
 
+    Piu' grafiche dello stesso tipo (cartelli, sottopancia, contatori): scrivi
+    UN file modello con segnaposto ``{{titolo}}`` e passa ``vars={"titolo":
+    "..."}`` a ogni add_html (meglio, tutte insieme in batch). Non scrivere
+    dieci documenti quasi uguali.
+
     Mettila su una traccia sopra la ripresa (add_track) e controlla con
     preview_frame: al render Chromium la fotografa fotogramma per fotogramma.
     Serve Playwright (extra ``html``) e Chrome, Edge o Chromium.
     """
     c = _store(project).add_html(html=html, path=path, track_id=track, start=start,
-                                 duration=duration, base=base)
+                                 duration=duration, base=base, vars=vars)
     return {**_clip_view(c), "html": f"{len(c.html or '')} caratteri", "base": c.html_base}
 
 
 @_strumento()
 def set_html(clip: str, html: str | None = None, path: str | None = None,
-             base: str | None = None, project: str | None = None) -> dict:
-    """Sostituisce il documento di una clip html (o solo la cartella ``base``)."""
-    c = _store(project).set_html(clip, html=html, path=path, base=base)
+             base: str | None = None, vars: dict | None = None,
+             project: str | None = None) -> dict:
+    """Sostituisce il documento di una clip html (o solo la cartella ``base``).
+
+    ``vars`` riempie i segnaposto ``{{nome}}`` del documento, come in add_html.
+    """
+    c = _store(project).set_html(clip, html=html, path=path, base=base, vars=vars)
     return {**_clip_view(c), "html": f"{len(c.html or '')} caratteri", "base": c.html_base}
 
 
@@ -1139,19 +1164,32 @@ async def transcribe(path: str | None = None, clip: str | None = None,
 
 
 @_strumento()
-async def list_styles() -> dict:
+async def list_styles(style: str | None = None) -> dict:
     """Gli stili di montaggio disponibili e i numeri che li definiscono.
 
     ``stili``: i ritmi di plan_edit. ``stili_montaggio``: gli stili per
     apply_style (integrati e personali) con la loro ricetta; ``looks``: i look
-    che una ricetta di create_style puo' usare.
+    che una ricetta di create_style puo' usare. La guida scritta di uno stile
+    personale (fino a 20.000 caratteri) non e' nell'elenco: chiedila con
+    style='<id>' quando monti con quello stile.
     """
     from . import presets
+    if style:
+        d = next((x for x in stili.descrivi() if x["id"] == style), None)
+        if d is None:
+            raise EditError(f"unknown style {style!r}: see list_styles")
+        return {**d, "ricetta": stili.ricetta(d["id"])}
+
+    def corto(d: dict) -> dict:
+        d = {k: v for k, v in d.items() if k not in ("guida", "piano")}
+        if "guida" in d or d.get("personale"):
+            d["guida"] = f"list_styles(style='{d['id']}')"
+        return d
     return {"stili": [{"nome": s.name, "label": s.label, "desc": s.desc,
                        "taglio_s": [s.shot_min, s.shot_max],
                        "apre_col_meglio": s.hook_first,
                        "transizione": s.transition} for s in story.STYLES.values()],
-            "stili_montaggio": [{**d, "ricetta": stili.ricetta(d["id"])}
+            "stili_montaggio": [{**corto(d), "ricetta": stili.ricetta(d["id"])}
                                 for d in stili.descrivi()],
             "looks": [p["id"] for p in presets.LOOKS]}
 
@@ -1228,6 +1266,7 @@ async def make_captions(clip: str | None = None, path: str | None = None,
                         size: int = 64, primary: str = "#FFE100",
                         secondary: str = "#FFFFFF", margin_v: int = 120,
                         model: str = "small", language: str | None = None,
+                        clips: list[str] | None = None,
                         project: str | None = None) -> dict:
     """Genera i sottotitoli dal parlato e (se burn) li imprime sulla clip.
 
@@ -1236,25 +1275,48 @@ async def make_captions(clip: str | None = None, path: str | None = None,
     gia' pronunciata, ``secondary`` quella che deve ancora arrivare.
 
     Con ``clip`` i tempi vengono riportati all'inizio della clip, cosi' i
-    sottotitoli restano in sincrono anche se la clip parte a meta' del file.
+    sottotitoli restano in sincrono anche se la clip parte a meta' del file, e
+    restano solo le righe dentro il tratto montato. ``clips=["<id>", ...]``
+    sottotitola piu' clip in una chiamata, ognuna col suo file.
     """
+    if clips:
+        esiti = {}
+        for cid in clips:
+            r = await make_captions(clip=cid, format=format, karaoke=karaoke, burn=burn,
+                                    max_chars=max_chars, uppercase=uppercase, size=size,
+                                    primary=primary, secondary=secondary, margin_v=margin_v,
+                                    model=model, language=language, project=project)
+            esiti[cid] = r["righe"]
+        return {"righe": esiti, "applicato": burn}
     s = _store(project) if (clip or burn or project) else None
     src = _source(path, clip, project)
     tr = await _off(analyze.transcribe, src, model, language)
 
-    offset = 0.0
+    offset, fine = 0.0, float("inf")
     larghezza, altezza = 1080, 1920
     if clip:
         _, c = s.clip_or_die(clip)
         offset = c.in_
+        # il tratto montato, in secondi della sorgente dall'attacco
+        fine = c.duration * abs(c.speed or 1.0)
         larghezza, altezza = s.project.settings.width, s.project.settings.height
 
     righe = captions.group_words(tr, max_chars=max_chars, offset=offset)
-    righe = [r for r in righe if r["end"] > 0]
+    righe = [r for r in righe if r["end"] > 0 and r["start"] < fine]
     if not righe:
         return {"righe": 0, "file": None, "nota": "nessun parlato riconosciuto"}
 
-    out = output or str(Path(tempfile.gettempdir()) / f"vedit_captions_{os.getpid()}.{format}")
+    # un file per clip: con un nome solo, ogni clip sottotitolata dopo
+    # sovrascriveva quelle prima e mostravano tutte l'ultima
+    if output:
+        out = output
+    elif clip and s.path:
+        cartella = Path(s.path).parent / f"{Path(s.path).stem}_sottotitoli"
+        cartella.mkdir(exist_ok=True)
+        out = str(cartella / f"{clip}.{format}")
+    else:
+        nome = clip or os.getpid()
+        out = str(Path(tempfile.gettempdir()) / f"vedit_captions_{nome}.{format}")
     st = captions.CaptionStyle(size=size, primary=primary, secondary=secondary,
                                margin_v=margin_v, uppercase=uppercase)
     kw = {"style": st, "karaoke": karaoke, "width": larghezza, "height": altezza} \
@@ -1326,13 +1388,30 @@ async def censor_speech(clip: str, words: list[str] | None = None,
 # --------------------------------------------------------------------------
 
 
+async def _fotogrammi(s: Store, tempi: list[float], width: int) -> Image:
+    """Piu' istanti della timeline in un'immagine sola, col tempo stampato."""
+    cartella = Path(tempfile.mkdtemp(prefix="vedit_tempi_"))
+    frames = []
+    for i, tt in enumerate(tempi[:16]):
+        f = await _off(render.render_frame, s.project, float(tt), str(cartella / f"{i:02d}.jpg"),
+                       width, True)
+        frames.append((f"t={float(tt):.2f}", f))
+    out = str(Path(tempfile.gettempdir()) / f"vedit_tempi_{os.getpid()}.jpg")
+    res = await _off(review.griglia, frames, out, 4 if len(frames) > 4 else len(frames))
+    return Image(path=res["file"])
+
+
 @_strumento()
-async def preview_frame(t: float | None = None, width: int = 640, path: str | None = None,
-                        time: float | None = None, project: str | None = None) -> Image:
+async def preview_frame(t: float | list[float] | None = None, width: int = 640,
+                        path: str | None = None, time: float | None = None,
+                        project: str | None = None) -> Image:
     """Renderizza il fotogramma della timeline al tempo ``t`` e lo restituisce.
 
     E' il modo per *vedere* il montaggio: posizione degli overlay, testo,
     correzione colore, inquadratura. Usa build_proxies per renderlo piu' rapido.
+
+    ``t=[2.0, 7.5, 12.0]`` (fino a 16 istanti) li mette in un'immagine sola:
+    controllare cinque punti con cinque chiamate costa cinque giri interi.
 
     ``time`` e' accettato come sinonimo di ``t``. Alza ``width`` a 1280 o 1920
     quando devi giudicare un dettaglio piccolo — la posizione di una maschera, un
@@ -1342,6 +1421,8 @@ async def preview_frame(t: float | None = None, width: int = 640, path: str | No
     if quando is None:
         raise EditError("t is needed: the time in seconds on the timeline")
     s = _store(project)
+    if isinstance(quando, list):
+        return await _fotogrammi(s, quando, width if width != 640 else 480)
     out = path or str(Path(tempfile.gettempdir()) / f"vedit_preview_{os.getpid()}.jpg")
     p = await _off(render.render_frame, s.project, float(quando), out, width, True)
     return Image(path=p)
@@ -2105,7 +2186,8 @@ _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "pro
 
 
 @_strumento()
-async def batch(ops: list[dict], project: str | None = None) -> dict:
+async def batch(ops: list[dict], look: list[float] | None = None,
+                project: str | None = None) -> dict:
     """Molte modifiche in UNA chiamata: atomiche, un solo passo di undo.
 
     ``ops`` = ``[{"tool": "set_transform", "args": {"clip": "c1", "scale": 1.2}},
@@ -2117,6 +2199,10 @@ async def batch(ops: list[dict], project: str | None = None) -> dict:
     giri. Raccogli le modifiche decise e mandale qui. Se un'operazione fallisce
     non resta applicato niente e l'errore dice quale. Fuori: anteprime,
     render_video, ask_user, apertura di progetti, undo.
+
+    ``look=[t1, t2, ...]`` restituisce insieme all'esito i fotogrammi della
+    timeline a quegli istanti, dopo le modifiche: modificare e guardare in un
+    giro solo.
     """
     s = _store(project)
     esiti = []
@@ -2138,7 +2224,10 @@ async def batch(ops: list[dict], project: str | None = None) -> dict:
             except _PREVISTI as exc:
                 raise EditError(f"op {i} ({nome}): {_messaggio(exc)}; nothing applied") from exc
             esiti.append(r)
-    return {"done": len(esiti), "results": esiti}
+    esito = {"done": len(esiti), "results": esiti}
+    if look:
+        return [esito, await _fotogrammi(s, look, 480)]
+    return esito
 
 
 def main() -> None:

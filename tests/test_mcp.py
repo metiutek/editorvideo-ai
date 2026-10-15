@@ -381,7 +381,7 @@ async def test_track_mask_con_box_segue_un_oggetto_qualsiasi(tmp_path):
                    box=[200 / 1280, 300 / 720, 120 / 1280, 120 / 720], box_t=0.0,
                    padding=1.0, params={"color": "#00ff00", "thickness": 4})
     assert r["copertura"] > 0.9
-    info = await call("project_info")
+    info = await call("project_info", detail="full")
     fx_ = info["tracks"][0]["clips"][0]["effects"][-1]
     assert fx_["type"] == "mask_outline" and fx_["params"]["color"] == "#00ff00"
     punti = fx_["params"]["x"]["kf"]
@@ -520,3 +520,104 @@ async def test_list_effects_compatto_e_scheda():
     assert all(isinstance(q, str) for e in corto for q in e["params"])
     scheda = await call("list_effects", name="sharpen")
     assert len(scheda) == 1 and isinstance(scheda[0]["params"][0], dict)
+
+
+@pytest.mark.anyio
+async def test_project_info_riassume_i_keyframe(assets, tmp_path):
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    m = (await call("import_media", paths=[assets["red"]]))[0]["id"]
+    c = (await call("add_clips", clips=[{"media": m, "duration": 2.0}]))["ids"][0]
+    kf = {"kf": [{"t": 0, "v": 1}, {"t": 1, "v": 1.2}, {"t": 2, "v": 1.3}]}
+    await call("batch", ops=[{"tool": "set_transform", "args": {"clip": c, "scale": kf}},
+                             {"tool": "add_effect", "args": {"clip": c, "type": "shake",
+                                                             "params": {"amount": kf}}}])
+    clip = (await call("project_info"))["tracks"][0]["clips"][0]
+    assert clip["transform"]["scale"] == "kf x3"
+    assert clip["effects"][0]["params"]["amount"] == "kf x3"
+    full = (await call("project_info", detail="full"))["tracks"][0]["clips"][0]
+    assert full["transform"]["scale"] == kf
+
+
+@pytest.mark.anyio
+async def test_add_clips_crea_le_tracce_che_nomina(assets, tmp_path):
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    m = (await call("import_media", paths=[assets["red"]]))[0]["id"]
+    await call("add_clips", clips=[{"media": m, "duration": 1.0, "track": "V3"},
+                                   {"media": m, "duration": 1.0, "track": "A2"}])
+    ids = [t["id"] for t in (await call("project_info"))["tracks"]]
+    assert {"V2", "V3", "A2"} <= set(ids)
+    with pytest.raises(ToolError, match="does not exist"):
+        await call("add_clips", clips=[{"media": m, "duration": 1.0, "track": "musica"}])
+    # un solo undo toglie clip e tracce create
+    await call("undo")
+    assert "V3" not in [t["id"] for t in (await call("project_info"))["tracks"]]
+
+
+@pytest.mark.anyio
+async def test_piu_istanti_in_un_immagine(assets, tmp_path):
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    m = (await call("import_media", paths=[assets["blue"]]))[0]["id"]
+    c = (await call("add_clips", clips=[{"media": m, "duration": 3.0}]))["ids"][0]
+    r = await srv.mcp.call_tool("preview_frame", {"t": [0.5, 1.5, 2.5]})
+    assert [x.type for x in r.content] == ["image"]
+    r = await srv.mcp.call_tool("batch", {"ops": [
+        {"tool": "set_transform", "args": {"clip": c, "scale": 1.3}}], "look": [1.0, 2.0]})
+    assert [x.type for x in r.content] == ["text", "image"]
+    assert json.loads(r.content[0].text)["done"] == 1
+
+
+@pytest.mark.anyio
+async def test_list_styles_senza_le_guide_lunghe(tmp_path, monkeypatch):
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path / "cache"))
+    lunga = "Monta cosi'. " * 1000
+    sid = (await call("create_style", name="Lungo", guide=lunga, base="vlog"))["stile"]["id"]
+    elenco = await call("list_styles")
+    mio = next(x for x in elenco["stili_montaggio"] if x["id"] == sid)
+    assert sid in mio["guida"] and len(mio["guida"]) < 100
+    assert (await call("list_styles", style=sid))["guida"] == lunga.strip()
+
+
+@pytest.mark.anyio
+async def test_make_captions_un_file_per_clip_e_solo_il_tratto(assets, tmp_path, monkeypatch):
+    """Segnalato montando 53 clip: tutte mostravano i sottotitoli dell'ultima."""
+    from vedit import analyze
+
+    def parole(*voci):
+        return [{"w": w, "t": t, "e": t + 0.4, "p": 0.9} for w, t in voci]
+
+    finta = {"language": "it", "segments": [
+        {"start": 0.0, "end": 0.9, "text": "uno", "words": parole(("uno", 0.2))},
+        {"start": 2.0, "end": 2.9, "text": "due", "words": parole(("due", 2.2))},
+        {"start": 4.0, "end": 4.9, "text": "tre", "words": parole(("tre", 4.2))},
+    ]}
+    monkeypatch.setattr(analyze, "transcribe", lambda *a, **k: finta)
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    m = (await call("import_media", paths=[assets["red"]]))[0]["id"]
+    a, b = (await call("add_clips", clips=[
+        {"media": m, "start": 0.0, "in": 0.0, "duration": 1.0},
+        {"media": m, "start": 1.0, "in": 2.0, "duration": 1.0}]))["ids"]
+    res = await call("make_captions", clips=[a, b], format="srt")
+    assert res["righe"] == {a: 1, b: 1}
+    clips = (await call("project_info", detail="full"))["tracks"][0]["clips"]
+    file = [c["effects"][0]["params"]["file"] for c in clips]
+    assert file[0] != file[1]
+    assert "uno" in Path(file[0]).read_text(encoding="utf-8")
+    testo_b = Path(file[1]).read_text(encoding="utf-8")
+    assert "due" in testo_b and "tre" not in testo_b
+
+
+@pytest.mark.anyio
+async def test_add_html_da_modello_con_vars(tmp_path):
+    """Dieci cartelli = un modello e dieci vars, non dieci documenti interi."""
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    modello = tmp_path / "cartello.html"
+    modello.write_text("<h1>{{titolo}}</h1><p>{{ sotto }}</p>", encoding="utf-8")
+    res = await call("batch", ops=[
+        {"tool": "add_html", "args": {"path": str(modello), "start": i * 2.0, "duration": 2.0,
+                                      "vars": {"titolo": f"Capitolo {i}", "sotto": "x"}}}
+        for i in range(3)])
+    assert res["done"] == 3
+    docs = sorted(c.html for t in srv._store().project.tracks for c in t.clips)
+    assert docs == [f"<h1>Capitolo {i}</h1><p>x</p>" for i in range(3)]
+    with pytest.raises(ToolError, match=r"placeholders without a value.*sotto"):
+        await call("add_html", path=str(modello), vars={"titolo": "solo questo"})

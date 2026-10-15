@@ -280,7 +280,8 @@ timeline behind if something breaks midway.
 costs *calls × context*. Tool replies are compact JSON without echoes, and `batch` applies
 any list of edits (`[{"tool": "set_transform", "args": {...}}, ...]`) in one atomic call with
 one undo step. `transcribe(media=["*"])` and `preview_media(media=["*"])` cover all the
-footage in a single call.
+footage in a single call; `preview_frame(t=[...])` shows several instants in one image, and
+`add_html(vars=...)` fills the `{{placeholders}}` of one template file for many title cards.
 
 **Showing the result:** `open_ui` starts the web interface **inside the MCP server process**
 and returns the address. It is not a second instance — the UI works on the *same* `Store`

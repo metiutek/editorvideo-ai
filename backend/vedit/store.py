@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import time
 import uuid
 from contextlib import contextmanager
@@ -329,6 +330,21 @@ class Store:
         self._done()
         return t
 
+    def _crea_traccia(self, track_id: str) -> None:
+        """``V3``/``A2`` che non esiste ancora: crea le tracce che mancano fino a lei.
+
+        Chi costruisce un montaggio a piu' tracce con add_clips sa gia' dove
+        vuole le cose; fermarlo per un add_track per traccia e' solo un giro in
+        piu'. Un nome che non ha la forma V<n>/A<n> resta un errore.
+        """
+        m = re.fullmatch(r"([VA])(\d+)", track_id or "")
+        if not m or self.project.track_by_id(track_id) or int(m.group(2)) > 16:
+            return
+        kind = "video" if m.group(1) == "V" else "audio"
+        for _ in range(int(m.group(2))):
+            if self.add_track(kind).id == track_id:
+                return
+
     def track_or_die(self, track_id: str) -> Track:
         t = self.project.track_by_id(track_id)
         if t is None:
@@ -572,12 +588,17 @@ class Store:
         return c
 
     @staticmethod
-    def _sorgente_html(html: str | None, path: str | None) -> tuple[str, str | None]:
+    def _sorgente_html(html: str | None, path: str | None,
+                       vars: dict | None = None) -> tuple[str, str | None]:
         """Documento e cartella base da ``html`` (testo) o ``path`` (file .html).
 
         Il documento entra *nel progetto*: il render resta funzione del solo
         JSON anche se il file viene cambiato o spostato. La cartella serve ai
         percorsi relativi (immagini, font) e resta quella del file.
+
+        ``vars`` riempie i segnaposto ``{{nome}}``: un solo modello per dieci
+        cartelli diversi, invece di dieci documenti quasi uguali scritti per
+        intero (e riletti, a ogni giro, nel contesto di chi li scrive).
         """
         if (html is None) == (path is None):
             raise EditError("pass html (the document) or path (an .html file), one of the two")
@@ -589,6 +610,13 @@ class Store:
             html = f.read_text(encoding="utf-8", errors="replace")
             base = str(f.resolve().parent)
         assert html is not None
+        if vars:
+            html = re.sub(r"\{\{\s*(\w+)\s*\}\}",
+                          lambda m: str(vars[m.group(1)]) if m.group(1) in vars else m.group(0),
+                          html)
+            restano = sorted(set(re.findall(r"\{\{\s*(\w+)\s*\}\}", html)))
+            if restano:
+                raise EditError(f"placeholders without a value in vars: {restano}")
         if not html.strip():
             raise EditError("the html document is empty")
         if len(html) > htmlclip.MAX_HTML:
@@ -597,14 +625,14 @@ class Store:
 
     def add_html(self, html: str | None = None, path: str | None = None, track_id: str | None = None,
                  start: float = 0.0, duration: float = 4.0, name: str | None = None,
-                 base: str | None = None) -> Clip:
+                 base: str | None = None, vars: dict | None = None) -> Clip:
         """Grafica animata in HTML/CSS/JS sopra il video (vedi htmlclip.py).
 
         Senza ``html`` ne' ``path`` parte da un sottopancia di esempio.
         """
         if html is None and path is None:
             html = htmlclip.template(self.project.settings.width, self.project.settings.height)
-        doc, cartella = self._sorgente_html(html, path)
+        doc, cartella = self._sorgente_html(html, path, vars)
         if base is not None:
             if not Path(base).is_dir():
                 raise EditError(f"base folder does not exist: {base}")
@@ -702,14 +730,14 @@ class Store:
             raise EditError(str(e)) from None
 
     def set_html(self, clip_id: str, html: str | None = None, path: str | None = None,
-                 base: str | None = None) -> Clip:
+                 base: str | None = None, vars: dict | None = None) -> Clip:
         """Sostituisce il documento di una clip html (o solo la cartella base)."""
         track, clip = self.clip_for_edit(clip_id)
         if clip.type != "html":
             raise EditError(f"clip {clip_id} is not an html clip")
         doc, cartella = (None, None)
         if html is not None or path is not None:
-            doc, cartella = self._sorgente_html(html, path)
+            doc, cartella = self._sorgente_html(html, path, vars)
         if base is not None and base != "" and not Path(base).is_dir():
             raise EditError(f"base folder does not exist: {base}")
         self._touch()
@@ -1520,6 +1548,8 @@ class Store:
 
         out: list[Clip] = []
         with self.batch():
+            for dove in {it.get("track", track_id) for it in items} - {None}:
+                self._crea_traccia(dove)
             for it in items:
                 dove = it.get("track", track_id)
                 start = it.get("start")

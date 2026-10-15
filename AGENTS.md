@@ -191,7 +191,9 @@ costo di un montaggio è giri × contesto: le risposte degli strumenti escono in
 (`mcp_server._compatto`) e non ripetono ciò che l'agente ha appena passato. Uno strumento
 nuovo che restituisce l'eco dei suoi argomenti o un elenco lungo va contro questa regola.
 `transcribe` e `preview_media` accettano `media=["*"]` per lavorare su tutto il girato in
-una chiamata.
+una chiamata; `preview_frame(t=[...])` e `batch(look=[...])` fanno vedere piu' istanti in
+un'immagine; `add_html(vars=...)` riempie i `{{segnaposto}}` di un file modello
+(`Store._sorgente_html`).
 
 ```json
 [{"media": "m1b1a", "start": 0.0,   "in": 122.5, "duration": 1.5},

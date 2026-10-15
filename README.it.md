@@ -521,7 +521,9 @@ indovinarlo.
 costa *chiamate × contesto*. Le risposte degli strumenti sono JSON compatto senza eco, e
 `batch` applica una lista qualsiasi di modifiche (`[{"tool": "set_transform", "args": {...}},
 ...]`) in una chiamata atomica con un solo undo. `transcribe(media=["*"])` e
-`preview_media(media=["*"])` lavorano su tutto il girato in una chiamata sola.
+`preview_media(media=["*"])` lavorano su tutto il girato in una chiamata sola;
+`preview_frame(t=[...])` mostra piu' istanti in un'immagine, e `add_html(vars=...)` riempie i
+`{{segnaposto}}` di un file modello per tanti cartelli.
 
 Gli agenti che montano annotano cio' che si rompe, e' scomodo o manca con lo strumento
 `report_issue`, in [`SEGNALAZIONI.md`](SEGNALAZIONI.md) (da un clone) o
