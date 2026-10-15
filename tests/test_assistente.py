@@ -494,6 +494,28 @@ def test_stile_arriva_al_modello(monkeypatch):
     assert "style='cinematic'" in testo
 
 
+def test_stile_e_stato_entrano_in_contesto_una_volta(monkeypatch):
+    """La cronologia li ha gia': rimandarli a ogni messaggio riempie il contesto."""
+    mandati = []
+
+    def finto(url, chiave, body):
+        mandati.append(json.loads(json.dumps(body)))
+        yield {"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}
+
+    monkeypatch.setattr(llm, "_post_stream", finto)
+    llm.imposta("openai", chiave="k", modello="gpt-5")
+    store, stato = Store.create("t", "720p"), {}
+    for domanda in ("primo", "secondo"):
+        list(chat.run(store, stato, domanda, lambda n, a: "", stile="trailer"))
+    primo = json.dumps(mandati[0]["messages"][-1], ensure_ascii=False)
+    secondo = json.dumps(mandati[1]["messages"][-1], ensure_ascii=False)
+    assert "Trailer" in primo and "Stato attuale" in primo
+    assert "Trailer" not in secondo and "Stato attuale" not in secondo
+    # cambiando stile la guida nuova arriva
+    list(chat.run(store, stato, "terzo", lambda n, a: "", stile="cinematico"))
+    assert "Stile di montaggio scelto" in json.dumps(mandati[2]["messages"][-1], ensure_ascii=False)
+
+
 def test_l_assistente_non_ha_l_export_e_puo_chiedere():
     nomi = {t["name"] for t in chat.build_tools()}
     assert "ask_user" in nomi

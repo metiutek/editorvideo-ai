@@ -264,6 +264,9 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
                 max_tokens=64000,
                 system=system,
                 tools=strumenti,
+                # l'API e' senza stato: sistema, strumenti e cronologia viaggiano
+                # a ogni richiesta, ma dalla cache costano un decimo
+                cache_control={"type": "ephemeral"},
                 messages=history,
                 thinking={"type": "adaptive"},
                 output_config={"effort": "high"},

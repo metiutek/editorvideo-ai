@@ -513,10 +513,18 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
     contenuto: list[dict] = []
     if p["tipo"] != "claude_code":
         # lo stato va nel turno utente, non nel prompt di sistema: il prefisso
-        # resta identico fra un turno e l'altro e la cache non si invalida
-        contenuto.append({"type": "text", "text": _state_block(store)})
-    if stili.blocco(stile):
-        contenuto.append({"type": "text", "text": stili.blocco(stile)})
+        # resta identico fra un turno e l'altro e la cache non si invalida.
+        # Solo quando e' cambiato: la cronologia ha gia' quello precedente
+        stato = _state_block(store)
+        if stato != stato_chat.get("stato_inviato"):
+            contenuto.append({"type": "text", "text": stato})
+            stato_chat["stato_inviato"] = stato
+    # la guida dello stile (fino a 20k caratteri) entra in contesto una volta,
+    # e di nuovo solo se l'utente cambia stile
+    guida = stili.blocco(stile)
+    if guida and guida != stato_chat.get("stile_inviato"):
+        contenuto.append({"type": "text", "text": guida})
+        stato_chat["stile_inviato"] = guida
     if testo_rif:
         contenuto.append({"type": "text", "text": testo_rif})
     for im in immagini:

@@ -5,6 +5,10 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Chat più leggera sul contesto.** La guida dello stile e lo stato del progetto entrano nella
+  conversazione solo la prima volta e quando cambiano, invece di ripetersi a ogni messaggio.
+  Col motore Anthropic, sistema, strumenti e cronologia passano dalla cache dei prompt
+  (`cache_control`): l'API resta senza stato, ma il prefisso già visto costa un decimo.
 - **Interfaccia in inglese.** Tutti i testi della UI, i messaggi di errore che arrivano a
   schermo e dagli strumenti MCP, e i cataloghi (effetti, look, catene audio, transizioni,
   stili integrati, particelle, impostazioni del modello) sono in inglese. Codice e commenti
