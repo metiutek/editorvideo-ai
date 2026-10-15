@@ -171,22 +171,45 @@ def duck_keyframes(ranges, clip_start: float, clip_duration: float,
     return out
 
 
+def _clip_o_traccia(store, ident: str) -> list[str]:
+    """Una clip, oppure tutte le clip con un file di una traccia (``V1``, ``A2``)."""
+    t = store.project.track_by_id(ident)
+    if t is None:
+        store.clip_or_die(ident)
+        return [ident]
+    ids = [c.id for c in sorted(t.clips, key=lambda c: c.start) if c.media and c.enabled]
+    if not ids:
+        raise ValueError(f"track {ident} has no clips with a source file")
+    return ids
+
+
 def duck_music(store, music_clip: str, voice_clip: str, amount_db: float = DUCK_DB,
                attack: float = ATTACK, release: float = RELEASE,
                apply: bool = True) -> dict:
-    """Abbassa la musica quando la voce parla, con rampe di attacco e rilascio."""
-    _, musica = store.clip_or_die(music_clip)
-    parlato = speech_ranges(store, voice_clip)
+    """Abbassa la musica quando la voce parla, con rampe di attacco e rilascio.
+
+    ``music_clip`` e ``voice_clip`` possono essere anche tracce: la voce di un
+    montaggio parlato sta in decine di clip e la musica spesso in piu' pezzi, e
+    una chiamata per coppia costringeva a calcolare l'automazione a mano.
+    """
+    musiche = _clip_o_traccia(store, music_clip)
+    parlato = merge_spans([r for v in _clip_o_traccia(store, voice_clip)
+                           for r in speech_ranges(store, v)])
     if not parlato:
         return {"tratti_di_parlato": 0, "keyframe": 0, "applicato": False,
                 "nota": "nessun parlato rilevato nella clip voce"}
-    kfs = duck_keyframes(parlato, musica.start, musica.duration,
-                         amount_db, attack, release)
-    if apply:
-        store.set_audio(music_clip, gain_db={"kf": kfs})
-    return {"tratti_di_parlato": len(parlato), "keyframe": len(kfs),
+    totale = 0
+    with store.batch():
+        for mid in musiche:
+            _, musica = store.clip_or_die(mid)
+            kfs = duck_keyframes(parlato, musica.start, musica.duration,
+                                 amount_db, attack, release)
+            totale += len(kfs)
+            if apply:
+                store.set_audio(mid, gain_db={"kf": kfs})
+    return {"tratti_di_parlato": len(parlato), "keyframe": totale, "clip_musica": len(musiche),
             "amount_db": amount_db, "applicato": apply,
-            "parlato": parlato[:8]}
+            "parlato": [list(x) for x in parlato[:8]]}
 
 
 # --------------------------------------------------------------------------

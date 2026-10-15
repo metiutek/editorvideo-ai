@@ -83,6 +83,19 @@ def test_senza_clip_lo_dice(assets):
         stili.applica(Store.create("v", "720p"), "cinematico")
 
 
+def test_spot_di_sola_grafica_html():
+    """Segnalato: apply_style falliva e review_edit chiedeva movimento e colore
+    che su uno spot fatto solo di add_html non si potevano dare."""
+    s = Store.create("g", "720p")
+    for i in range(6):
+        s.add_html(html=f"<h1>scena {i}</h1>", start=i * 2.0, duration=2.0 + i * 0.3)
+    esito = stili.applica(s, "dinamico")
+    assert esito["applicato"]
+    r = review.ricchezza(s.project, stili.ricetta("dinamico")["attese"])
+    assert "movimento" not in r["mancano"] and "colore" not in r["mancano"]
+    assert r["conti"]["clip_video"] == 6
+
+
 def test_stile_sconosciuto(montaggio):
     with pytest.raises(ValueError, match="unknown style"):
         stili.applica(montaggio, "barocco")

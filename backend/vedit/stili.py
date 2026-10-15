@@ -442,12 +442,14 @@ def applica(store, stile_id: str, track: str | None = None) -> dict:
     tracce = [t for t in p.tracks if t.kind == "video" and (track is None or t.id == track)]
     if track is not None and not tracce:
         raise ValueError(f"video track {track!r} does not exist")
-    principale = next((t for t in tracce if any(c.type == "media" for c in t.clips)), None)
+    # uno spot fatto solo di grafica html non ha riprese: la grafica e' il materiale
+    tipo = "media" if any(c.type == "media" for t in tracce for c in t.clips) else "html"
+    principale = next((t for t in tracce if any(c.type == tipo for c in t.clips)), None)
     if principale is None:
         raise ValueError("no video clips in the timeline: lay down the footage first "
                          "(add_clips or plan_edit apply=True)")
     ids = [c.id for c in sorted((c for c in principale.clips
-                                 if c.type == "media" and c.enabled), key=lambda c: c.start)]
+                                 if c.type == tipo and c.enabled), key=lambda c: c.start)]
     fatto: dict[str, object] = {}
     saltati: list[str] = []
 

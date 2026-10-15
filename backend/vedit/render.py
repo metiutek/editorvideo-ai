@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -910,7 +911,11 @@ def render_frame(project: Project, t: float, output: str, width: int | None = No
         w = width or project.settings.width
         h = int(round(w * project.settings.height / project.settings.width))
         h += h % 2
-        a, b = max(0.0, t), max(0.0, t) + max(2.0 / fps, 0.05)
+        # l'istante va all'inizio del suo fotogramma, che e' quello che il render
+        # mostra li': a meta' dell'ultimo fotogramma di una clip il tratto
+        # visibile era troppo corto per produrne uno e l'anteprima usciva nera
+        t = math.floor(max(0.0, t) * fps + 1e-6) / fps
+        a, b = t, t + max(2.0 / fps, 0.05)
         copts = CompileOptions(
             width=w, height=h, fps=fps, use_proxy=use_proxy, audio=False, video=True,
             start=a, end=b, workdir=str(workdir),

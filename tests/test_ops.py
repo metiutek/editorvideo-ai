@@ -187,6 +187,35 @@ def test_duck_music_applica_l_automazione(progetto, tmp_path):
     assert max(k["v"] for k in kfs) == 0.0
 
 
+def test_duck_music_su_tracce_intere(progetto, tmp_path):
+    """Voce in piu' clip e musica in piu' pezzi: una chiamata sola, un undo solo."""
+    s, _, _ = progetto
+    voce = tmp_path / "voce.mp4"
+    subprocess.run([
+        ffmpeg.binary("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "lavfi", "-i", "color=c=gray:s=320x180:r=25:d=3",
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-shortest", str(voce),
+    ], check=True, capture_output=True)
+    mv = s.import_media([str(voce)])[0]
+    vt = s.add_track("video")
+    s.add_clip(mv.id, track_id=vt.id, start=0.0, duration=1.0)
+    s.add_clip(mv.id, track_id=vt.id, start=4.0, duration=1.0)
+    at = s.add_track("audio")
+    mm = s.import_media([_video(tmp_path / "m.m4a", "black", 6.0)])[0]
+    m1 = s.add_clip(mm.id, track_id=at.id, start=0.0, duration=3.0)
+    m2 = s.add_clip(mm.id, track_id=at.id, start=3.0, duration=3.0)
+    passi = len(s._undo)
+
+    res = ops.duck_music(s, at.id, vt.id, amount_db=-12)
+    assert res["clip_musica"] == 2 and res["tratti_di_parlato"] == 2
+    for c in (m1, m2):
+        _, m = s.clip_or_die(c.id)
+        assert min(k["v"] for k in m.audio.gain_db["kf"]) == -12.0
+    assert len(s._undo) == passi + 1
+
+
 # --------------------------------------------------------------------------
 # J/L cut
 # --------------------------------------------------------------------------

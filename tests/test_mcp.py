@@ -621,3 +621,42 @@ async def test_add_html_da_modello_con_vars(tmp_path):
     assert docs == [f"<h1>Capitolo {i}</h1><p>x</p>" for i in range(3)]
     with pytest.raises(ToolError, match=r"placeholders without a value.*sotto"):
         await call("add_html", path=str(modello), vars={"titolo": "solo questo"})
+
+
+@pytest.mark.anyio
+async def test_lavori_lunghi_mandano_battiti_di_progresso(assets, tmp_path, monkeypatch):
+    """Claude Code tronca una chiamata muta da 300 s: render e trascrizioni lunghe
+    ripartivano da capo. Mentre il lavoro gira, il server manda progresso."""
+    import time
+    from mcp import Client
+    from vedit import analyze
+
+    def lenta(src, model, language):
+        time.sleep(0.5)
+        return {"language": "it", "words_per_minute": 1.0, "speech_seconds": 1.0,
+                "text": "x", "segments": []}
+
+    monkeypatch.setattr(analyze, "transcribe", lenta)
+    monkeypatch.setattr(srv, "BATTITO_S", 0.1)
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    await call("import_media", paths=[assets["red"], assets["blue"]])
+    visti = []
+
+    async def progresso(fatto, totale, nota):
+        visti.append((fatto, totale, nota))
+
+    async with Client(srv.mcp) as client:
+        r = await client.call_tool("transcribe", {"media": ["*"]}, progress_callback=progresso)
+    assert not r.is_error
+    assert len(visti) >= 3
+    assert any(n and n.startswith("transcribing 2/2") for _, _, n in visti)
+
+
+@pytest.mark.anyio
+async def test_preview_grid_su_un_video_lo_guarda(assets, tmp_path):
+    """Quattro volte l'agente ha passato il render .mp4 come path della griglia."""
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    r = await srv.mcp.call_tool("preview_grid", {"path": assets["blue"], "count": 4})
+    assert [c.type for c in r.content] == ["image"]
+    with pytest.raises(ToolError, match="preview_media"):
+        await call("preview_grid", path=str(tmp_path / "manca.mp4"))

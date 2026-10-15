@@ -25,7 +25,28 @@ Le voci più recenti stanno in cima.
   le guide degli stili personali (fino a 20.000 caratteri l'una: `list_styles(style=id)`), e
   `project_info` riassume i keyframe come `kf xN` (`detail='full'` li da' per intero).
 
+- **Niente piu' strumenti troncati a 300 secondi.** Claude Code interrompe una chiamata MCP
+  muta per cinque minuti: render, trascrizioni di tutto il girato e verifiche lunghe
+  ripartivano da capo (sette render persi nelle sessioni registrate). Ora ogni lavoro lungo
+  manda un battito di progresso ogni 15 s (`mcp_server._off`), con la percentuale vera per
+  il render e il file in corso per `transcribe`.
+- **Schemi degli strumenti piu' corti del 28%.** Tolti `title`, `anyOf` con `null` e
+  `default: null` che pydantic ripete su ogni parametro, e l'indentazione delle descrizioni
+  (`mcp_server._snello`): gli argomenti accettati sono gli stessi.
+- **`duck_music` su tracce intere** (`music="A2", voice="V1"`): tutta la musica sotto tutto il
+  parlato in una chiamata e un undo, invece di calcolare l'automazione a mano clip per clip.
+- **`preview_grid` su un video**: se `path` e' un file video (di solito il render appena
+  fatto) ne mostra i fotogrammi invece di fallire.
+
 ### Corretto
+- **Fotogrammi neri in anteprima a fine clip.** `preview_frame` sugli ultimi due fotogrammi di
+  una clip html, o a meta' dell'ultimo fotogramma di qualunque clip, dava nero: l'agente
+  vedeva un lampo che nel render non c'e' e provava a correggerlo. L'istante va all'inizio
+  del suo fotogramma (`render.render_frame`) e la grafica html salta a confine di
+  fotogramma (`graph`).
+- **Spot di sola grafica html.** `apply_style` falliva con "no video clips" e `review_edit`
+  chiedeva movimento e colore che non si potevano dare: senza riprese la grafica html e' il
+  materiale principale.
 - **`make_captions` su piu' clip.** Senza `output` ogni clip scriveva lo stesso file e tutte
   mostravano i sottotitoli dell'ultima; ora ogni clip ha il suo file accanto al progetto
   (`<progetto>_sottotitoli/<clip>.ass`) e restano solo le righe del tratto montato.

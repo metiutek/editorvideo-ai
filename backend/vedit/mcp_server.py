@@ -21,8 +21,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import contextvars
+import time as _time
+
 import anyio
-from mcp.server.mcpserver import Image, MCPServer
+from mcp.server.mcpserver import Context, Image, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from . import analyze, captions, cleanup, colormatch, ops
@@ -222,6 +225,32 @@ def _compatto(res):
 _STRUMENTI: dict[str, Any] = {}
 
 
+def _snello(schema: Any) -> Any:
+    """Schema dei parametri senza cio' che il modello non usa.
+
+    pydantic mette un ``title`` su ogni campo (il nome ripetuto), scrive ogni
+    opzionale come ``anyOf: [tipo, null]`` con ``default: null``. Gli schemi di
+    tutti gli strumenti stanno nel contesto dell'agente quando li carica: un
+    terzo erano queste ripetizioni. La validazione non passa di qui (usa il
+    modello pydantic), quindi gli argomenti accettati restano gli stessi.
+    """
+    if isinstance(schema, list):
+        return [_snello(x) for x in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out = {k: _snello(v) for k, v in schema.items()
+           if k != "title" and not (k == "default" and v is None)}
+    varianti = out.get("anyOf")
+    if isinstance(varianti, list):
+        senza_null = [v for v in varianti if v != {"type": "null"}]
+        if len(senza_null) == 1 and isinstance(senza_null[0], dict):
+            del out["anyOf"]
+            out = {**senza_null[0], **out}
+        elif len(senza_null) != len(varianti):
+            out["anyOf"] = senza_null
+    return out
+
+
 def _strumento(*args, **kwargs):
     """``mcp.tool`` che consegna all'agente il testo degli errori previsti.
 
@@ -233,20 +262,35 @@ def _strumento(*args, **kwargs):
     def applica(fn):
         if inspect.iscoroutinefunction(fn):
             @functools.wraps(fn)
-            async def avvolta(*a, **k):
+            async def avvolta(*a, contesto_mcp=None, **k):
+                _CTX.set(contesto_mcp)
+                _avanza(None)
                 try:
                     return _compatto(await fn(*a, **k))
                 except _PREVISTI as exc:
                     raise ToolError(_messaggio(exc)) from exc
         else:
             @functools.wraps(fn)
-            def avvolta(*a, **k):
+            def avvolta(*a, contesto_mcp=None, **k):
                 try:
                     return _compatto(fn(*a, **k))
                 except _PREVISTI as exc:
                     raise ToolError(_messaggio(exc)) from exc
+        # il Context della richiesta arriva al wrapper (non alla funzione) e
+        # finisce in _CTX, da dove _off lo usa per i battiti di progresso
+        firma = inspect.signature(fn)
+        avvolta.__signature__ = firma.replace(parameters=[
+            *firma.parameters.values(),
+            inspect.Parameter("contesto_mcp", inspect.Parameter.KEYWORD_ONLY, default=None,
+                              annotation=Context)])
+        avvolta.__annotations__ = {**getattr(fn, "__annotations__", {}), "contesto_mcp": Context}
         registra(avvolta)
-        _STRUMENTI[kwargs.get("name") or fn.__name__] = fn
+        nome = kwargs.get("name") or fn.__name__
+        _STRUMENTI[nome] = fn
+        tool = mcp._tool_manager.get_tool(nome)
+        if tool is not None:
+            tool.parameters = _snello(tool.parameters)
+            tool.description = inspect.cleandoc(tool.description or "")
         return fn
 
     return applica
@@ -324,9 +368,49 @@ def _clip_view(c) -> dict:
     return out
 
 
+# Claude Code interrompe una chiamata che resta muta per 300 secondi: un render,
+# una trascrizione di tutto il girato o una verifica lunga venivano troncati, e
+# l'agente ripartiva da capo (render rifatti, giri persi). Mentre il lavoro gira
+# si manda un battito di progresso; ``_avanza`` ci aggiunge la percentuale vera
+# quando chi lavora la conosce. Senza token di progresso il battito non fa niente.
+_CTX: contextvars.ContextVar[Context | None] = contextvars.ContextVar("vedit_ctx", default=None)
+_STATO: dict[str, Any] = {"fatto": None, "nota": ""}
+BATTITO_S = 15.0
+
+
+def _avanza(fatto: float | None, nota: str = "") -> None:
+    """Percentuale 0..1 del lavoro in corso, letta dal prossimo battito."""
+    _STATO["fatto"], _STATO["nota"] = fatto, nota
+
+
 async def _off(fn, *args, **kwargs):
-    """Esegue lavoro bloccante (ffmpeg) fuori dal loop asincrono."""
-    return await anyio.to_thread.run_sync(lambda: fn(*args, **kwargs))
+    """Esegue lavoro bloccante (ffmpeg) fuori dal loop asincrono, con battiti di progresso."""
+    ctx = _CTX.get()
+    if ctx is None:
+        return await anyio.to_thread.run_sync(lambda: fn(*args, **kwargs))
+    t0, esito = _time.monotonic(), []
+
+    async def battito():
+        while True:
+            await anyio.sleep(BATTITO_S)
+            fatto = _STATO["fatto"]
+            secondi = int(_time.monotonic() - t0)
+            nota = _STATO["nota"] or f"working, {secondi}s"
+            try:
+                if fatto is not None:
+                    await ctx.report_progress(round(100 * fatto, 1), 100, nota)
+                else:
+                    await ctx.report_progress(secondi, None, nota)
+            except Exception:
+                return   # niente canale di progresso: il lavoro va avanti lo stesso
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(battito)
+        try:
+            esito.append(await anyio.to_thread.run_sync(lambda: fn(*args, **kwargs)))
+        finally:
+            tg.cancel_scope.cancel()
+    return esito[0]
 
 
 # --------------------------------------------------------------------------
@@ -1155,7 +1239,8 @@ async def transcribe(path: str | None = None, clip: str | None = None,
         ids = [m.id for m in s.project.media if m.has_audio] if media == ["*"] else media
         sorgenti += [(i, s.media_or_die(i).path) for i in ids]
     esiti: dict[str, Any] = {}
-    for nome, src in sorgenti:
+    for i, (nome, src) in enumerate(sorgenti):
+        _avanza(i / len(sorgenti), f"transcribing {i + 1}/{len(sorgenti)}")
         try:
             esiti[nome] = una(await _off(analyze.transcribe, src, model, language))
         except Exception as exc:   # una ripresa senza parlato non ferma le altre
@@ -1756,6 +1841,15 @@ async def preview_grid(count: int = 12, width: int = 320, cols: int = 4,
     tempo stampato sopra, quindi si leggono stacchi, continuita' e buchi in un
     colpo d'occhio. Usalo dopo ogni modifica strutturale, prima di renderizzare.
     """
+    if path and Path(path).suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
+        # ``path`` e' dove salvare la griglia; passarci un video (di solito il
+        # render appena fatto) e' l'errore naturale: lo si guarda e basta
+        if not Path(path).is_file():
+            raise EditError("path is where the grid image is saved (.jpg/.png); to look at "
+                            "a video file use preview_media(path=...)")
+        out = str(Path(tempfile.gettempdir()) / f"vedit_grid_{os.getpid()}.jpg")
+        res = await _off(review.media_sheet, path, out, count, width, cols, start, end)
+        return Image(path=res["file"])
     s = _store(project)
     out = path or str(Path(tempfile.gettempdir()) / f"vedit_grid_{os.getpid()}.jpg")
     res = await _off(review.contact_sheet, s.project, out, count, width, cols, start, end)
@@ -1914,6 +2008,9 @@ async def duck_music(music: str, voice: str, amount_db: float = -12.0,
     Non e' un compressore sidechain: sono keyframe veri sul guadagno della clip
     musicale, quindi si vedono nel progetto, si correggono a mano e si annullano
     con undo. attack basso = stacco netto; release alto = rientro morbido.
+
+    ``music`` e ``voice`` sono id di clip oppure di tracce: duck_music(music="A2",
+    voice="V1") abbassa tutta la musica sotto tutto il parlato in una chiamata.
     """
     return await _off(ops.duck_music, _store(project), music, voice,
                       amount_db, attack, release)
@@ -2067,7 +2164,11 @@ async def render_video(output: str, quality: str = "high", codec: str = "h264",
         subtitle_track=subtitle_track, subtitle_file=subtitle_file,
         subtitle_lang=subtitle_lang, burn_subtitles=burn_subtitles,
     )
-    res = await _off(render.render, s.project, opts)
+    def progresso(p: dict) -> None:
+        if p.get("percent") is not None:
+            _avanza(p["percent"] / 100.0, f"render {p['percent']:.0f}%")
+
+    res = await _off(render.render, s.project, opts, progresso)
     return {"output": res.output, "durata": res.duration, "secondi_impiegati": res.seconds,
             "encoder": res.encoder, "mb": round(res.size / 1e6, 2), "avvisi": res.warnings}
 

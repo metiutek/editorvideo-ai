@@ -691,6 +691,12 @@ def ricchezza(project, attese: tuple[str, ...] | list[str] | None = None) -> dic
     attese = tuple(attese) if attese else ATTESE_DEFAULT
     video = [c for t in project.tracks if t.kind == "video" for c in t.clips
              if c.type == "media" and c.enabled]
+    # senza riprese (uno spot di sola grafica html) il materiale e' la grafica:
+    # si anima da se', e un look di colore non ha niente da correggere
+    solo_grafica = not video
+    if solo_grafica:
+        video = [c for t in project.tracks if t.kind == "video" for c in t.clips
+                 if c.type == "html" and c.enabled]
     audio_tr = [t for t in project.tracks if t.kind == "audio"]
     musica = [c for t in audio_tr for c in t.clips if c.type == "media" and c.duration >= 8]
 
@@ -711,7 +717,7 @@ def ricchezza(project, attese: tuple[str, ...] | list[str] | None = None) -> dic
 
     conti = {
         "clip_video": len(video),
-        "con_movimento": sum(1 for c in video if mosso(c)),
+        "con_movimento": sum(1 for c in video if solo_grafica or mosso(c)),
         "effetti_clip": len(tutti_fx),
         "effetti_master": len(master_fx),
         "transizioni": sum(1 for c in video if c.transition_out.duration > 0
@@ -726,7 +732,7 @@ def ricchezza(project, attese: tuple[str, ...] | list[str] | None = None) -> dic
     }
     presenti = {
         "movimento": conti["con_movimento"] >= max(1, len(video) // 4),
-        "colore": bool(colore_fx & set(tutti_fx + master_fx)),
+        "colore": solo_grafica or bool(colore_fx & set(tutti_fx + master_fx)),
         "transizioni": conti["transizioni"] > 0,
         "grafica": conti["grafica"] > 0,
         "musica_viva": not musica or conti["musica_automatizzata"] > 0,

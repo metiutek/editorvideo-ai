@@ -193,7 +193,12 @@ nuovo che restituisce l'eco dei suoi argomenti o un elenco lungo va contro quest
 `transcribe` e `preview_media` accettano `media=["*"]` per lavorare su tutto il girato in
 una chiamata; `preview_frame(t=[...])` e `batch(look=[...])` fanno vedere piu' istanti in
 un'immagine; `add_html(vars=...)` riempie i `{{segnaposto}}` di un file modello
-(`Store._sorgente_html`).
+(`Store._sorgente_html`); `duck_music` accetta tracce intere.
+
+Uno strumento lungo deve passare da `mcp_server._off`: manda i battiti di progresso senza i
+quali Claude Code lo interrompe a 300 secondi (`_avanza(frazione, nota)` per la
+percentuale vera). Gli schemi pubblicati passano da `_snello`: se aggiungi un parametro,
+il modello pydantic resta quello che valida.
 
 ```json
 [{"media": "m1b1a", "start": 0.0,   "in": 122.5, "duration": 1.5},

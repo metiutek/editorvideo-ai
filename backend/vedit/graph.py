@@ -18,6 +18,7 @@ dopo (cross-dissolve gratuito).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -286,7 +287,10 @@ class _Builder:
             # nei segmenti l'attacco (in_) e' gia' avanzato della parte tagliata;
             # il file parte da t0, quindi si salta solo la differenza
             args: list[str] = []
-            salto = clip.in_ - float(t0)
+            # all'inizio del fotogramma che copre l'attacco: a meta' fotogramma
+            # ffmpeg scarta proprio quello, e negli ultimi due fotogrammi della
+            # clip (il file ne ha uno o due) non restava niente, cioe' nero
+            salto = math.floor((clip.in_ - float(t0)) * self.fps + 1e-6) / self.fps
             if salto > 1e-6:
                 args += ["-ss", n(salto)]
             args += ["-t", n(clip_visible(clip) + 0.05)]

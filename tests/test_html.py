@@ -143,6 +143,18 @@ def test_grafo_nei_segmenti_salta_solo_la_differenza():
     assert comp.inputs[i - 5:i - 3] == ["-ss", "0.1"]
 
 
+def test_grafo_salta_all_inizio_del_fotogramma():
+    """Uno scarto a meta' fotogramma faceva scartare a ffmpeg proprio quello."""
+    s, c = _progetto_con_html()
+    fps = s.project.settings.fps
+    comp = compile_project(s.project, CompileOptions(
+        start=2.0 + 0.5 / fps, end=2.1, html_files={c.id: ("pezzo.mov", 0.9)}))
+    i = comp.inputs.index("pezzo.mov")
+    salto = float(comp.inputs[i - 4])
+    assert salto * fps == pytest.approx(round(salto * fps), abs=1e-3)
+    assert salto <= 0.1 + 0.5 / fps
+
+
 def test_grafo_senza_rasterizzazione_lo_dice():
     s, c = _progetto_con_html()
     comp = compile_project(s.project, CompileOptions())
@@ -389,3 +401,27 @@ def test_api_particelle_su_misura(client, tmp_path, monkeypatch):
     assert r.status_code == 200, r.text
     assert client.delete(f"/api/particelle/{pid}").json()["personali"] == []
     assert client.delete(f"/api/particelle/{pid}").status_code == 404
+
+
+@pytest.mark.slow
+def test_ultimi_fotogrammi_della_clip_non_sono_neri(tmp_path):
+    """Segnalato: preview_frame negli ultimi due fotogrammi di una clip html dava nero."""
+    _browser_o_salta()
+    from PIL import Image
+
+    from vedit import render
+
+    s = Store.create("t", "720p")
+    s.project.settings.width, s.project.settings.height = 320, 180
+    pagina = '<html><body style="margin:0"><div style="width:100vw;height:100vh;background:#e33"></div></body></html>'
+    s.add_html(html=pagina, start=0, duration=2.4)
+    s.add_html(html=pagina.replace("e33", "3e3"), start=2.4, duration=2.4)
+    fps = s.project.settings.fps
+    for t, atteso in ((2.4 - 1.5 / fps, 0), (2.4 - 0.5 / fps, 0), (4.8 - 0.3 / fps, 1)):
+        out = tmp_path / f"{t}.png"
+        try:
+            render.render_frame(s.project, t, str(out), width=320, use_proxy=False)
+        except htmlclip.HtmlNonDisponibile as exc:
+            pytest.skip(str(exc))
+        px = Image.open(out).convert("RGB").getpixel((160, 90))
+        assert px[atteso] > 200, (t, px)
