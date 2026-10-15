@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import json
 import os
 import sys
 import tempfile
@@ -63,6 +64,17 @@ I tempi sono in secondi. Ogni parametro animabile accetta anche
 all'inizio della clip. project_info da' lo stato della timeline con gli id.
 Per un montaggio serrato usa add_clips: mette tutti i tagli in una chiamata sola,
 ed e' atomico.
+
+ECONOMIA. Ogni chiamata rilegge tutto il contesto: il costo di un montaggio e'
+numero di giri per lunghezza del contesto. Quindi:
+- batch per tutte le modifiche gia' decise (set_transform, add_html, add_effect,
+  set_audio, remove_effect...): una chiamata invece di decine;
+- transcribe(media=["*"]) e preview_media(media=["*"]) guardano e trascrivono
+  tutto il girato in una chiamata, non una per file;
+- project_info solo quando lo stato non lo conosci gia' (track= per una traccia
+  sola); detail='full' e list_effects(name=...) solo se servono davvero;
+- guarda con preview_grid dopo un blocco di modifiche, non dopo ognuna;
+- niente Bash/ffprobe/ffmpeg per lavoro che fa gia' uno strumento.
 
 Non esportare mai di tua iniziativa: render_video si usa solo quando l'utente lo
 chiede esplicitamente, e anche allora l'editor gli chiede conferma prima di
@@ -173,26 +185,62 @@ def _messaggio(exc: BaseException) -> str:
     return str(exc.args[0]) if isinstance(exc, KeyError) and exc.args else str(exc)
 
 
+# Ogni risposta resta nel contesto dell'agente per tutto il resto del lavoro e
+# viene riletta a ogni turno: un montaggio di due minuti sono centinaia di turni
+# su un contesto di centinaia di migliaia di token. mcp serializza i dict con
+# indent=2 e li manda una seconda volta come structuredContent; qui escono una
+# volta sola, in JSON compatto, con i decimali tagliati. Meta' dei token.
+def _arrotonda(x):
+    if isinstance(x, float):
+        return round(x, 4)
+    if isinstance(x, dict):
+        return {k: _arrotonda(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_arrotonda(v) for v in x]
+    return x
+
+
+def _json(x) -> str:
+    return json.dumps(_arrotonda(x), ensure_ascii=False, separators=(",", ":"), default=str)
+
+
+def _compatto(res):
+    if res is None or isinstance(res, (str, Image)):
+        return res
+    if isinstance(res, (list, tuple)) and any(isinstance(x, Image) for x in res):
+        return [x if isinstance(x, (str, Image)) else _json(x) for x in res]
+    return _json(res)
+
+
+# nome -> funzione, per ``batch``
+_STRUMENTI: dict[str, Any] = {}
+
+
 def _strumento(*args, **kwargs):
-    """``mcp.tool`` che consegna all'agente il testo degli errori previsti."""
-    registra = mcp.tool(*args, **kwargs)
+    """``mcp.tool`` che consegna all'agente il testo degli errori previsti.
+
+    Le risposte escono in JSON compatto (``_compatto``); la funzione Python
+    resta quella originale, che restituisce dict.
+    """
+    registra = mcp.tool(*args, structured_output=False, **kwargs)
 
     def applica(fn):
         if inspect.iscoroutinefunction(fn):
             @functools.wraps(fn)
             async def avvolta(*a, **k):
                 try:
-                    return await fn(*a, **k)
+                    return _compatto(await fn(*a, **k))
                 except _PREVISTI as exc:
                     raise ToolError(_messaggio(exc)) from exc
         else:
             @functools.wraps(fn)
             def avvolta(*a, **k):
                 try:
-                    return fn(*a, **k)
+                    return _compatto(fn(*a, **k))
                 except _PREVISTI as exc:
                     raise ToolError(_messaggio(exc)) from exc
         registra(avvolta)
+        _STRUMENTI[kwargs.get("name") or fn.__name__] = fn
         return fn
 
     return applica
@@ -249,6 +297,12 @@ def _store(project: str | None = None) -> Store:
     return _stores[_current[0]]
 
 
+def _valori(v: Any) -> dict:
+    """Campi di transform/audio senza ripetere i keyframe appena passati."""
+    return {k: (f"kf x{len(x['kf'])}" if isinstance(x, dict) and "kf" in x else x)
+            for k, x in vars(v).items()}
+
+
 def _clip_view(c) -> dict:
     out = {"id": c.id, "type": c.type, "start": round(c.start, 3),
            "duration": round(c.duration, 3), "end": round(c.end, 3)}
@@ -300,12 +354,38 @@ def project_open(path: str) -> dict:
 
 
 @_strumento()
-def project_info(detail: str = "normal", project: str | None = None) -> dict:
-    """Stato completo della timeline: media, tracce, clip, effetti, durata.
+def project_info(detail: str = "normal", track: str | None = None,
+                 project: str | None = None) -> dict:
+    """Stato della timeline: media, tracce, clip, effetti, durata.
 
-    detail='full' aggiunge transform e audio di ogni clip.
+    ``track='V1'`` limita la risposta a una traccia. detail='full' aggiunge
+    transform, audio e percorsi dei file (molto piu' lungo: chiedilo solo
+    quando ti servono davvero).
     """
-    return _store(project).summary(detail)
+    info = _store(project).summary(detail)
+    if detail != "full":
+        # i percorsi dei file e i campi delle tracce ai valori di default sono
+        # la parte piu' lunga e quella che non serve mai per montare
+        info["media"] = [{k: v for k, v in m.items() if k not in ("path", "folder", "proxy")
+                          and v is not None} for m in info["media"]]
+        nomi = {m["id"]: m["name"] for m in info["media"]}
+        for t in info["tracks"]:
+            for k in ("hidden", "muted", "locked", "solo"):
+                if not t.get(k):
+                    t.pop(k, None)
+            for k in ("sidechain", "surround"):
+                if t.get(k) in (None, False, "", {}):
+                    t.pop(k, None)
+            if t.get("volume") == 1.0:
+                t.pop("volume")
+            for c in t["clips"]:
+                c.pop("end", None)   # start + duration
+                if c.get("name") in (None, "", nomi.get(c.get("media"))):
+                    c.pop("name", None)
+    if track:
+        info["tracks"] = [t for t in info["tracks"] if t["id"] == track or t["name"] == track]
+        info.pop("media")
+    return info
 
 
 @_strumento()
@@ -579,7 +659,8 @@ def add_clips(clips: list[dict], track: str | None = None, gap: float = 0.0,
     Per accodare media *interi* senza ritagliarli c'e' append_sequence.
     """
     fatte = _store(project).add_clips(clips, track, gap)
-    return {"aggiunte": len(fatte), "clip": [_clip_view(c) for c in fatte],
+    # solo gli id, nell'ordine della lista: il resto l'agente l'ha appena scritto
+    return {"aggiunte": len(fatte), "ids": [c.id for c in fatte],
             "fine": round(max((c.start + c.duration for c in fatte), default=0.0), 3)}
 
 
@@ -744,7 +825,7 @@ def set_transform(clip: str, x: Any = None, y: Any = None, scale: Any = None,
     """
     c = _store(project).set_transform(clip, x=x, y=y, scale=scale, rotation=rotation,
                                       opacity=opacity)
-    return {"id": c.id, "transform": vars(c.transform)}
+    return {"id": c.id, "transform": _valori(c.transform)}
 
 
 @_strumento()
@@ -754,7 +835,7 @@ def set_audio(clip: str, gain_db: Any = None, mute: bool | None = None,
     """Volume (dB, animabile), silenziamento, dissolvenze audio e panning (-1..1)."""
     c = _store(project).set_audio(clip, gain_db=gain_db, mute=mute, fade_in=fade_in,
                                   fade_out=fade_out, pan=pan)
-    return {"id": c.id, "audio": vars(c.audio)}
+    return {"id": c.id, "audio": _valori(c.audio)}
 
 
 @_strumento()
@@ -818,12 +899,31 @@ def close_gaps(track: str, project: str | None = None) -> dict:
 
 
 @_strumento()
-def list_effects(kind: str | None = None) -> list[dict]:
+def list_effects(kind: str | None = None, name: str | None = None) -> list[dict]:
     """Catalogo degli effetti disponibili con parametri, range e animabilita'.
 
-    kind='video' o 'audio' per filtrare. Consultalo prima di usare add_effect.
+    kind='video' o 'audio' per filtrare. Ogni parametro e' una riga
+    ``nome=default min..max [scelte] ~`` (``~`` = animabile con keyframe).
+    name='<effetto>' da' la scheda completa di un effetto solo, con la
+    descrizione di ogni parametro.
     """
-    return fx.describe(kind)
+    tutti = fx.describe(kind)
+    if name:
+        scelto = [e for e in tutti if e["name"] == name]
+        if not scelto:
+            raise EditError(f"unknown effect {name!r}: see list_effects")
+        return scelto
+
+    def riga(q: dict) -> str:
+        r = f"{q['name']}={q['default']}"
+        if q["min"] is not None or q["max"] is not None:
+            r += f" {q['min']}..{q['max']}"
+        if q["choices"]:
+            r += " [" + "|".join(map(str, q["choices"])) + "]"
+        return r + (" ~" if q["animatable"] else "")
+
+    return [{"name": e["name"], "kind": e["kind"], "desc": e["desc"],
+             "params": [riga(q) for q in e["params"]]} for e in tutti]
 
 
 @_strumento()
@@ -977,8 +1077,8 @@ async def music_beats(path: str | None = None, clip: str | None = None,
     Montare a tempo vuol dire far cadere gli stacchi sui battiti, e per farlo
     serve sapere dove sono. Ritorna ``bpm``, la durata di un battito (``beat``)
     e di una misura in 4/4 (``bar``), lo scostamento del primo battito
-    (``offset``) e ``profilo``, l'energia per blocchi di 4 secondi normalizzata
-    a 1: e' li' che si leggono intro, stacco e ritornello, cioe' dove mettere
+    (``offset``) e ``profilo``, l'energia per blocchi di ``profilo_s`` secondi
+    (il valore i-esimo copre da i*profilo_s) normalizzata a 1: e' li' che si leggono intro, stacco e ritornello, cioe' dove mettere
     l'apertura e il picco.
 
     Con ``every`` > 0 aggiunge ``griglia``, gli istanti veri su cui tagliare:
@@ -988,6 +1088,11 @@ async def music_beats(path: str | None = None, clip: str | None = None,
     """
     src = _source(path, clip, project, media)
     out = dict(await _off(analyze.beats, src))
+    # [{"t":0,"energia":0.86}, ...] -> [0.86, ...]: i tempi sono un blocco ogni profilo_s
+    prof = out.get("profilo") or []
+    if prof:
+        out["profilo_s"] = prof[1]["t"] - prof[0]["t"] if len(prof) > 1 else 4.0
+        out["profilo"] = [round(x["energia"], 2) for x in prof]
     if every > 0:
         out["griglia"] = await _off(analyze.beat_grid, src, start, end, every)
     return out
@@ -996,20 +1101,41 @@ async def music_beats(path: str | None = None, clip: str | None = None,
 @_strumento()
 async def transcribe(path: str | None = None, clip: str | None = None,
                      model: str = "small", language: str | None = None,
-                     with_words: bool = False, project: str | None = None) -> dict:
+                     with_words: bool = False, paths: list[str] | None = None,
+                     media: list[str] | None = None, project: str | None = None) -> dict:
     """Trascrive il parlato con i tempi, per capire il contenuto e dove tagliare.
 
-    with_words=True aggiunge i timestamp per singola parola (serve per tagliare
-    sulla pausa esatta o censurare una parola sola); senza, restituisce solo le
-    frasi con inizio/fine, che e' molto piu' compatto da leggere.
+    Piu' riprese insieme: ``media=["<id>", ...]`` (o ``paths=[...]``) le trascrive
+    tutte in una chiamata, ``media=["*"]`` tutti i media importati con audio.
+    Molto meglio di una chiamata per file.
+
+    ``segments`` e' una lista di ``[inizio, fine, "testo"]`` in secondi della
+    sorgente. with_words=True da' invece i segmenti completi con i tempi di ogni
+    parola (per tagliare sulla pausa esatta o censurare una parola): e' molto
+    piu' lungo, chiedilo solo per la ripresa che stai tagliando.
     """
-    src = _source(path, clip, project)
-    tr = await _off(analyze.transcribe, src, model, language)
-    segs = [{"t": s["start"], "e": s["end"], "text": s["text"]}
-            if not with_words else s for s in tr["segments"]]
-    return {"language": tr["language"], "words_per_minute": tr["words_per_minute"],
-            "speech_seconds": tr["speech_seconds"], "text": tr["text"],
-            "segments": segs}
+    def una(tr: dict) -> dict:
+        segs = (tr["segments"] if with_words else
+                [[round(x["start"], 2), round(x["end"], 2), x["text"].strip()]
+                 for x in tr["segments"]])
+        return {"language": tr["language"], "wpm": tr["words_per_minute"],
+                "speech_s": tr["speech_seconds"], "segments": segs}
+
+    if not paths and not media:
+        return una(await _off(analyze.transcribe, _source(path, clip, project), model, language))
+
+    sorgenti: list[tuple[str, str]] = [(Path(x).name, _source(x, None, project)) for x in paths or []]
+    if media:
+        s = _store(project)
+        ids = [m.id for m in s.project.media if m.has_audio] if media == ["*"] else media
+        sorgenti += [(i, s.media_or_die(i).path) for i in ids]
+    esiti: dict[str, Any] = {}
+    for nome, src in sorgenti:
+        try:
+            esiti[nome] = una(await _off(analyze.transcribe, src, model, language))
+        except Exception as exc:   # una ripresa senza parlato non ferma le altre
+            esiti[nome] = {"error": _messaggio(exc)}
+    return {"files": esiti}
 
 
 @_strumento()
@@ -1222,7 +1348,7 @@ async def preview_frame(t: float | None = None, width: int = 640, path: str | No
 
 
 @_strumento()
-async def preview_media(media: str | None = None, path: str | None = None,
+async def preview_media(media: str | list[str] | None = None, path: str | None = None,
                         t: float | None = None, count: int = 8, width: int = 320,
                         cols: int = 4, start: float | None = None, end: float | None = None,
                         guide: bool = False, project: str | None = None) -> Image:
@@ -1236,7 +1362,21 @@ async def preview_media(media: str | None = None, path: str | None = None,
 
     guide=True disegna una griglia al 10% con le frazioni sui bordi: serve per
     indicare un oggetto a track_mask / pin_to_subject con box=[x, y, w, h].
+
+    Tutto il girato in un'immagine sola: ``media=["*"]`` (o una lista di id)
+    da' un foglio con ``count`` fotogrammi per ripresa (default 1 in questo
+    caso), etichettati con l'id del media. Usalo per primo, invece di una
+    griglia per file.
     """
+    if isinstance(media, list):
+        s = _store(project)
+        ids = [m.id for m in s.project.media if m.kind != "audio"] if media == ["*"] else media
+        sorgenti = [(i, s.media_or_die(i).path) for i in ids][:60]
+        out = str(Path(tempfile.gettempdir()) / f"vedit_indice_{os.getpid()}.jpg")
+        punti = 1 if count == 8 else count   # 8 e' il default della griglia di un file
+        res = await _off(review.media_indice, sorgenti, out, min(width, 240),
+                         cols if cols != 4 else 6, punti)
+        return Image(path=res["file"])
     src = _source(path, None, project, media)
     out = str(Path(tempfile.gettempdir()) / f"vedit_media_{os.getpid()}.jpg")
     res = await _off(review.media_sheet, src, out, count, width, cols, start, end, t, guide)
@@ -1954,6 +2094,51 @@ async def clear_cache(kind: str | None = None) -> dict:
     """Svuota la cache di proxy/miniature/stabilizzazione."""
     freed = await _off(proxy.clear, kind)
     return {"liberati_mb": round(freed / 1e6, 2)}
+
+
+# Dentro batch solo cio' che modifica o legge il progetto. Le immagini vanno
+# guardate una per volta, l'export e le domande vogliono l'utente, e aprire o
+# creare un progetto cambierebbe sotto i piedi quello del blocco.
+_FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "project_create",
+                "project_open", "install_ffmpeg", "preview_frame", "preview_media",
+                "preview_grid", "scope_image", "undo", "redo", "restore_snapshot"}
+
+
+@_strumento()
+async def batch(ops: list[dict], project: str | None = None) -> dict:
+    """Molte modifiche in UNA chiamata: atomiche, un solo passo di undo.
+
+    ``ops`` = ``[{"tool": "set_transform", "args": {"clip": "c1", "scale": 1.2}},
+    {"tool": "add_html", "args": {"path": "t.html", "start": 3, "track": "V2"}}, ...]``
+    — ``tool`` e' il nome di uno strumento, ``args`` i suoi argomenti.
+
+    Ogni chiamata a uno strumento costa un giro intero dell'agente: trenta
+    set_transform, venti add_html, dieci add_effect uno per volta sono sessanta
+    giri. Raccogli le modifiche decise e mandale qui. Se un'operazione fallisce
+    non resta applicato niente e l'errore dice quale. Fuori: anteprime,
+    render_video, ask_user, apertura di progetti, undo.
+    """
+    s = _store(project)
+    esiti = []
+    with s.batch():
+        for i, op in enumerate(ops):
+            nome = op.get("tool") if isinstance(op, dict) else None
+            fn = _STRUMENTI.get(nome or "")
+            if fn is None or nome in _FUORI_BATCH:
+                raise EditError(f"op {i}: {nome!r} cannot be used in batch")
+            args = dict(op.get("args") or {})
+            if "project" in inspect.signature(fn).parameters:
+                args.setdefault("project", project)
+            try:
+                r = fn(**args)
+                if inspect.isawaitable(r):
+                    r = await r
+            except TypeError as exc:
+                raise EditError(f"op {i} ({nome}): {exc}; nothing applied") from exc
+            except _PREVISTI as exc:
+                raise EditError(f"op {i} ({nome}): {_messaggio(exc)}; nothing applied") from exc
+            esiti.append(r)
+    return {"done": len(esiti), "results": esiti}
 
 
 def main() -> None:

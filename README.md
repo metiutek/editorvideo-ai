@@ -276,6 +276,12 @@ timeline behind if something breaks midway.
  {"media": "m9155", "start": 1.5, "in": 98.5,  "duration": 0.75}]
 ```
 
+**Spending fewer tokens:** every tool call re-reads the agent's whole context, so an edit
+costs *calls × context*. Tool replies are compact JSON without echoes, and `batch` applies
+any list of edits (`[{"tool": "set_transform", "args": {...}}, ...]`) in one atomic call with
+one undo step. `transcribe(media=["*"])` and `preview_media(media=["*"])` cover all the
+footage in a single call.
+
 **Showing the result:** `open_ui` starts the web interface **inside the MCP server process**
 and returns the address. It is not a second instance — the UI works on the *same* `Store`
 object as the agent, and every change shows up in the browser live. One writer, no file

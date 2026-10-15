@@ -164,6 +164,50 @@ def media_sheet(path: str, output: str, count: int = 8, width: int = 320,
             "durata_sorgente": round(dur, 3), "risoluzione": [m.width, m.height]}
 
 
+def media_indice(sorgenti: list[tuple[str, str]], output: str, width: int = 240,
+                 cols: int = 6, punti: int = 1) -> dict:
+    """Un foglio con ``punti`` fotogrammi di ogni ripresa, etichettati con l'id.
+
+    Per scegliere il materiale fra decine di file serve prima vederli tutti
+    insieme: una griglia per file costa un'immagine e un giro di agente per
+    ripresa, qui ne basta una per tutto il girato.
+    """
+    from . import probe
+
+    w = int(width) // 2 * 2
+    h = w * 9 // 16 // 2 * 2
+    # verticali e orizzontali nello stesso riquadro 16:9, con le bande
+    vf = (f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
+          f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2")
+    tmp = Path(tempfile.mkdtemp(prefix="vedit_indice_"))
+    frames, saltati = [], []
+    for k, (nome, path) in enumerate(sorgenti):
+        try:
+            m = probe.probe(path)
+        except Exception:
+            saltati.append(nome)
+            continue
+        if not m.has_video:
+            saltati.append(nome)
+            continue
+        dur = m.duration or 0.0
+        n = max(1, int(punti))
+        for i in range(n):
+            tt = dur / n * (i + 0.5) if dur else 0.0
+            f = tmp / f"{k:03d}_{i}.jpg"
+            subprocess.run([
+                ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error",
+                "-y", "-ss", f"{tt:.3f}", "-i", str(path), "-frames:v", "1",
+                "-vf", vf, "-q:v", "4", str(f),
+            ], capture_output=True, timeout=120)
+            if f.exists() and f.stat().st_size > 0:
+                frames.append((f"{nome} | {_timecode(tt)} of {dur:.0f}s", str(f)))
+    if not frames:
+        raise ValueError("no readable frames in the given media")
+    res = griglia(frames, output, cols)
+    return {"file": res["file"], "saltati": saltati}
+
+
 # --------------------------------------------------------------------------
 # anteprima guardabile
 # --------------------------------------------------------------------------

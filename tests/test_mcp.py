@@ -424,3 +424,99 @@ async def test_trim_edit_dall_agente(assets, tmp_path):
     assert (await call("trim_edit", clip=b["id"], mode="slide", delta=-0.5))["start"] == 1.0
     with pytest.raises(ToolError, match="mode"):
         await call("trim_edit", clip=a["id"], mode="zoom", delta=1)
+
+
+# --------------------------------------------------------------------------
+# economia: ogni risposta resta nel contesto dell'agente e viene riletta a ogni
+# turno. Due minuti di video montati via MCP consumavano un abbonamento intero.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_risposte_in_json_compatto(assets, tmp_path):
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    r = await srv.mcp.call_tool("import_media", {"paths": [assets["red"]]})
+    assert r.structured_content is None, "la stessa risposta non va mandata due volte"
+    testo = r.content[0].text
+    assert "\n" not in testo and ", " not in testo and '": ' not in testo
+
+
+@pytest.mark.anyio
+async def test_risposte_senza_eco(assets, tmp_path):
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    m = (await call("import_media", paths=[assets["red"]]))[0]["id"]
+    res = await call("add_clips", clips=[{"media": m, "start": i * 1.0, "in": 0.0,
+                                          "duration": 1.0} for i in range(3)])
+    assert len(res["ids"]) == 3 and "clip" not in res
+    kf = {"kf": [{"t": 0, "v": 1}, {"t": 1, "v": 1.2}]}
+    t = await call("set_transform", clip=res["ids"][0], scale=kf)
+    assert t["transform"]["scale"] == "kf x2"
+    info = await call("project_info", track="V1")
+    assert "media" not in info and [tr["id"] for tr in info["tracks"]] == ["V1"]
+    assert all("end" not in c for c in info["tracks"][0]["clips"])
+
+
+@pytest.mark.anyio
+async def test_batch_una_chiamata_atomica(assets, tmp_path):
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    m = (await call("import_media", paths=[assets["red"]]))[0]["id"]
+    ids = (await call("add_clips", clips=[{"media": m, "start": i * 1.0, "in": 0.0,
+                                           "duration": 1.0} for i in range(3)]))["ids"]
+    res = await call("batch", ops=[
+        {"tool": "set_transform", "args": {"clip": ids[0], "scale": 1.2}},
+        {"tool": "add_effect", "args": {"clip": ids[1], "type": "sharpen"}},
+        {"tool": "set_fades", "args": {"clip": ids[2], "fade_out": 0.5}},
+    ])
+    assert res["done"] == 3
+    full = await call("project_info", detail="full")
+    clips = full["tracks"][0]["clips"]
+    assert clips[0]["transform"]["scale"] == 1.2 and clips[1]["effects"]
+    # un solo undo disfa tutto il blocco
+    await call("undo")
+    clips = (await call("project_info", detail="full"))["tracks"][0]["clips"]
+    assert clips[0]["transform"]["scale"] == 1.0 and not clips[1].get("effects")
+
+    # un'operazione sbagliata: non resta applicato niente, e l'errore dice quale
+    with pytest.raises(ToolError, match=r"op 1 \(set_transform\)"):
+        await call("batch", ops=[
+            {"tool": "set_transform", "args": {"clip": ids[0], "scale": 1.5}},
+            {"tool": "set_transform", "args": {"clip": "fantasma", "scale": 1.5}},
+        ])
+    clips = (await call("project_info", detail="full"))["tracks"][0]["clips"]
+    assert clips[0]["transform"]["scale"] == 1.0
+    with pytest.raises(ToolError, match="cannot be used in batch"):
+        await call("batch", ops=[{"tool": "render_video", "args": {"output": "x.mp4"}}])
+
+
+@pytest.mark.anyio
+async def test_transcribe_tutto_il_girato_in_una_chiamata(assets, tmp_path, monkeypatch):
+    from vedit import analyze
+    viste = []
+
+    def finta(src, model, language):
+        viste.append(src)
+        return {"language": "it", "words_per_minute": 120.0, "speech_seconds": 1.0,
+                "text": "ciao", "segments": [{"start": 0.123, "end": 1.0, "text": " ciao"}]}
+
+    monkeypatch.setattr(analyze, "transcribe", finta)
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    ids = [x["id"] for x in await call("import_media", paths=[assets["red"], assets["blue"]])]
+    res = await call("transcribe", media=["*"])
+    assert set(res["files"]) == set(ids) and len(viste) == 2
+    assert res["files"][ids[0]]["segments"] == [[0.12, 1.0, "ciao"]]
+
+
+@pytest.mark.anyio
+async def test_preview_media_tutto_il_girato(assets, tmp_path):
+    await call("project_create", path=str(tmp_path / "p.json"), preset="720p")
+    await call("import_media", paths=[assets["red"], assets["blue"]])
+    r = await srv.mcp.call_tool("preview_media", {"media": ["*"]})
+    assert [c.type for c in r.content] == ["image"]
+
+
+@pytest.mark.anyio
+async def test_list_effects_compatto_e_scheda():
+    corto = await call("list_effects")
+    assert all(isinstance(q, str) for e in corto for q in e["params"])
+    scheda = await call("list_effects", name="sharpen")
+    assert len(scheda) == 1 and isinstance(scheda[0]["params"][0], dict)

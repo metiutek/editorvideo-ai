@@ -517,6 +517,12 @@ dissolvenze incrociate, normalizzazione EBU R128, render, e `preview_frame` che 
 l'immagine vera** del fotogramma — così l'agente vede quello che ha montato invece di
 indovinarlo.
 
+**Meno token.** Ogni chiamata rilegge tutto il contesto dell'agente, quindi un montaggio
+costa *chiamate × contesto*. Le risposte degli strumenti sono JSON compatto senza eco, e
+`batch` applica una lista qualsiasi di modifiche (`[{"tool": "set_transform", "args": {...}},
+...]`) in una chiamata atomica con un solo undo. `transcribe(media=["*"])` e
+`preview_media(media=["*"])` lavorano su tutto il girato in una chiamata sola.
+
 Gli agenti che montano annotano cio' che si rompe, e' scomodo o manca con lo strumento
 `report_issue`, in [`SEGNALAZIONI.md`](SEGNALAZIONI.md) (da un clone) o
 `~/.vedit/SEGNALAZIONI.md`: e' l'elenco da cui migliorare l'editor.

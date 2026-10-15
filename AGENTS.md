@@ -184,6 +184,15 @@ quello che è un gesto solo, e se qualcosa si rompe a metà lascia mezza timelin
 `add_clips` è atomico: o entrano tutti o non entra nessuno. `append_sequence` serve solo per
 accodare media *interi*, senza punto d'attacco.
 
+Stessa regola per tutto il resto: **`batch`** prende una lista di `{"tool", "args"}` e la
+applica in un blocco atomico con un solo undo (`mcp_server._STRUMENTI`, fuori anteprime,
+export, domande e undo). Ogni chiamata rilegge l'intero contesto dell'agente, quindi il
+costo di un montaggio è giri × contesto: le risposte degli strumenti escono in JSON compatto
+(`mcp_server._compatto`) e non ripetono ciò che l'agente ha appena passato. Uno strumento
+nuovo che restituisce l'eco dei suoi argomenti o un elenco lungo va contro questa regola.
+`transcribe` e `preview_media` accettano `media=["*"]` per lavorare su tutto il girato in
+una chiamata.
+
 ```json
 [{"media": "m1b1a", "start": 0.0,   "in": 122.5, "duration": 1.5},
  {"media": "m9155", "start": 1.5,   "in": 98.5,  "duration": 0.75}]

@@ -5,6 +5,18 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Montare via MCP costa molti meno token.** Una sessione reale (due minuti di video, 402 giri,
+  contesto medio 248k token) aveva esaurito un abbonamento Pro: il costo e' giri per lunghezza
+  del contesto. Ora le risposte di tutti gli strumenti escono una volta sola in JSON compatto
+  (prima `indent=2` piu' `structuredContent`), senza eco di cio' che l'agente ha appena
+  passato (`add_clips` restituisce gli id, `set_transform`/`set_audio` riassumono i keyframe),
+  e `project_info` lascia fuori percorsi e campi ai valori di default (`track=` per una
+  traccia sola). Nuovo strumento **`batch`**: molte modifiche in una chiamata, atomiche e con
+  un solo undo. `transcribe(media=["*"])` trascrive tutto il girato in una chiamata, con i
+  segmenti come `[inizio, fine, testo]`; `preview_media(media=["*"])` mostra tutte le riprese
+  in un foglio solo. `list_effects` e' compatto (`name=` per la scheda completa),
+  `music_beats` da' il profilo come lista di numeri. Le istruzioni del server hanno una
+  sezione *ECONOMIA*.
 - **Chat più leggera sul contesto.** La guida dello stile e lo stato del progetto entrano nella
   conversazione solo la prima volta e quando cambiano, invece di ripetersi a ogni messaggio.
   Col motore Anthropic, sistema, strumenti e cronologia passano dalla cache dei prompt
