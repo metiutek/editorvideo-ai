@@ -181,13 +181,14 @@ def measure_loudness(project: Project) -> dict:
 
 
 def _html_files(project: Project, width: int | None, height: int | None, fps: float | None,
-                start: float | None, end: float | None) -> dict:
+                start: float | None, end: float | None,
+                on_progress: Callable[[int, int], None] | None = None) -> dict:
     """Clip html fotografate alla risoluzione e cadenza di questo render."""
     if not any(c.type == "html" for t in project.tracks for c in t.clips):
         return {}
     s = project.settings
     return htmlclip.prepare(project, width=int(width or s.width), height=int(height or s.height),
-                            fps=float(fps or s.fps), start=start, end=end)
+                            fps=float(fps or s.fps), start=start, end=end, on_progress=on_progress)
 
 
 def _plugin_files(project: Project, start: float | None, end: float | None) -> dict:
@@ -197,11 +198,13 @@ def _plugin_files(project: Project, start: float | None, end: float | None) -> d
     return plugins.prepare(project, start, end)
 
 
-def _preparativi(project: Project, opts: RenderOptions, want_video: bool, want_audio: bool) -> dict:
+def _preparativi(project: Project, opts: RenderOptions, want_video: bool, want_audio: bool,
+                 html_progress: Callable[[int, int], None] | None = None) -> dict:
     """Lavoro fuori da ffmpeg (stabilizzazione, html, plugin): una volta sola per render."""
     return {
         "stab": analyze_stabilization(project),
-        "html": _html_files(project, opts.width, opts.height, opts.fps, opts.start, opts.end)
+        "html": _html_files(project, opts.width, opts.height, opts.fps, opts.start, opts.end,
+                            html_progress)
         if want_video else {},
         "suoni": _plugin_files(project, opts.start, opts.end) if want_audio else {},
     }
@@ -462,6 +465,40 @@ def _metti_sottotitoli(out_path: Path, righe: list[dict], lingua: str, workdir: 
     os.replace(tmp, out_path)
 
 
+# Parte della barra data alla grafica html quando c'e' da fotografarla: e'
+# Chromium a costare, il render dopo e' secondi.
+QUOTA_HTML = 0.9
+
+
+def _barra_con_grafica(on_progress: Progress | None, t0: float
+                       ) -> tuple[Callable[[int, int], None], Progress | None]:
+    """(avanzamento dei fotogrammi html, avanzamento di ffmpeg riscalato dopo di loro).
+
+    Senza, un export di sola grafica restava a 0% per tutto il tempo del
+    browser e sembrava bloccato.
+    """
+    fotografata = [False]
+
+    def html(fatti: int, totale: int) -> None:
+        fotografata[0] = True
+        if on_progress:
+            on_progress({"seconds": 0.0, "duration": 0.0, "phase": "html",
+                         "frames": fatti, "total_frames": totale,
+                         "percent": round(fatti / max(1, totale) * QUOTA_HTML * 100, 2),
+                         "elapsed": round(time.time() - t0, 2)})
+
+    if on_progress is None:
+        return html, None
+
+    def resto(info: dict) -> None:
+        if fotografata[0]:
+            info = {**info, "percent": round(
+                QUOTA_HTML * 100 + info["percent"] * (1 - QUOTA_HTML), 2)}
+        on_progress(info)
+
+    return html, resto
+
+
 def render(project: Project, opts: RenderOptions, on_progress: Progress | None = None) -> RenderResult:
     if not opts.output:
         raise ValueError("output path missing")
@@ -479,12 +516,16 @@ def render(project: Project, opts: RenderOptions, on_progress: Progress | None =
     workdir = Path(tempfile.mkdtemp(prefix="vedit_"))
     t0 = time.time()
     try:
+        def_v, def_a = CONTAINER_DEFAULTS.get(out_path.suffix.lower(), ("h264", "aac"))
+        html_progress, on_progress = _barra_con_grafica(on_progress, t0)
+        pre = _preparativi(project, opts, opts.video and def_v is not None,
+                           opts.audio and def_a is not None, html_progress)
         confini = _confini_se_conviene(project, opts)
         if confini:
             args, duration, warnings, enc = render_a_pezzi(project, opts, confini, workdir,
-                                                           on_progress, t0)
+                                                           on_progress, t0, pre)
         else:
-            args, duration, warnings, enc = _passaggio(project, opts, workdir, on_progress, t0)
+            args, duration, warnings, enc = _passaggio(project, opts, workdir, on_progress, t0, pre)
 
         if righe:
             _metti_sottotitoli(out_path, righe, opts.subtitle_lang, workdir)
@@ -723,14 +764,16 @@ def _pota_cache_pezzi() -> None:
 
 
 def render_a_pezzi(project: Project, opts: RenderOptions, confini: list[float], workdir: Path,
-                   on_progress: Progress | None, t0: float) -> tuple[list[str], float, list[str], str]:
+                   on_progress: Progress | None, t0: float,
+                   pre: dict | None = None) -> tuple[list[str], float, list[str], str]:
     """Video a pezzi in parallelo, audio in un passaggio, poi un incollaggio senza ricodifica."""
     out_path = Path(opts.output)
     ext = out_path.suffix.lower()
     def_v, def_a = CONTAINER_DEFAULTS.get(ext, ("h264", "aac"))
     want_audio = opts.audio and def_a is not None
     durata = confini[-1] - confini[0]
-    pre = _preparativi(project, opts, True, want_audio)
+    if pre is None:
+        pre = _preparativi(project, opts, True, want_audio)
 
     fatto: dict[str, float] = {}
     lock = threading.Lock()

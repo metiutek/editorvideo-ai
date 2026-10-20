@@ -21,6 +21,11 @@ from .store import EditError, Store
 def _bar(state: dict) -> None:
     pct = state["percent"]
     filled = int(pct / 2.5)
+    if state.get("phase") == "html":
+        sys.stdout.write(f"\r[{'#' * filled}{'.' * (40 - filled)}] {pct:5.1f}%  "
+                         f"grafica html {state['frames']}/{state['total_frames']}  ")
+        sys.stdout.flush()
+        return
     speed = state["seconds"] / state["elapsed"] if state["elapsed"] > 0 else 0
     sys.stdout.write(
         f"\r[{'#' * filled}{'.' * (40 - filled)}] {pct:5.1f}%  "

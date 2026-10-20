@@ -4,6 +4,19 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+### Corretto
+- **Export con grafica HTML da ore a minuti.** Un progetto di nove minuti fatto di clip html
+  costava circa 2,5 ore di export a qualunque qualita': tutto il tempo era Chromium che
+  fotografava, il render vero dopo era di secondi. Ora la cattura passa da CDP
+  (`optimizeForSpeed`, sfondo trasparente impostato una volta: meta' del tempo per
+  fotogramma), i blocchi di 4 s di *tutte* le clip si dividono tra piu' browser (anche una
+  clip lunga sola, prima un browser per clip), e la stima di memoria per browser e' quella
+  misurata (115 MB, presi 250) invece di 500 MB, che su un PC con un paio di giga liberi
+  lasciava un browser solo. Su 8 s di grafica a 1080p: da 137 s a 21 s.
+- **La barra dell'export si muove mentre si fotografa la grafica**: prima restava a 0% per
+  tutto il tempo del browser e l'export sembrava bloccato. La UI e la CLI dicono a che
+  fotogramma della grafica si e' arrivati.
+
 ## v0.1.4 — 2026-10-15 · Montaggio MCP con molti meno token, interfaccia in inglese, mixer
 
 ### Aggiunto

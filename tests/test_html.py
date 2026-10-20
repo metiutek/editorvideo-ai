@@ -342,6 +342,51 @@ def test_piu_clip_si_fotografano_in_parallelo():
         assert _pixel(fatti[cid][0], 0.1, 160, 90)[:3] == pytest.approx(attesi[colore], abs=8)
 
 
+@pytest.mark.slow
+def test_clip_lunga_divisa_tra_piu_browser(monkeypatch, tmp_path):
+    """I blocchi di una clip sola vanno a browser diversi, con lo stesso risultato.
+
+    Un browser che parte dal terzo blocco deve far avanzare lo stato script
+    (rAF, timer) da zero: il quadrato mosso da rAF e' dove sarebbe in fila.
+    """
+    _browser_o_salta()
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setattr(htmlclip, "_browser_paralleli", lambda n: 3)
+    s = Store.create("t", "720p")
+    s.project.settings.width, s.project.settings.height = 320, 180
+    cid = s.add_html(html=ANIMATA, duration=10).id
+    visti = []
+    try:
+        fatti = htmlclip.prepare(s.project, width=320, height=180, fps=10,
+                                 on_progress=lambda k, n: visti.append((k, n)))
+    except htmlclip.HtmlNonDisponibile as exc:
+        pytest.skip(str(exc))
+    assert visti[-1] == (100, 100) and len(visti) == 100
+    mov = fatti[cid][0]
+    assert mov.endswith(".ffconcat")
+    # fotogramma 90: rAF ha girato novanta volte, il quadrato blu sta a 90px
+    assert _pixel(mov, 9.0, 100, 110)[:3] == pytest.approx((0, 0, 255), abs=8)
+    assert _pixel(mov, 9.0, 85, 110)[3] == 0
+    assert _pixel(mov, 9.0, 290, 150)[:3] == pytest.approx((0, 255, 0), abs=8)
+
+
+def test_avanzamento_export_con_grafica():
+    """Mentre si fotografa la grafica la barra si muove; dopo, ffmpeg riempie il resto."""
+    from vedit import render
+
+    visti = []
+    html, resto = render._barra_con_grafica(visti.append, 0.0)
+    html(50, 100)
+    assert visti[-1]["phase"] == "html" and visti[-1]["percent"] == pytest.approx(45.0)
+    resto({"seconds": 1.0, "duration": 2.0, "percent": 50.0, "elapsed": 1.0})
+    assert visti[-1]["percent"] == pytest.approx(95.0)
+    # senza grafica da fotografare la barra di ffmpeg resta quella
+    visti.clear()
+    _, resto = render._barra_con_grafica(visti.append, 0.0)
+    resto({"seconds": 1.0, "duration": 2.0, "percent": 50.0, "elapsed": 1.0})
+    assert visti[-1]["percent"] == 50.0
+
+
 def test_blocchi_allineati_al_tempo_della_clip():
     """Tratti diversi della stessa clip cadono negli stessi blocchi: si riusano."""
     b = htmlclip._blocchi

@@ -1253,7 +1253,9 @@ def render_start(body: RenderBody) -> dict:
     def work() -> None:
         def on_progress(p: dict) -> None:
             S.jobs[job_id].update(percent=p["percent"], seconds=p["seconds"],
-                                  duration=p["duration"], elapsed=p["elapsed"])
+                                  duration=p["duration"], elapsed=p["elapsed"],
+                                  phase=p.get("phase", "video"), frames=p.get("frames"),
+                                  total_frames=p.get("total_frames"))
             S.publish({"type": "render", "job": S.jobs[job_id]})
 
         try:

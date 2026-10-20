@@ -425,8 +425,9 @@ export function RenderDialog({ project, path, job, onStart, onClose, onTimeline,
               </span>
             )}
             {job.state === 'error' && <span style={{ color: 'var(--danger)' }}>error: {job.error}</span>}
-            {job.state === 'running' &&
-              `${(job.percent || 0).toFixed(1)}% · ${(job.seconds || 0).toFixed(1)}/${(job.duration || 0).toFixed(1)}s`}
+            {job.state === 'running' && (job.phase === 'html'
+              ? `${(job.percent || 0).toFixed(1)}% · HTML graphics: frame ${job.frames}/${job.total_frames}`
+              : `${(job.percent || 0).toFixed(1)}% · ${(job.seconds || 0).toFixed(1)}/${(job.duration || 0).toFixed(1)}s`)}
           </div>
         </div>
       )}
