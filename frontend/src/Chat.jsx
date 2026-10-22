@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { api, chat as sendChat } from './api.js'
-import { FileBrowser } from './Dialogs.jsx'
+import { FileBrowser, Modal } from './Dialogs.jsx'
 import { useFineTrascinamento } from './trascina.js'
 import Icon from './Icons.jsx'
 import { dettaglioStrumento, fmt } from './util.js'
@@ -24,7 +24,8 @@ const TOOL_LABEL = {
   inspect_footage: 'looks at the footage', plan_edit: 'plans the edit', analyze_media: 'analyses a file',
   transcribe: 'transcribes the speech', make_captions: 'creates the subtitles', duck_music: 'ducks the music under the voice',
   normalize_audio: 'normalises the audio', audio_levels: 'measures the levels', check_cuts: 'checks the cuts',
-  verify_edit: 'checks the edit', snapshot: 'saves a version', match_color: 'matches the colours',
+  verify_edit: 'checks the edit', remember: 'remembers it for every project',
+  forget: 'forgets a preference', memory: 'reads the memory', snapshot: 'saves a version', match_color: 'matches the colours',
   Glob: 'searches files', WebFetch: 'reads a web page',
 }
 
@@ -64,6 +65,7 @@ export default function Chat({
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [settings, setSettings] = useState(false)
+  const [memoriaAperta, setMemoriaAperta] = useState(false)
   // stile di montaggio: resta scelto fra una sessione e l'altra, ma un
   // progetto nuovo riparte da "nessuno"
   const [stile, setStileState] = useState(() => {
@@ -231,10 +233,16 @@ export default function Chat({
           <Icon name="libreria" size={13} />
           {stili.find((s) => s.id === stile)?.nome || 'style'}
         </button>
+        <button className="icon sm" onClick={() => setMemoriaAperta(true)}
+          title="Memory: what the assistant remembers across all your projects">
+          <Icon name="memoria" size={14} />
+        </button>
         <button className="icon sm" onClick={reset} title="Start the conversation over">
           <Icon name="cestino" size={14} />
         </button>
       </div>
+
+      {memoriaAperta && <EditorMemoria setError={setError} onClose={() => setMemoriaAperta(false)} />}
 
       {menuStili && (
         <div className="stilimenu">
@@ -624,6 +632,43 @@ function ModelSettings({ available, setError, onSaved }) {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Memoria comune a tutti i progetti (memoria.py): la scrivono l'assistente e
+ * l'agente MCP, qui si legge e si corregge a mano. E' un file Markdown.
+ */
+function EditorMemoria({ setError, onClose }) {
+  const [testo, setTesto] = useState(null)
+  const [file, setFile] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    api.memoria().then((r) => { setTesto(r.testo); setFile(r.file) })
+      .catch((e) => { setError(e.message); onClose() })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const salva = async () => {
+    setSaving(true)
+    try { await api.salvaMemoria(testo); onClose() }
+    catch (e) { setError(e.message) } finally { setSaving(false) }
+  }
+  return (
+    <Modal title="Memory across projects" onClose={onClose}
+      actions={<>
+        <button onClick={onClose}>cancel</button>
+        <button className="primary" disabled={testo === null || saving} onClick={salva}>
+          {saving ? 'saving…' : 'save'}</button>
+      </>}>
+      <div className="hint" style={{ marginBottom: 8 }}>
+        Preferences and choices the assistant keeps for every project: usual format, style,
+        voice, channel, things to avoid. It adds them when you state one; edit or delete
+        lines freely. Stays on this computer{file ? <> (<code>{file}</code>)</> : ''}.
+      </div>
+      <textarea className="memoria-testo" value={testo ?? 'loading…'} disabled={testo === null}
+        spellCheck={false} onChange={(e) => setTesto(e.target.value)}
+        placeholder={'## preferences\n- my videos are 9:16 for Reels'} />
+    </Modal>
   )
 }
 

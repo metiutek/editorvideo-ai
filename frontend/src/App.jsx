@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { api, connectEvents } from './api.js'
 import Chat from './Chat.jsx'
 import { Confirm, FileBrowser, NewProject, ProjectFormat, RenderDialog } from './Dialogs.jsx'
+import Voce from './Voce.jsx'
+import Pubblica from './Pubblica.jsx'
 import Icon from './Icons.jsx'
 import Inspector from './Inspector.jsx'
 import Library from './Library.jsx'
@@ -57,7 +59,7 @@ export default function App() {
   const [pxPerSec, setPxPerSec] = useState(70)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
-  const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render' | 'particelle' | 'formato'
+  const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render' | 'particelle' | 'formato' | 'voce' | 'pubblica'
   const [job, setJob] = useState(null)
   const [nuovi, setNuovi] = useState(0)          // progetti creati in questa sessione
   const [source, setSource] = useState(null)     // media aperto nel monitor
@@ -498,6 +500,10 @@ export default function App() {
           onClick={() => run('add_html', { start: playhead, duration: 4 })
             .then((c) => setSelected(c.id)).catch((e) => setError(e.message))}>
           <Icon name="codice" />html graphics</button>
+        <button className="ghost act mint" disabled={!project}
+          title="Voiceover from text: AI or local text-to-speech, at the playhead"
+          onClick={() => setDialog('voce')}>
+          <Icon name="voce" />voice</button>
         <MenuParticelle disabled={!project}
           onAggiungi={(kind) => run('add_particles', { kind, start: playhead, duration: 5 })
             .then((c) => setSelected(c.id)).catch((err) => setError(err.message))}
@@ -515,6 +521,9 @@ export default function App() {
           title="Make low-resolution copies: much faster previews"
           onClick={() => { setBusy('building proxies…'); api.buildProxies() }}>
           <Icon name="proxy" />proxy</button>
+        <button className="ghost" disabled={!project}
+          title="Publish an exported video to YouTube or TikTok"
+          onClick={() => setDialog('pubblica')}><Icon name="pubblica" />publish</button>
         <button className="primary" disabled={!project || !project.duration}
           onClick={() => setDialog('render')}><Icon name="esporta" />export</button>
       </div>
@@ -688,6 +697,14 @@ export default function App() {
           onClose={() => setDialog(null)}
           onCreate={(p, name, preset, extra) => api.createProject(p, name, preset, extra)
             .then(progettoNuovo).catch((e) => setError(e.message))} />
+      )}
+      {dialog === 'pubblica' && project && (
+        <Pubblica file={job?.state === 'done' ? job.output : ''} nome={project.name}
+          setError={setError} flash={flash} onClose={() => setDialog(null)} />
+      )}
+      {dialog === 'voce' && project && (
+        <Voce playhead={playhead} run={run} setError={setError} flash={flash}
+          onClose={() => setDialog(null)} />
       )}
       {dialog === 'formato' && project && (
         <ProjectFormat resolution={project.settings.resolution} onClose={() => setDialog(null)}

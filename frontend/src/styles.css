@@ -1187,3 +1187,8 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .formato b { font-size: 12px; }
 .formato small { color: var(--faint); font-size: 10px; line-height: 1.2; text-align: center; }
 .spunta-riga { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; margin-top: 6px; }
+.memoria-testo {
+  width: 100%; min-height: 320px; resize: vertical; box-sizing: border-box;
+  font-family: var(--mono, ui-monospace, monospace); font-size: 12px; line-height: 1.5;
+}
+.voce-testo { width: 100%; min-height: 140px; resize: vertical; box-sizing: border-box; }

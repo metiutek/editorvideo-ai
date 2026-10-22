@@ -32,7 +32,7 @@ from . import analyze, captions, cleanup, colormatch, ops
 # domande_mod: in ask_user il parametro si chiama domande
 from . import domande as domande_mod
 from . import effects as fx
-from . import ffmpeg, hw, particelle, probe, proxy, render, review, stili, story, versions, vision
+from . import ffmpeg, hw, memoria, particelle, social, tts, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
 from .store import EditError, Store, rapporto
 
@@ -85,9 +85,9 @@ numero di giri per lunghezza del contesto. Quindi:
 - list_styles non riporta le guide degli stili personali: list_styles(style=id);
 - niente Bash/ffprobe/ffmpeg per lavoro che fa gia' uno strumento.
 
-Non esportare mai di tua iniziativa: render_video si usa solo quando l'utente lo
-chiede esplicitamente, e anche allora l'editor gli chiede conferma prima di
-scrivere il file. Quando una scelta spetta all'utente (stile, durata, formato,
+Non esportare e non pubblicare mai di tua iniziativa: render_video e
+publish_video si usano solo quando l'utente lo chiede esplicitamente, e anche
+allora l'editor gli chiede conferma prima di scrivere il file o di caricarlo. Quando una scelta spetta all'utente (stile, durata, formato,
 quale versione tenere, se esportare) usa ask_user con 2-4 opzioni chiare, la
 consigliata per prima, invece di decidere a caso o di fare domande nel testo.
 
@@ -174,6 +174,14 @@ secondi e' quasi una battuta di deriva e gli stacchi finiscono fuori tempo.
 
 Prima di dire che e' finito: preview_grid su tutto il montaggio, audio_levels per
 i livelli, verify_edit per i problemi rimasti.
+
+MEMORIA FRA I PROGETTI. project_create e project_open restituiscono "memoria":
+le preferenze e le scelte di chi monta, valide in ogni progetto. Seguile se la
+richiesta non dice altro. Quando l'utente esprime una preferenza che vale oltre
+questo video ("i miei video sono sempre 9:16", "niente musica epica", "il canale
+si chiama...", "voce femminile calma"), salvala con remember, breve e concreta,
+senza chiedere. Una preferenza smentita va tolta con forget. memory la legge
+per intero. Non salvare cio' che riguarda solo il progetto aperto.
 """
 
 mcp = MCPServer(
@@ -434,7 +442,8 @@ def project_create(path: str, name: str = "untitled", preset: str = "1080p",
     _stores[key] = s
     _current[0] = key
     _ui_attach(s)
-    return {"path": s.path, "settings": s.summary()["settings"], "tracks": ["V1", "A1"]}
+    return _con_memoria({"path": s.path, "settings": s.summary()["settings"],
+                         "tracks": ["V1", "A1"]})
 
 
 @_strumento()
@@ -447,7 +456,14 @@ def project_open(path: str) -> dict:
     _stores[key] = Store.open(key)
     _current[0] = key
     _ui_attach(_stores[key])
-    return _stores[key].summary()
+    return _con_memoria(_stores[key].summary())
+
+
+def _con_memoria(out: dict) -> dict:
+    """Aggiunge la memoria fra i progetti, se c'e': e' il primo giro di ogni lavoro."""
+    if m := memoria.contesto():
+        out["memoria"] = m
+    return out
 
 
 @_strumento()
@@ -2187,6 +2203,49 @@ async def render_video(output: str, quality: str = "high", codec: str = "h264",
 
 
 @_strumento()
+async def publish_video(file: str, platform: str = "youtube", title: str = "",
+                        description: str = "", tags: list[str] | None = None,
+                        privacy: str = "private", confirmed: bool = False) -> dict:
+    """Pubblica un video GIA' esportato (render_video) su YouTube o TikTok.
+
+    Solo se l'utente l'ha chiesto. Con l'editor aperto gli si chiede conferma
+    e senza un si' non parte niente; senza editor serve confirmed=True, da
+    mettere solo dopo che l'utente ha detto di pubblicare *questo* file.
+    youtube: title (max 100), description, tags; privacy private (default) |
+    unlisted | public — pubblico solo se lo dice l'utente. tiktok: il video
+    arriva come bozza nella casella TikTok, l'utente lo pubblica dall'app.
+    Gli account si collegano dall'editor (finestra Publish): social_accounts
+    dice cosa e' collegato.
+    """
+    if platform not in social.PIATTAFORME:
+        raise EditError(f"platform must be one of {', '.join(social.PIATTAFORME)}")
+    if not Path(file).is_file():
+        raise EditError(f"video not found: {file}. Export it first with render_video.")
+    api = sys.modules.get("vedit.api")
+    if api is not None and (api.MCP_ATTIVO or api.background_info()) \
+            and (api.S.store is not None):
+        esito = await _off(api.chiedi, domande_mod.conferma_pubblica(platform, file, title, privacy))
+        if not domande_mod.approvato(esito):
+            return {"pubblicato": False,
+                    "motivo": esito.get("motivo") or "l'utente ha scelto di non pubblicare adesso"}
+    elif not confirmed:
+        return {"pubblicato": False,
+                "motivo": "serve la conferma dell'utente: chiediglielo nella conversazione e "
+                          "richiama con confirmed=True solo se dice di pubblicare questo file"}
+    try:
+        return await _off(social.pubblica, platform, file, title, description, tags, privacy,
+                          lambda f: _avanza(f, f"upload {f * 100:.0f}%"))
+    except social.SocialError as exc:
+        raise EditError(str(exc)) from exc
+
+
+@_strumento()
+async def social_accounts() -> dict:
+    """Account social collegati per publish_video (nessun segreto nella risposta)."""
+    return social.stato()
+
+
+@_strumento()
 async def ask_user(domande: list[dict]) -> dict:
     """Fa all'utente da 1 a 4 domande con opzioni cliccabili, nell'editor, e aspetta.
 
@@ -2285,6 +2344,75 @@ async def report_issue(tipo: str, cosa: str, compito: str = "", strumento: str =
 
 
 @_strumento()
+async def generate_voice(text: str | None = None, lines: list[dict] | None = None,
+                         start: float | None = None, track: str | None = None,
+                         engine: str | None = None, voice: str | None = None,
+                         speed: float = 1.0, style: str = "", apply: bool = True,
+                         project: str | None = None) -> dict:
+    """Voce fuori campo dal testo (TTS) messa in timeline, sulla traccia audio "VO".
+
+    text = una battuta sola (a ``start``); lines = tante battute in una
+    chiamata: [{"text", "start", "voice"?, "speed"?, "style"?}], start assente =
+    dopo la precedente. engine: openai (anche servizi compatibili e server
+    locali come Kokoro), elevenlabs, piper (offline), system (voce del sistema,
+    sempre disponibile); senza, quello scelto dall'utente. voice: nome o id
+    della voce del motore (voice_engines le elenca). style: come dirla (tono,
+    ritmo, emozione) per i modelli che lo capiscono. apply=False genera solo i
+    file. Dopo, duck_music abbassa la musica sotto la voce.
+    """
+    if not text and not lines:
+        raise EditError("give 'text' or 'lines'")
+    righe = list(lines or []) or [{"text": text, "start": start}]
+    if lines and start is not None and righe[0].get("start") is None:
+        righe[0] = {**righe[0], "start": start}
+    s = _store(project)
+
+    def avanza(i: int, n: int) -> None:
+        _avanza(i / n, f"voice {i}/{n}")
+
+    try:
+        voci = await _off(tts.battute, righe, tts.cartella_progetto(s.path), engine, voice,
+                          speed, style, avanza)
+    except tts.TtsError as exc:
+        raise EditError(str(exc)) from exc
+    if not apply:
+        return {"files": [v["path"] for v in voci]}
+    clips = s.add_voiceover(voci, track)
+    return {"clips": [{"id": c.id, "start": round(c.start, 3), "duration": round(c.duration, 3)}
+                      for c in clips], "track": s.project.find_clip(clips[0].id)[0].id}
+
+
+@_strumento()
+async def voice_engines() -> dict:
+    """Motori di voce (TTS): quale e' pronto, cosa manca agli altri, voci note."""
+    st = await _off(tts.stato)
+    st["voci_di_sistema"] = await _off(tts.voci_sistema)
+    return st
+
+
+@_strumento()
+async def remember(note: str, section: str = "general") -> dict:
+    """Salva nella memoria comune a TUTTI i progetti (MEMORIA.md) una preferenza
+    o una scelta di chi monta: formato abituale, stile, ritmo, musica, voce,
+    nome del canale, pubblico, errori da non ripetere. Una riga breve e concreta.
+    section raggruppa: preferences, style, audio, voice, channel, publishing...
+    """
+    return memoria.ricorda(note, section)
+
+
+@_strumento()
+async def forget(match: str) -> dict:
+    """Toglie dalla memoria comune le voci che contengono ``match``."""
+    return memoria.dimentica(match)
+
+
+@_strumento()
+async def memory() -> dict:
+    """La memoria comune a tutti i progetti, per intero, e dove sta il file."""
+    return {"file": str(memoria.percorso()), "testo": memoria.leggi()}
+
+
+@_strumento()
 async def clear_cache(kind: str | None = None) -> dict:
     """Svuota la cache di proxy/miniature/stabilizzazione."""
     freed = await _off(proxy.clear, kind)
@@ -2296,7 +2424,9 @@ async def clear_cache(kind: str | None = None) -> dict:
 # creare un progetto cambierebbe sotto i piedi quello del blocco.
 _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "project_create",
                 "project_open", "install_ffmpeg", "preview_frame", "preview_media",
-                "preview_grid", "scope_image", "undo", "redo", "restore_snapshot"}
+                "preview_grid", "scope_image", "undo", "redo", "restore_snapshot",
+                "remember", "forget", "memory", "voice_engines", "publish_video",
+                "social_accounts"}
 
 
 @_strumento()

@@ -623,6 +623,26 @@ surround**: si passa il progetto a 5.1 e si instrada ogni traccia (davanti, cent
 dialogo, dietro, tutto, LFE); il file esce a sei canali (AAC a bitrate doppio, Opus, PCM), un
 `.mp3` ripiega in stereo (`project_settings(audio_layout=...)`, `set_track(surround=...)`).
 
+**Voce dal testo** — `generate_voice` (o il pulsante *voice*) trasforma un testo in voce su
+una traccia audio `VO`: una battuta alla testina, o tante in una chiamata, ognuna dopo la
+precedente. Motori: **OpenAI** e qualunque servizio con la stessa forma `/audio/speech` —
+anche server locali come Kokoro-FastAPI o LocalAI —, **ElevenLabs**, **Piper** tutto offline,
+oppure la **voce di sistema** (SAPI su Windows, `say` su macOS, `espeak-ng` su Linux) senza
+installare niente. Le chiavi stanno in `~/.vedit/tts.json`; i file audio accanto al progetto,
+e la stessa battuta con le stesse impostazioni non si genera due volte.
+
+**Pubblicare** — il pulsante *publish* (o `publish_video`) carica un video esportato su
+**YouTube** (un tuo client OAuth, accesso una volta nel browser; il caricamento parte
+**privato** se non scegli altro) o nella casella **TikTok** come bozza da pubblicare dall'app
+(access token della tua app TikTok for Developers). Niente si pubblica senza il tuo clic, o il
+tuo sì quando lo chiede l'agente. Instagram non c'è: la sua API vuole un account
+professionale legato a una pagina Facebook e un'app Meta approvata.
+
+**Memoria fra i progetti** — `~/.vedit/MEMORIA.md`: l'assistente e l'agente MCP ci annotano
+le tue preferenze durature (formato abituale, stile, voce, canale, cose che non vuoi) con
+`remember` / `forget`, e le rileggono a ogni progetto. Si modifica a mano, o dal pulsante col
+segnalibro nella scheda assistente.
+
 ---
 
 ## Keyframe
@@ -654,6 +674,9 @@ backend/vedit/
   proxy.py       proxy, forme d'onda, miniature
   store.py       operazioni di editing + undo/redo + salvataggio
   chat.py        assistente: gli strumenti sono le operazioni di store
+  tts.py         voce dal testo: compatibili OpenAI, ElevenLabs, Piper, voce di sistema
+  social.py      pubblicare: YouTube (OAuth, caricamento a riprese), casella TikTok
+  memoria.py     memoria fra i progetti (~/.vedit/MEMORIA.md)
   mcp_server.py  strumenti MCP
   api.py         API REST/WebSocket per la UI
   cli.py         riga di comando

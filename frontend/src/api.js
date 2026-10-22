@@ -204,6 +204,35 @@ export const api = {
   eliminaParticelle: (id) => req(`/api/particelle/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   // modello dell'assistente: quale usare e con che chiave (resta su questo computer)
+  // voce generata dal testo (tts.py)
+  tts: () => req('/api/tts'),
+  setTts: (body) =>
+    req('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  generaVoce: (body) =>
+    req('/api/tts/genera', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  // pubblicare sui social (social.py)
+  social: () => req('/api/social'),
+  setSocial: (body) => req('/api/social', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  loginYoutube: () => req('/api/social/login/youtube', { method: 'POST' }),
+  scollegaSocial: (p) => req(`/api/social/scollega/${p}`, { method: 'POST' }),
+  pubblica: (body) => req('/api/social/pubblica', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  statoPubblica: (id) => req(`/api/social/pubblica/${id}`),
+  // memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
+  memoria: () => req('/api/memoria'),
+  salvaMemoria: (testo) =>
+    req('/api/memoria', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ testo }),
+    }),
   llm: () => req('/api/llm'),
   setLlm: (body) =>
     req('/api/llm', {

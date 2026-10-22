@@ -15,6 +15,12 @@ const paths = {
   apri: <path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />,
   salva: <><path d="M4 4h12l4 4v12H4z" /><path d="M8 4v6h8V4M8 20v-6h8v6" /></>,
   esporta: <><path d="M12 15V3" /><path d="m8 7 4-4 4 4" /><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" /></>,
+  // memoria fra i progetti: un segnalibro
+  memoria: <path d="M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1z" />,
+  // voce generata: microfono
+  voce: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
+  // pubblicare: freccia che esce verso l'alto da una nuvola
+  pubblica: <><path d="M7 18a4 4 0 0 1-.6-8A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9" /><path d="M12 21v-9M9 15l3-3 3 3" /></>,
 
   // --- modifica
   annulla: <><path d="M3 8h11a5 5 0 0 1 0 10H8" /><path d="m7 4-4 4 4 4" /></>,

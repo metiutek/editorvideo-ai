@@ -103,6 +103,23 @@ def conferma_export(output: str, quality: str) -> list[dict]:
     }]
 
 
+def conferma_pubblica(piattaforma: str, file: str, titolo: str, privacy: str) -> list[dict]:
+    """La domanda che precede ogni pubblicazione chiesta dall'assistente."""
+    from pathlib import Path
+
+    dove = {"youtube": f"YouTube ({privacy})", "tiktok": "your TikTok inbox, as a draft"}
+    return [{
+        "domanda": f"The assistant wants to publish \"{Path(file).name}\" to "
+                   f"{dove.get(piattaforma, piattaforma)}. Go ahead?",
+        "titolo": "Publish",
+        "opzioni": [
+            {"etichetta": "Yes, publish", "descrizione": titolo or Path(file).stem},
+            {"etichetta": "No, not now", "descrizione": "nothing leaves this computer"},
+        ],
+        "multipla": False,
+    }]
+
+
 def approvato(esito: dict) -> bool:
     """Vero solo se l'utente ha scelto esplicitamente di esportare."""
     if esito.get("annullata"):

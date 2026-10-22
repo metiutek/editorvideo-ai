@@ -565,6 +565,26 @@ comes out with six channels (AAC at double bitrate, Opus, PCM), an `.mp3` folds 
 `censor_speech`; `detect_subjects`, `track_mask`, `auto_reframe`, `remove_background`,
 `pin_to_subject`, `highlight_subject`.
 
+**Voiceover from text** — `generate_voice` (or the *voice* button) turns text into a voice on
+a `VO` audio track: one line at the playhead, or many lines in one call, each starting after
+the previous. Engines: **OpenAI** and any service with the same `/audio/speech` shape —
+including local servers like Kokoro-FastAPI or LocalAI —, **ElevenLabs**, **Piper** fully
+offline, or the **system voice** (SAPI on Windows, `say` on macOS, `espeak-ng` on Linux) with
+nothing to install. Keys live in `~/.vedit/tts.json`; the audio files sit next to the project,
+and the same line with the same settings is never generated twice.
+
+**Publishing** — the *publish* button (or `publish_video`) uploads an exported file to
+**YouTube** (your own OAuth client, sign in once in the browser; uploads start **private**
+unless you pick otherwise) or to your **TikTok** inbox as a draft you post from the app
+(access token from your TikTok developer app). Nothing is ever published without your click,
+or your yes when the agent asks. Instagram is not supported: its API needs a business account
+tied to a Facebook page and an approved Meta app.
+
+**Memory across projects** — `~/.vedit/MEMORIA.md`: the assistant and the MCP agent note your
+lasting preferences there (usual format, style, voice, channel, things you don't want) with
+`remember` / `forget`, and read them back at every project. Edit it by hand, or from the
+bookmark button in the assistant tab.
+
 ---
 
 ## Keyframes
@@ -596,6 +616,9 @@ backend/vedit/
   proxy.py       proxies, waveforms, thumbnails
   store.py       editing operations + undo/redo + atomic save
   chat.py        assistant: its tools are Store's operations
+  tts.py         voice from text: OpenAI-compatible, ElevenLabs, Piper, system voice
+  social.py      publishing: YouTube (OAuth, resumable upload), TikTok inbox
+  memoria.py     memory across projects (~/.vedit/MEMORIA.md)
   mcp_server.py  MCP tools
   api.py         REST/WebSocket API for the UI
   cli.py         command line

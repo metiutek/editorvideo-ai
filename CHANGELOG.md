@@ -5,6 +5,16 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Voce dal testo (TTS)**: `generate_voice` da MCP e dalla chat, pulsante *voice* nella UI.
+  Motori OpenAI e compatibili (anche server locali come Kokoro-FastAPI), ElevenLabs, Piper
+  offline e voce di sistema senza installare niente. Le battute vanno sulla traccia `VO` in un
+  solo undo (`Store.add_voiceover`); stessa battuta, stesso file, niente seconda chiamata.
+- **Pubblicare sui social**: pulsante *publish* e `publish_video`. YouTube con login OAuth e
+  caricamento a riprese (parte privato), TikTok come bozza nella casella. Sempre con conferma
+  dell'utente. Solo libreria standard.
+- **Memoria fra i progetti** in `~/.vedit/MEMORIA.md`: `remember`, `forget`, `memory`;
+  `project_create`/`project_open` la restituiscono, la chat la passa al modello, la UI la
+  mostra e la fa modificare (segnalibro nella scheda assistente).
 - **Formati per rapporto d'aspetto: 16:9, 9:16, 1:1, 4:5, 4:3, 3:4, 21:9, 2:3** (o `WxH`),
   con la qualita' come lato corto (720, 1080, 1440, 4K). Nella UI il nuovo progetto ha i
   riquadri dei formati, la qualita' e gli fps; a progetto aperto il pulsante del formato

@@ -1618,6 +1618,40 @@ class Store:
                     it.get("duration"), it.get("name")))
         return out
 
+    def add_voiceover(self, items: list[dict], track_id: str | None = None) -> list[Clip]:
+        """Mette in timeline battute di voce gia' generate (``tts.genera``).
+
+        Ogni voce e' ``{"path": file, "start": s, "text": battuta}``; ``start``
+        assente mette la battuta dopo la precedente. Senza ``track_id`` la voce
+        va sulla traccia audio "VO", creata se manca: non si mescola con la
+        musica o il parlato gia' in A1. Una modifica sola, tutto o niente.
+        """
+        if not items:
+            return []
+        for i, it in enumerate(items):
+            if not it.get("path"):
+                raise EditError(f"line {i}: 'path' is missing")
+        out: list[Clip] = []
+        with self.batch():
+            if track_id is None:
+                vo = next((t for t in self.project.tracks
+                           if t.kind == "audio" and t.name == "VO"), None)
+                track_id = (vo or self.add_track("audio", "VO")).id
+            track = self.track_for_edit(track_id)
+            if track.kind != "audio":
+                raise EditError(f"track {track_id} is not an audio track")
+            self.import_media([it["path"] for it in items], folder="voice")
+            for it in items:
+                # per percorso: la stessa battuta due volte e' un media solo
+                m = self.project.media_by_path(str(Path(it["path"]).resolve()))
+                start = it.get("start")
+                if start is None:
+                    start = self.track_end(track)
+                testo = " ".join(str(it.get("text") or "").split())
+                nome = (testo[:40] + "…") if len(testo) > 40 else (testo or m.name)
+                out.append(self.add_clip(m.id, track_id, float(start), 0.0, None, nome))
+        return out
+
     def crossfade(self, clip_a: str, clip_b: str, duration: float = 1.0,
                   type: str = "dissolve") -> dict:
         """Transizione tra due clip consecutive: sovrappone B sotto A e la scopre.

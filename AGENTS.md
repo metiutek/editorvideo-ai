@@ -111,6 +111,9 @@ backend/vedit/
   interscambio.py timeline per e da altri montaggi: EDL, FCPXML, OTIO
   proxy.py       proxy, forme d'onda, miniature
   chat.py        assistente: i suoi strumenti sono i metodi di Store
+  tts.py         voce dal testo (OpenAI e compatibili, ElevenLabs, Piper, sistema)
+  social.py      pubblicare su YouTube e TikTok
+  memoria.py     memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
   mcp_server.py  strumenti MCP
   api.py         API REST/WebSocket per la UI
   cli.py         riga di comando
@@ -313,6 +316,24 @@ repo se il pacchetto gira da un clone, altrimenti `~/.vedit/SEGNALAZIONI.md`
 (`VEDIT_SEGNALAZIONI` lo sposta). Tipi: `bug`, `scomodo`, `sbagliato`, `manca`, `lento`.
 L'agente lo usa da solo mentre monta, senza fermarsi; chi modifica la repo parte da li' e
 cancella le voci risolte.
+
+### Voce, pubblicazione, memoria
+
+`generate_voice` genera le battute con `tts.battute` (fuori dal lock: e' rete o sintesi) e le
+mette in timeline con `Store.add_voiceover`, sulla traccia audio `VO`, in un solo undo. Il nome
+del file e' l'impronta di testo e parametri: la stessa battuta non si rigenera. Le chiavi
+stanno in `~/.vedit/tts.json`, mai nel progetto.
+
+`publish_video` (`social.py`, solo libreria standard) carica un file **gia' esportato**. Come
+l'export, non e' una decisione dell'agente: con l'editor aperto chiede conferma
+(`domande.conferma_pubblica`), senza editor vuole `confirmed=True` dopo il si' dell'utente.
+YouTube parte privato. I test usano un server HTTP finto (`tests/test_social.py`): nessuna
+chiamata vera a Google o TikTok.
+
+`memoria.py` tiene `~/.vedit/MEMORIA.md` (`VEDIT_MEMORIA` lo sposta): `remember` / `forget` /
+`memory` da MCP e dalla chat; `project_create` e `project_open` restituiscono `memoria`, e la
+chat la passa al modello una volta per conversazione. Ci va solo cio' che vale oltre il
+progetto aperto.
 
 ### Domande all'utente ed export
 

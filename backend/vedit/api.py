@@ -40,8 +40,8 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import (captions, domande, ffmpeg, figli, htmlclip, hw, interscambio, llm, particelle, presets, proxy,
-               render, review, stili)
+from . import (captions, domande, ffmpeg, figli, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
+               render, review, social, stili, tts)
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
 from .store import FORMATI, PRESETS, EditError, Store
@@ -72,7 +72,7 @@ OPS = {
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
-    "set_loudnorm", "set_settings", "set_format", "undo", "redo", "save",
+    "set_loudnorm", "set_settings", "set_format", "add_voiceover", "undo", "redo", "save",
 }
 
 
@@ -1482,6 +1482,151 @@ def llm_imposta(body: LlmBody) -> dict:
     return {**chat_available(), "mcp": mcp_url()}
 
 
+class TtsBody(BaseModel):
+    motore: str
+    chiave: str | None = None
+    voce: str | None = None
+    modello: str | None = None
+    indirizzo: str | None = None
+
+
+class VoceBody(BaseModel):
+    lines: list[dict]
+    motore: str | None = None
+    voce: str | None = None
+    velocita: float = 1.0
+    istruzioni: str = ""
+
+
+@app.get("/api/tts")
+def tts_stato() -> dict:
+    """Motori di voce, quale e' pronto e le voci del sistema."""
+    return {**tts.stato(), "voci_sistema": tts.voci_sistema()}
+
+
+@app.post("/api/tts")
+def tts_imposta(body: TtsBody) -> dict:
+    """Motore, chiave, voce: solo su questa macchina (~/.vedit/tts.json)."""
+    try:
+        tts.imposta(body.motore, body.chiave, body.voce, body.modello, body.indirizzo)
+    except tts.TtsError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return tts_stato()
+
+
+@app.post("/api/tts/genera")
+def tts_genera(body: VoceBody) -> dict:
+    """Genera i file della voce, senza toccare il progetto.
+
+    Fuori dal lock: un servizio lento non ferma l'editor. La UI poi li mette
+    in timeline con l'operazione ``add_voiceover`` (un solo Ctrl+Z).
+    """
+    store = S.need()
+    try:
+        voci = tts.battute(body.lines, tts.cartella_progetto(store.path), body.motore,
+                           body.voce, body.velocita, body.istruzioni)
+    except tts.TtsError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"voci": voci}
+
+
+class SocialBody(BaseModel):
+    piattaforma: str
+    client_id: str | None = None
+    client_secret: str | None = None
+    token: str | None = None
+
+
+class PubblicaBody(BaseModel):
+    piattaforma: str
+    file: str
+    titolo: str = ""
+    descrizione: str = ""
+    tag: list[str] = []
+    privacy: str = "private"
+
+
+@app.get("/api/social")
+def social_stato() -> dict:
+    """Account collegati, senza segreti."""
+    return social.stato()
+
+
+@app.post("/api/social")
+def social_imposta(body: SocialBody) -> dict:
+    try:
+        return social.imposta(body.piattaforma, body.client_id, body.client_secret, body.token)
+    except social.SocialError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/social/login/youtube")
+def social_login_youtube() -> dict:
+    """Apre il login Google nel browser; ``/api/social`` dice quando e' fatto."""
+    try:
+        return social.avvia_login_youtube()
+    except social.SocialError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/social/scollega/{piattaforma}")
+def social_scollega(piattaforma: str) -> dict:
+    try:
+        return social.scollega(piattaforma)
+    except social.SocialError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/social/pubblica")
+def social_pubblica(body: PubblicaBody) -> dict:
+    """Carica un video esportato. Il clic su "publish" e' la conferma dell'utente."""
+    if not Path(body.file).is_file():
+        raise HTTPException(400, f"video not found: {body.file}. Export it first.")
+    job_id = uuid.uuid4().hex[:8]
+    S.jobs[job_id] = {"id": job_id, "state": "running", "percent": 0.0,
+                      "piattaforma": body.piattaforma, "started": time.time()}
+
+    def work() -> None:
+        def avanza(f: float) -> None:
+            S.jobs[job_id]["percent"] = round(f * 100, 1)
+        try:
+            esito = social.pubblica(body.piattaforma, body.file, body.titolo, body.descrizione,
+                                    body.tag, body.privacy, avanza)
+            S.jobs[job_id].update(state="done", percent=100.0, **esito)
+        except Exception as exc:
+            S.jobs[job_id].update(state="error", error=str(exc))
+
+    threading.Thread(target=work, daemon=True, name=f"publish-{job_id}").start()
+    return S.jobs[job_id]
+
+
+@app.get("/api/social/pubblica/{job_id}")
+def social_pubblica_stato(job_id: str) -> dict:
+    job = S.jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "job does not exist")
+    return job
+
+
+class MemoriaBody(BaseModel):
+    testo: str
+
+
+@app.get("/api/memoria")
+def memoria_leggi() -> dict:
+    """La memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)."""
+    return {"file": str(memoria.percorso()), "testo": memoria.leggi()}
+
+
+@app.put("/api/memoria")
+def memoria_scrivi(body: MemoriaBody) -> dict:
+    try:
+        out = memoria.sostituisci(body.testo)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {**out, "testo": memoria.leggi()}
+
+
 class StileBody(BaseModel):
     nome: str
     guida: str
@@ -1747,6 +1892,9 @@ def chat(body: ChatBody) -> StreamingResponse:
         if name == "ask_user":
             # fuori dal lock: si aspetta l'utente, non si tocca il progetto
             return json.dumps(chiedi(args.get("domande", args)), ensure_ascii=False)
+        if name == "generate_voice":
+            # la sintesi puo' durare: fuori dal lock, la UI resta libera
+            args = {**args, "_voci": chat_mod.prepara_voce(store, args)}
         with S.lock:
             out = chat_mod.execute(store, name, args)
         _avvisa(store)

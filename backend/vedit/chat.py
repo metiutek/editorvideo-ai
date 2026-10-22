@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from . import domande, llm, presets, stili
+from . import domande, llm, memoria, presets, stili, tts
 
 SYSTEM = """Sei l'assistente di montaggio dentro vedit, un editor video non lineare.
 
@@ -50,6 +50,11 @@ Non esportare mai di tua iniziativa: qui non hai l'export, lo fa l'utente con il
 pulsante "export". Quando una scelta spetta all'utente (stile, durata, formato,
 quale versione tenere) usa ask_user con 2-4 opzioni chiare, la consigliata per
 prima, invece di decidere a caso o di fare domande nel testo.
+
+Memoria: quello che vale per tutti i progetti di questo utente (formato
+abituale, stile, voce, canale, cose che non vuole) ti arriva come "Memoria di
+chi monta". Quando l'utente esprime una preferenza che vale oltre questo video,
+salvala con remember, breve e senza chiedere; se ne smentisce una, forget.
 
 Rispondi nella lingua in cui ti scrive l'utente (l'interfaccia e' in inglese), in modo
 breve. Dopo aver modificato la timeline di' in una
@@ -261,6 +266,19 @@ def build_tools() -> list[dict]:
               "fotogramma alle clip tagliando i bordi, invece di lasciare le bande.",
               {"format": _STR, "size": {"type": "integer"}, "fill": {"type": "boolean"}},
               ["format"]),
+        _tool("generate_voice",
+              "Voce fuori campo dal testo (TTS), messa in timeline sulla traccia audio VO. "
+              "lines: [{text, start}] per tante battute in una chiamata (start assente = "
+              "dopo la precedente). engine: openai | elevenlabs | piper | system; senza, "
+              "quello scelto dall'utente. voice: nome della voce. style: come dirla.",
+              {"lines": {"type": "array", "items": {"type": "object"}}, "engine": _STR,
+               "voice": _STR, "speed": _NUM, "style": _STR, "track": _STR}, ["lines"]),
+        _tool("remember",
+              "Salva nella memoria comune a tutti i progetti una preferenza o scelta "
+              "dell'utente (formato, stile, voce, canale, cose da evitare). Una riga breve.",
+              {"note": _STR, "section": _STR}, ["note"]),
+        _tool("forget", "Toglie dalla memoria comune le voci che contengono match.",
+              {"match": _STR}, ["match"]),
         _tool("undo", "Annulla l'ultima modifica.", {}, []),
     ]
 
@@ -270,7 +288,16 @@ def build_tools() -> list[dict]:
 # --------------------------------------------------------------------------
 
 # strumenti che non sono metodi di Store
-_SPECIAL = {"project_info", "apply_preset", "apply_style", "review_edit", "create_style"}
+_SPECIAL = {"project_info", "apply_preset", "apply_style", "review_edit", "create_style",
+            "remember", "forget", "generate_voice"}
+
+
+def prepara_voce(store: Any, args: dict) -> list[dict]:
+    """Genera i file della voce: e' la parte lenta (rete o sintesi), da fare
+    fuori dal lock del progetto, prima di ``execute``."""
+    return tts.battute(args["lines"], tts.cartella_progetto(store.path), args.get("engine"),
+                       args.get("voice"), float(args.get("speed") or 1.0),
+                       args.get("style") or "")
 
 
 def execute(store: Any, name: str, args: dict) -> str:
@@ -298,6 +325,18 @@ def execute(store: Any, name: str, args: dict) -> str:
                             args.get("base", "vlog"), args.get("style"), args.get("recipe"))
         return json.dumps({"stile": nuovo["id"], "ricetta": stili.ricetta(nuovo["id"])},
                           ensure_ascii=False, default=str)
+
+    if name == "generate_voice":
+        voci = args.get("_voci") or prepara_voce(store, args)
+        clips = store.add_voiceover(voci, args.get("track"))
+        return json.dumps([{"id": c.id, "start": c.start, "duration": c.duration} for c in clips])
+
+    if name == "remember":
+        return json.dumps(memoria.ricorda(args["note"], args.get("section") or "general"),
+                          ensure_ascii=False)
+
+    if name == "forget":
+        return json.dumps(memoria.dimentica(args["match"]), ensure_ascii=False)
 
     if name == "review_edit":
         from . import review
@@ -528,6 +567,11 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
             stato_chat["stato_inviato"] = stato
     # la guida dello stile (fino a 20k caratteri) entra in contesto una volta,
     # e di nuovo solo se l'utente cambia stile
+    # la memoria fra i progetti: entra una volta, e di nuovo se cambia
+    ricordi = memoria.contesto()
+    if ricordi and ricordi != stato_chat.get("memoria_inviata"):
+        contenuto.append({"type": "text", "text": ricordi})
+        stato_chat["memoria_inviata"] = ricordi
     guida = stili.blocco(stile)
     if guida and guida != stato_chat.get("stile_inviato"):
         contenuto.append({"type": "text", "text": guida})

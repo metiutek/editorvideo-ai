@@ -379,3 +379,34 @@ def test_browse_risale_ai_dischi(client):
     assert any(Path(x["path"]) == radice for x in dischi["dirs"])
     if len(dischi["dirs"]) > 1:
         assert d["parent"] == api.DISCHI
+
+
+def test_formato_memoria_voce_social(client, tmp_path, assets, monkeypatch):
+    """Le finestre nuove della UI: formato, memoria, voce, pubblicazione."""
+    import shutil
+
+    from vedit import tts
+
+    monkeypatch.setenv("VEDIT_MEMORIA", str(tmp_path / "MEMORIA.md"))
+    r = client.post("/api/project/create", json={"path": str(tmp_path / "p.json"),
+                                                 "preset": "9:16", "size": 720, "fps": 25})
+    assert r.json()["project"]["settings"]["resolution"] == "720x1280"
+    r = client.post("/api/op/set_format", json={"format": "4:5", "fill": True})
+    assert r.json()["project"]["settings"]["format"] == "4:5"
+
+    assert client.get("/api/memoria").json()["testo"] == ""
+    r = client.put("/api/memoria", json={"testo": "## stile\n- tagli corti\n"})
+    assert r.json()["voci"] == 1
+
+    monkeypatch.setitem(tts._GENERATORI, "system",
+                        lambda m, cfg, t, v, vel, i, out: shutil.copy(assets["music"], out))
+    monkeypatch.setattr(tts, "_pronto", lambda m, cfg: None)
+    assert any(m["id"] == "piper" for m in client.get("/api/tts").json()["motori"])
+    voci = client.post("/api/tts/genera", json={"lines": [{"text": "ciao", "start": 1}],
+                                                "motore": "system"}).json()["voci"]
+    r = client.post("/api/op/add_voiceover", json={"items": voci})
+    assert r.status_code == 200 and r.json()["result"][0]["start"] == 1
+
+    assert "youtube" in client.get("/api/social").json()
+    r = client.post("/api/social/pubblica", json={"piattaforma": "youtube", "file": "manca.mp4"})
+    assert r.status_code == 400
