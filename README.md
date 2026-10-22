@@ -11,7 +11,7 @@
   <a href="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml"><img src="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/v/vedit-mcp.svg?style=flat-square" alt="PyPI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/pyversions/vedit-mcp.svg?style=flat-square" alt="Python versions"/></a>
-  <img src="https://img.shields.io/badge/AI%20tools-92-blueviolet?style=flat-square" alt="92 AI tools"/>
+  <img src="https://img.shields.io/badge/AI%20tools-113-blueviolet?style=flat-square" alt="113 AI tools"/>
   <img src="https://img.shields.io/badge/runs-100%25%20local-brightgreen?style=flat-square" alt="Runs locally"/>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"/>
 </p>
@@ -53,6 +53,29 @@ connects Claude Code to vedit; it does not install anything, so do step 2 first.
 
 Something wrong? `vedit doctor` tells you what is missing and how to fix it.
 
+**Update** to the latest version: `uv tool upgrade vedit-mcp`.
+
+## Using it — the 2-minute tour
+
+1. **New project** (top bar → *new*): pick the format — 16:9 for YouTube, 9:16 for
+   Reels/Shorts/TikTok, 1:1, 4:5… — and the quality. You can change it later from the
+   format button in the top bar.
+2. **Add your footage**: drag files onto the window, or search the web from the **web** tab
+   on the left and click *add* on a photo or video.
+3. **Ask the assistant** (right panel → *assistant*): the first time, pick a model — if you
+   have Claude Code installed there is nothing to configure. Then write what you want:
+   *"make a 30-second vertical video with these clips, on the beat of the music, with
+   titles"*. The edit appears on the timeline while it works; Ctrl+Z undoes anything.
+4. **Voiceover**: top bar → *voice*, write the text, click *generate and add*. The system
+   voice works with nothing to set up; OpenAI, ElevenLabs or Piper sound better.
+5. **Export** (top bar → *export*), then **publish** to YouTube or TikTok if you like
+   (top bar → *publish*, sign in once).
+
+The assistant **remembers your preferences across projects** (your usual format, style,
+voice…): see and edit them from the bookmark button in the assistant tab. In the model
+settings, *what the assistant can use* lets it also use **your skills, MCP servers, plugins
+and Chrome** — or the whole computer, if you choose so.
+
 ---
 
 ## What it is
@@ -61,7 +84,7 @@ vedit is a video editor. The ordinary kind: a timeline, video and audio tracks, 
 drag, cut, speed up, colour-grade and fade into each other.
 
 The difference is that **everything you can do with the mouse, an AI can also do on command** —
-because the buttons and the AI call the exact same 86 operations. Nothing is AI-only, nothing
+because the buttons and the AI call the exact same operations. Nothing is AI-only, nothing
 is mouse-only.
 
 So instead of half an hour of trimming, you type:
@@ -92,7 +115,7 @@ finished file you cannot touch — it is your editing software, with a second pa
 | **vs. an ffmpeg script** | Same speed and precision, but you can actually see what happened, scrub it, and undo it. |
 | **Cost and privacy** | Runs on your machine. No subscription, no upload, no watermark, no render queue. MIT licensed. |
 
-> Code, comments and UI messages are in Italian — that is the project convention.
+> The interface is in English; code and comments are in Italian — that is the project convention.
 
 ---
 
@@ -103,7 +126,7 @@ difference between a demo and something you would actually cut a video with:
 
 | | |
 |---|---|
-| **An agent can actually edit** | 92 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
+| **An agent can actually edit** | 113 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
 | **The agent can see what it did** | `preview_frame` returns the **real rendered frame**, `preview_grid` the whole edit as a contact sheet. An agent that guesses produces garbage; this one looks. |
 | **It cuts on the beat, for real** | `music_beats` returns BPM, beat and bar length, first-beat offset and an energy profile, so cuts land on the music instead of near it. |
 | **It picks the takes** | `plan_edit` splits shots longer than 12s into their own segments and scores them individually — three minutes of continuous footage becomes dozens of candidates with a real in-point. |
@@ -115,6 +138,7 @@ difference between a demo and something you would actually cut a video with:
 ## Table of contents
 
 - [Install — 3 steps](#install--3-steps)
+- [Using it — the 2-minute tour](#using-it--the-2-minute-tour)
 - [Install, in detail](#install)
 - [Quick start](#quick-start)
 - [Driving it from an agent (MCP)](#driving-it-from-an-agent-mcp)

@@ -41,6 +41,30 @@ collega soltanto Claude Code a vedit, non installa niente: prima fai il passo 2.
 
 Qualcosa non va? `vedit doctor` dice cosa manca e come sistemarlo.
 
+**Aggiornare** all'ultima versione: `uv tool upgrade vedit-mcp`.
+
+## Come si usa — il giro in 2 minuti
+
+1. **Nuovo progetto** (barra in alto → *new*): scegli il formato — 16:9 per YouTube, 9:16
+   per Reels/Shorts/TikTok, 1:1, 4:5… — e la qualità. Si cambia anche dopo dal pulsante del
+   formato nella barra in alto.
+2. **Aggiungi il materiale**: trascina i file sulla finestra, oppure cerca sul web dalla
+   scheda **web** a sinistra e clicca *add* su una foto o un video.
+3. **Chiedi all'assistente** (pannello destro → *assistant*): la prima volta scegli un
+   modello — se hai Claude Code installato non c'è niente da configurare. Poi scrivi cosa
+   vuoi: *"fammi un video verticale di 30 secondi con queste clip, a tempo di musica, con
+   i titoli"*. Il montaggio compare in timeline mentre lavora; Ctrl+Z annulla tutto.
+4. **Voce fuori campo**: barra in alto → *voice*, scrivi il testo, *generate and add*. La
+   voce di sistema funziona senza configurare niente; OpenAI, ElevenLabs o Piper suonano
+   meglio.
+5. **Esporta** (barra in alto → *export*), poi se vuoi **pubblica** su YouTube o TikTok
+   (barra in alto → *publish*, accesso una volta sola).
+
+L'assistente **ricorda le tue preferenze fra un progetto e l'altro** (formato abituale,
+stile, voce…): le vedi e le correggi dal pulsante col segnalibro nella scheda assistente.
+Nelle impostazioni del modello, *what the assistant can use* gli fa usare anche **le tue
+skill, i server MCP, i plugin e Chrome** — o tutto il computer, se lo scegli tu.
+
 ---
 
 Il progetto è un documento JSON. Il render è una funzione pura di quel documento, compilata
@@ -53,6 +77,7 @@ tutti dalle stesse operazioni.
 ## Indice
 
 - [Installazione — 3 passi](#installazione--3-passi)
+- [Come si usa — il giro in 2 minuti](#come-si-usa--il-giro-in-2-minuti)
 - [Usarlo senza installare niente](#usarlo-senza-installare-niente)
 - [Installazione in un comando (per modificarlo)](#installazione-in-un-comando-per-modificarlo)
 - [Darlo in mano a un agente](#darlo-in-mano-a-un-agente)
@@ -524,7 +549,7 @@ claude mcp add vedit -- vedit-mcp
 Per gli altri client (Cursor, Codex, VS Code) la configurazione equivalente e il flusso
 consigliato degli strumenti stanno in [`AGENTS.md`](AGENTS.md).
 
-92 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
+113 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
 riordinare, solo, blocco), velocità e reverse, transform con keyframe, effetti video e audio,
 dissolvenze incrociate, normalizzazione EBU R128, render, e `preview_frame` che **restituisce
 l'immagine vera** del fotogramma — così l'agente vede quello che ha montato invece di
