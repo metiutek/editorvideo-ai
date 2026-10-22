@@ -90,7 +90,9 @@ def test_server_mcp_vero(casa, tmp_path, monkeypatch):
     st = estensioni.GESTORE.stato
     assert st["prova"] == {"ok": True, "strumenti": 2} and st["morto"]["ok"] is False
     assert estensioni.esegui("mcp__prova__somma", {"a": 2, "b": 40}) == "42"
-    with pytest.raises(RuntimeError, match="rotto apposta"):
+    # le versioni recenti di mcp nascondono il testo dell'eccezione del server:
+    # conta che l'errore arrivi come errore, non come risultato
+    with pytest.raises(RuntimeError, match="rotto apposta|rompe"):
         estensioni.esegui("mcp__prova__rompe", {})
     # spento dall'utente: sparisce dagli strumenti
     monkeypatch.setattr(estensioni, "_spenti", lambda: {"prova"})
