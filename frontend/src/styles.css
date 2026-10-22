@@ -1171,3 +1171,19 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 @container (max-width: 400px) {
   .tabs.destra button svg { display: none; }
 }
+
+/* scelta del formato: ogni riquadro disegnato nella sua proporzione */
+.formati { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 4px 0 10px; }
+.formato {
+  height: auto; padding: 8px 4px 6px; border-radius: 12px; gap: 2px;
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--panel); border-color: var(--line); color: var(--text); white-space: normal;
+}
+.formato:hover:not(:disabled) { border-color: var(--accent); transform: none; }
+.formato.on { border-color: var(--accent); background: var(--accent-soft); }
+.formato .sagoma { width: 30px; height: 30px; display: grid; place-items: center; }
+.formato .sagoma i { display: block; border: 2px solid var(--dim); border-radius: 3px; }
+.formato.on .sagoma i { border-color: var(--accent); }
+.formato b { font-size: 12px; }
+.formato small { color: var(--faint); font-size: 10px; line-height: 1.2; text-align: center; }
+.spunta-riga { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; margin-top: 6px; }

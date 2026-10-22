@@ -254,6 +254,13 @@ def build_tools() -> list[dict]:
         _tool("close_gaps",
               "Compatta una traccia eliminando i buchi tra le clip.",
               {"track_id": _STR}, ["track_id"]),
+        _tool("set_format",
+              "Cambia il formato del video: 16:9 (YouTube), 9:16 (reel, short, TikTok), "
+              "1:1, 4:5 (feed), 4:3, 3:4, 21:9, 2:3 o WxH. size e' il lato corto "
+              "(720, 1080, 2160; senza resta l'attuale). fill=true fa riempire il nuovo "
+              "fotogramma alle clip tagliando i bordi, invece di lasciare le bande.",
+              {"format": _STR, "size": {"type": "integer"}, "fill": {"type": "boolean"}},
+              ["format"]),
         _tool("undo", "Annulla l'ultima modifica.", {}, []),
     ]
 

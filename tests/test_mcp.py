@@ -660,3 +660,17 @@ async def test_preview_grid_su_un_video_lo_guarda(assets, tmp_path):
     assert [c.type for c in r.content] == ["image"]
     with pytest.raises(ToolError, match="preview_media"):
         await call("preview_grid", path=str(tmp_path / "manca.mp4"))
+
+
+@pytest.mark.anyio
+async def test_formato_video(tmp_path):
+    """Formati per rapporto alla creazione e a progetto aperto."""
+    p = str(tmp_path / "f.json")
+    r = await call("project_create", path=p, preset="9:16")
+    assert r["settings"]["resolution"] == "1080x1920" and r["settings"]["format"] == "9:16"
+    r = await call("project_settings", format="4:5")
+    assert (r["width"], r["height"], r["format"]) == (1080, 1350, "4:5")
+    r = await call("project_settings", format="16:9", size=2160)
+    assert (r["width"], r["height"]) == (3840, 2160)
+    with pytest.raises(ToolError):
+        await call("project_settings", format="boh")

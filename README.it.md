@@ -261,7 +261,8 @@ vedit ui --port 9000 --no-browser            # su un'altra porta, senza aprire i
 ```
 
 Il primo progetto lo crei con **nuovo** nella barra in alto: scegli il file `.json` e il
-formato (`1080p`, `4k`, `vertical` per reel e short, `square`, …). Il `.json` è il progetto:
+formato (16:9, 9:16 per reel e short, 1:1, 4:5, 21:9, …) con la qualità. Il formato si
+cambia anche dopo, dal pulsante del formato nella barra in alto. Il `.json` è il progetto:
 i video restano dove sono, non vengono copiati.
 
 Un progetto nuovo parte con **una traccia video e una audio**. Ne aggiungi quante ne vuoi,
@@ -495,7 +496,12 @@ vedit doctor                             # ffmpeg, encoder, filtri
 vedit ui                                 # interfaccia web
 ```
 
-Preset di formato: `1080p`, `1080p60`, `4k`, `720p`, `vertical` (9:16), `vertical60`, `square`.
+Formati: qualunque rapporto — `16:9`, `9:16` (reel, short, TikTok), `1:1`, `4:5` (feed),
+`4:3`, `3:4`, `21:9`, `2:3` — oppure `LARGHEZZAxALTEZZA`; `--size` è il lato corto (720,
+1080, 2160). Restano i preset con nome: `1080p`, `1080p60`, `4k`, `720p`, `vertical`,
+`vertical60`, `square`. Per cambiarlo dopo: `vedit format film.json 9:16 --fill`, il pulsante
+del formato nella barra in alto, o `project_settings(format=...)` da MCP. La timeline resta,
+cambia il fotogramma; `--fill` taglia le clip invece di lasciare le bande.
 
 ---
 

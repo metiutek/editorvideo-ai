@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import Icon from './Icons.jsx'
+import { FORMATI_VIDEO, dimensioni, formatoDi } from './util.js'
 
 /**
  * Finestra modale.
@@ -193,15 +194,46 @@ const sep = (dir) => (dir && dir.includes('\\') ? '\\' : '/')
 /** Nome di file sicuro: niente caratteri che il filesystem rifiuta. */
 const nomeFile = (name) => (name || 'project').trim().replace(/[<>:"/\\|?*]+/g, '-')
 
+const QUALITA = [{ lato: 720, nome: '720p' }, { lato: 1080, nome: '1080p' },
+  { lato: 1440, nome: '1440p' }, { lato: 2160, nome: '4K' }]
+
+/** Riquadri cliccabili, ognuno disegnato nella sua proporzione. */
+function SceltaFormato({ formato, lato, onFormato, onLato }) {
+  return (
+    <>
+      <div className="formati" role="radiogroup" aria-label="aspect ratio">
+        {FORMATI_VIDEO.map((f) => {
+          const k = 26 / Math.max(f.a, f.b)
+          return (
+            <button key={f.id} type="button" role="radio" aria-checked={formato === f.id}
+              className={`formato${formato === f.id ? ' on' : ''}`} title={f.uso}
+              onClick={() => onFormato(f.id)}>
+              <span className="sagoma"><i style={{ width: f.a * k, height: f.b * k }} /></span>
+              <b>{f.id}</b><small>{f.uso}</small>
+            </button>
+          )
+        })}
+      </div>
+      <div className="row"><label>quality</label>
+        <select value={lato} onChange={(e) => onLato(Number(e.target.value))}>
+          {QUALITA.map((q) => <option key={q.lato} value={q.lato}>{q.nome}</option>)}
+        </select>
+        <span className="hint">{(dimensioni(formato, lato) || []).join(' x ')}</span></div>
+    </>
+  )
+}
+
 /**
  * Nuovo progetto. Il percorso viene proposto dalla cartella Video dell'utente
  * e segue il nome finche' non lo si tocca a mano: prima bisognava inventarsi
  * un percorso completo e scriverlo per esteso, per un'azione che si fa per
  * prima appena si apre l'editor.
  */
-export function NewProject({ presets, home, onCreate, onClose }) {
+export function NewProject({ home, onCreate, onClose }) {
   const [name, setName] = useState('new project')
-  const [preset, setPreset] = useState('1080p')
+  const [formato, setFormato] = useState('16:9')
+  const [lato, setLato] = useState(1080)
+  const [fps, setFps] = useState(30)
   const proposto = (n) => (home ? `${home}${sep(home)}${nomeFile(n)}.json` : '')
   const [path, setPath] = useState(() => proposto('new project'))
   const [pathManuale, setPathManuale] = useState(false)
@@ -215,7 +247,7 @@ export function NewProject({ presets, home, onCreate, onClose }) {
     let p = path.trim()
     if (!p) return
     if (!p.toLowerCase().endsWith('.json')) p += '.json'
-    onCreate(p, name, preset)
+    onCreate(p, name, formato, { size: lato, fps })
     onClose()
   }
 
@@ -232,13 +264,49 @@ export function NewProject({ presets, home, onCreate, onClose }) {
         <input value={path} placeholder="C:\video\project.json"
           onKeyDown={(e) => e.key === 'Enter' && create()}
           onChange={(e) => { setPathManuale(true); setPath(e.target.value) }} /><span /></div>
-      <div className="row"><label>format</label>
-        <select value={preset} onChange={(e) => setPreset(e.target.value)}>
-          {presets.map((p) => <option key={p} value={p}>{p}</option>)}
+      <SceltaFormato formato={formato} lato={lato} onFormato={setFormato} onLato={setLato} />
+      <div className="row"><label>fps</label>
+        <select value={fps} onChange={(e) => setFps(Number(e.target.value))}>
+          {[24, 25, 30, 50, 60].map((f) => <option key={f} value={f}>{f}</option>)}
         </select><span /></div>
       <div className="hint" style={{ marginTop: 10 }}>
-        vertical = 9:16 for reels and shorts · square = 1:1.<br />
+        The format can be changed later from the top bar.<br />
         The .json file is the project: your videos stay where they are.
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * Formato del progetto aperto. Cambia il fotogramma, non la timeline: le clip
+ * ci si adattano col proprio "inquadra", oppure lo riempiono tagliando i
+ * bordi se si spunta "fill".
+ */
+export function ProjectFormat({ resolution, onApply, onClose }) {
+  const [w, h] = (resolution || '1920x1080').split('x').map(Number)
+  const [formato, setFormato] = useState(formatoDi(w, h) || '16:9')
+  const [lato, setLato] = useState(() => {
+    const corto = Math.min(w, h)
+    return QUALITA.some((q) => q.lato === corto) ? corto : 1080
+  })
+  const [fill, setFill] = useState(true)
+  const applica = () => { onApply({ format: formato, size: lato, fill }); onClose() }
+
+  return (
+    <Modal title="Video format" narrow onClose={onClose}
+      actions={<>
+        <button onClick={onClose}>cancel</button>
+        <button className="primary" onClick={applica}>apply</button>
+      </>}>
+      <div className="hint" style={{ marginBottom: 8 }}>now {w} x {h}</div>
+      <SceltaFormato formato={formato} lato={lato} onFormato={setFormato} onLato={setLato} />
+      <label className="spunta-riga">
+        <input type="checkbox" checked={fill} onChange={(e) => setFill(e.target.checked)} />
+        fill the frame: crop the clips instead of leaving black bars
+      </label>
+      <div className="hint" style={{ marginTop: 10 }}>
+        The timeline stays the same. To keep a moving subject in the crop,
+        ask the assistant for an auto reframe after the change. Undo brings it back.
       </div>
     </Modal>
   )

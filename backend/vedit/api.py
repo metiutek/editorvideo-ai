@@ -44,7 +44,7 @@ from . import (captions, domande, ffmpeg, figli, htmlclip, hw, interscambio, llm
                render, review, stili)
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
-from .store import PRESETS, EditError, Store
+from .store import FORMATI, PRESETS, EditError, Store
 
 def _frontend_dir() -> Path:
     """Dove sta l'interfaccia compilata.
@@ -72,7 +72,7 @@ OPS = {
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
-    "set_loudnorm", "set_settings", "undo", "redo", "save",
+    "set_loudnorm", "set_settings", "set_format", "undo", "redo", "save",
 }
 
 
@@ -337,6 +337,9 @@ class CreateBody(BaseModel):
     path: str
     name: str = "untitled"
     preset: str = "1080p"
+    # lato corto per i formati a rapporto ("9:16", "4:5"...) e fotogrammi al secondo
+    size: int | None = None
+    fps: float | None = None
 
 
 class OpenBody(BaseModel):
@@ -356,6 +359,7 @@ def state() -> dict:
         "transitions": list(TRANSITIONS),
         "library": presets.describe(),
         "presets": list(PRESETS),
+        "formats": list(FORMATI),
         "chat": chat_available(),
         "stili": stili.descrivi(),
         "particelle": particelle.descrivi(),
@@ -386,7 +390,8 @@ def project_state() -> dict:
 @app.post("/api/project/create")
 def project_create(body: CreateBody) -> dict:
     try:
-        attach(Store.create(name=body.name, preset=body.preset, path=body.path))
+        attach(Store.create(name=body.name, preset=body.preset, path=body.path,
+                            size=body.size, fps=body.fps))
     except (EditError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
     S.chat.clear()

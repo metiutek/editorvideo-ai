@@ -226,8 +226,12 @@ vedit ui --port 9000 --no-browser
 ```
 
 The `.json` **is** the project: your video files stay where they are, nothing is copied.
-Format presets: `1080p`, `1080p60`, `4k`, `720p`, `vertical` (9:16, for reels and shorts),
-`vertical60`, `square`.
+Formats: any aspect ratio — `16:9`, `9:16` (reels, shorts, TikTok), `1:1`, `4:5` (feed),
+`4:3`, `3:4`, `21:9`, `2:3` — or an exact `WIDTHxHEIGHT`; `--size` sets the short side
+(720, 1080, 2160). The named presets still work: `1080p`, `1080p60`, `4k`, `720p`,
+`vertical`, `vertical60`, `square`. Change it later with `vedit format film.json 9:16 --fill`,
+from the format button in the top bar, or with `project_settings(format=...)` over MCP:
+the timeline stays, the frame changes, and `--fill` crops the clips instead of leaving bars.
 
 ---
 

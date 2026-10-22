@@ -33,11 +33,12 @@ export const api = {
   project: () => req('/api/project'),
   recenti: () => req('/api/recenti'),
 
-  createProject: (path, name, preset) =>
+  // preset: un nome ('1080p') o un formato ('9:16'); extra: { size, fps }
+  createProject: (path, name, preset, extra = {}) =>
     req('/api/project/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, name, preset }),
+      body: JSON.stringify({ path, name, preset, ...extra }),
     }),
 
   openProject: (path) =>

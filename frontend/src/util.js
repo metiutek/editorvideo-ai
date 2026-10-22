@@ -211,3 +211,32 @@ export function natura(clip, project) {
 export function mostraEsatto({ diretta, prova, approssimato, playing, url, pending }) {
   return !!(diretta && !prova && approssimato && !playing && url && !pending)
 }
+
+/**
+ * Formati del video per rapporto d'aspetto. Il lato corto e' la qualita':
+ * 9:16 a 1080 fa 1080x1920 (lo stesso conto di ``store.risoluzione``).
+ */
+export const FORMATI_VIDEO = [
+  { id: '16:9', a: 16, b: 9, uso: 'YouTube, TV' },
+  { id: '9:16', a: 9, b: 16, uso: 'Reels, Shorts, TikTok' },
+  { id: '1:1', a: 1, b: 1, uso: 'square feed' },
+  { id: '4:5', a: 4, b: 5, uso: 'Instagram feed' },
+  { id: '4:3', a: 4, b: 3, uso: 'classic' },
+  { id: '3:4', a: 3, b: 4, uso: 'portrait' },
+  { id: '21:9', a: 21, b: 9, uso: 'cinema' },
+  { id: '2:3', a: 2, b: 3, uso: 'Pinterest' },
+]
+
+/** Larghezza e altezza di un formato col lato corto dato, pari come vuole l'encoder. */
+export function dimensioni(id, lato) {
+  const f = FORMATI_VIDEO.find((x) => x.id === id)
+  if (!f) return null
+  const [w, h] = f.a >= f.b ? [lato * f.a / f.b, lato] : [lato, lato * f.b / f.a]
+  return [2 * Math.round(w / 2), 2 * Math.round(h / 2)]
+}
+
+/** Formato di una risoluzione, se e' uno di quelli noti. */
+export function formatoDi(w, h) {
+  const f = FORMATI_VIDEO.find((x) => Math.abs(w * x.b - h * x.a) <= Math.max(x.a, x.b) * 2)
+  return f ? f.id : null
+}

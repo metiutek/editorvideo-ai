@@ -7,7 +7,8 @@ import assert from 'node:assert/strict'
 import { leggiTrascinati } from './src/trascina.js'
 import { BLOCCO, PEZZO, caricaTrascinati, importaPercorsi, mandaFile } from './src/caricamento.js'
 import { IN_PARALLELO, _azzera, chiedi } from './src/mediaAssets.js'
-import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura, mostraEsatto } from './src/util.js'
+import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura, mostraEsatto,
+  dimensioni, formatoDi } from './src/util.js'
 
 let ok = 0
 const test = (name, fn) => {
@@ -262,5 +263,17 @@ test('natura della clip: cosa produce davvero, quindi cosa mostrare', () => {
     assert.equal(ordine.length, 9)
   })
 }
+
+test('formati: stesso conto del backend (store.risoluzione)', () => {
+  assert.deepEqual(dimensioni('16:9', 1080), [1920, 1080])
+  assert.deepEqual(dimensioni('9:16', 1080), [1080, 1920])
+  assert.deepEqual(dimensioni('4:5', 1080), [1080, 1350])
+  assert.deepEqual(dimensioni('21:9', 1080), [2520, 1080])
+  assert.deepEqual(dimensioni('16:9', 2160), [3840, 2160])
+  assert.equal(dimensioni('boh', 1080), null)
+  assert.equal(formatoDi(1080, 1920), '9:16')
+  assert.equal(formatoDi(1280, 720), '16:9')
+  assert.equal(formatoDi(1000, 1234), null)
+})
 
 console.log(`\n${ok} verifiche superate`)

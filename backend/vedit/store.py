@@ -54,6 +54,52 @@ PRESETS = {
     "square": (1080, 1080, 30.0),
 }
 
+# Rapporti d'aspetto. Il lato corto e' la qualita' (720, 1080, 2160): 9:16 a
+# 1080 e' 1080x1920, 4:5 e' 1080x1350, 21:9 e' 2520x1080.
+FORMATI = {
+    "16:9": (16, 9),     # YouTube, TV
+    "9:16": (9, 16),     # reel, short, TikTok, storie
+    "1:1": (1, 1),       # feed quadrato
+    "4:5": (4, 5),       # feed verticale Instagram / Facebook
+    "4:3": (4, 3),
+    "3:4": (3, 4),
+    "21:9": (21, 9),     # cinemascope
+    "2:3": (2, 3),       # Pinterest
+}
+
+
+def risoluzione(formato: str, lato: int = 1080) -> tuple[int, int]:
+    """Larghezza e altezza per un formato: "9:16", "4:5" o "WxH" esplicito.
+
+    Le dimensioni escono pari: gli encoder in yuv420p rifiutano le dispari.
+    """
+    f = str(formato).strip().lower().replace(" ", "")
+    m = re.fullmatch(r"(\d+)x(\d+)", f)
+    if m:
+        w, h = int(m.group(1)), int(m.group(2))
+    else:
+        m = re.fullmatch(r"(\d+(?:\.\d+)?)[:/](\d+(?:\.\d+)?)", f)
+        if not m or float(m.group(1)) <= 0 or float(m.group(2)) <= 0:
+            raise EditError(f"unknown format {formato!r}; use a ratio like "
+                            f"{', '.join(FORMATI)} or WIDTHxHEIGHT")
+        a, b = float(m.group(1)), float(m.group(2))
+        lato = int(lato)
+        if not 144 <= lato <= 4320:
+            raise EditError("size (the short side) must be between 144 and 4320")
+        w, h = (lato * a / b, lato) if a >= b else (lato, lato * b / a)
+    w, h = 2 * round(w / 2), 2 * round(h / 2)
+    if not (16 <= w <= 8192 and 16 <= h <= 8192):
+        raise EditError(f"resolution {w}x{h} out of range (16-8192 per side)")
+    return w, h
+
+
+def rapporto(w: int, h: int) -> str:
+    """Il formato con cui chiamare una risoluzione: "16:9", "9:16"... o "WxH"."""
+    for nome, (a, b) in FORMATI.items():
+        if abs(w * b - h * a) <= max(a, b) * 2:
+            return nome
+    return f"{w}x{h}"
+
 
 class EditError(ValueError):
     """Errore di editing con messaggio comprensibile all'utente."""
@@ -79,10 +125,19 @@ class Store:
     # ---- ciclo di vita -------------------------------------------------
     @classmethod
     def create(cls, name: str = "untitled", preset: str = "1080p", path: str | None = None,
-               width: int | None = None, height: int | None = None, fps: float | None = None) -> "Store":
-        if preset not in PRESETS:
-            raise EditError(f"unknown preset {preset!r}; available: {', '.join(PRESETS)}")
-        w, h, f = PRESETS[preset]
+               width: int | None = None, height: int | None = None, fps: float | None = None,
+               size: int | None = None) -> "Store":
+        """preset: un nome di PRESETS oppure un formato ("9:16", "4:5", "1280x720");
+        size e' il lato corto per i formati a rapporto (1080 di norma)."""
+        if preset in PRESETS:
+            w, h, f = PRESETS[preset]
+        else:
+            try:
+                w, h = risoluzione(preset, size or 1080)
+            except EditError:
+                raise EditError(f"unknown preset {preset!r}; available: {', '.join(PRESETS)}, "
+                                f"or a format: {', '.join(FORMATI)}, WIDTHxHEIGHT") from None
+            f = 30.0
         settings = Settings(width=width or w, height=height or h, fps=fps or f)
         p = Project(name=name, settings=settings, master=Master())
         p.tracks = [
@@ -1684,6 +1739,29 @@ class Store:
         self._done()
         return self.project.settings
 
+    def set_format(self, format: str, size: int | None = None, fill: bool = False) -> Settings:
+        """Cambia il formato del video (16:9, 9:16, 1:1, 4:5... o WxH).
+
+        La timeline resta quella: cambia il fotogramma, e le clip ci si
+        adattano col proprio ``fit``. Senza ``size`` si tiene il lato corto
+        attuale, cosi' 1920x1080 passa a 1080x1920 e non a 608x1080. ``fill``
+        mette ``cover`` su tutte le clip video e immagine: riempiono il nuovo
+        fotogramma tagliando i bordi invece di lasciare le bande.
+        """
+        st = self.project.settings
+        w, h = risoluzione(format, size or min(st.width, st.height))
+        self._touch()
+        st.width, st.height = w, h
+        if fill:
+            for t in self.project.tracks:
+                if t.kind != "video":
+                    continue
+                for c in t.clips:
+                    if c.type == "media":
+                        c.fit = "cover"
+        self._done()
+        return st
+
     # ---- lettura -------------------------------------------------------
     def summary(self, detail: str = "normal") -> dict:
         p = self.project
@@ -1692,6 +1770,7 @@ class Store:
             "path": self.path,
             "settings": {
                 "resolution": f"{p.settings.width}x{p.settings.height}",
+                "format": rapporto(p.settings.width, p.settings.height),
                 "fps": p.settings.fps,
                 "sample_rate": p.settings.sample_rate,
                 "background": p.settings.background,

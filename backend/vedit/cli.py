@@ -35,7 +35,8 @@ def _bar(state: dict) -> None:
 
 
 def cmd_new(a) -> int:
-    s = Store.create(name=a.name or Path(a.path).stem, preset=a.preset, path=a.path)
+    s = Store.create(name=a.name or Path(a.path).stem, preset=a.preset, path=a.path,
+                     size=a.size, fps=a.fps)
     print(f"creato {s.path}  {s.project.settings.width}x{s.project.settings.height} "
           f"@{s.project.settings.fps}fps")
     return 0
@@ -77,6 +78,13 @@ def cmd_add(a) -> int:
     s = Store.open(a.project)
     c = s.add_clip(a.media, a.track, a.start, a.in_point, a.duration)
     print(f"{c.id}  {c.start:.2f} -> {c.end:.2f}")
+    return 0
+
+
+def cmd_format(a) -> int:
+    s = Store.open(a.project)
+    st = s.set_format(a.format, size=a.size, fill=a.fill)
+    print(f"{st.width}x{st.height}")
     return 0
 
 
@@ -223,7 +231,10 @@ def build_parser() -> argparse.ArgumentParser:
     n = sub.add_parser("new", help="crea un progetto")
     n.add_argument("path")
     n.add_argument("--preset", default="1080p",
-                   help="1080p, 1080p60, 4k, 720p, vertical, vertical60, square")
+                   help="1080p, 1080p60, 4k, 720p, vertical, vertical60, square, "
+                        "or a format: 16:9, 9:16, 1:1, 4:5, 4:3, 3:4, 21:9, 2:3, WxH")
+    n.add_argument("--size", type=int, help="short side for a format (default 1080)")
+    n.add_argument("--fps", type=float)
     n.add_argument("--name")
     n.set_defaults(func=cmd_new)
 
@@ -232,6 +243,14 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--json", action="store_true")
     i.add_argument("--detail", default="normal", choices=["normal", "full"])
     i.set_defaults(func=cmd_info)
+
+    fo = sub.add_parser("format", help="cambia il formato del video (16:9, 9:16, 1:1, 4:5...)")
+    fo.add_argument("project")
+    fo.add_argument("format", help="16:9, 9:16, 1:1, 4:5, 4:3, 3:4, 21:9, 2:3 or WxH")
+    fo.add_argument("--size", type=int, help="short side (default: the current one)")
+    fo.add_argument("--fill", action="store_true",
+                    help="crop clips to fill the new frame instead of leaving bars")
+    fo.set_defaults(func=cmd_format)
 
     im = sub.add_parser("import", help="importa file nel progetto")
     im.add_argument("project")

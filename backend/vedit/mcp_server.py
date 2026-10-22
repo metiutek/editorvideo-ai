@@ -34,7 +34,7 @@ from . import domande as domande_mod
 from . import effects as fx
 from . import ffmpeg, hw, particelle, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
-from .store import EditError, Store
+from .store import EditError, Store, rapporto
 
 # Le istruzioni del server arrivano a chiunque usi vedit, quindi qui non sta solo
 # come si chiamano gli strumenti: sta anche come si monta. I difetti elencati
@@ -421,12 +421,15 @@ async def _off(fn, *args, **kwargs):
 @_strumento()
 def project_create(path: str, name: str = "untitled", preset: str = "1080p",
                    width: int | None = None, height: int | None = None,
-                   fps: float | None = None) -> dict:
+                   fps: float | None = None, size: int | None = None) -> dict:
     """Crea un progetto e lo rende quello corrente.
 
-    preset: 1080p, 1080p60, 4k, 720p, vertical (9:16 per reel/short), vertical60, square.
+    preset: 1080p, 1080p60, 4k, 720p, vertical, vertical60, square, oppure un
+    formato: 16:9, 9:16 (reel/short/TikTok), 1:1, 4:5 (feed), 4:3, 3:4, 21:9,
+    2:3, WxH. size e' il lato corto dei formati (1080 di norma, 2160 per il 4k).
     """
-    s = Store.create(name=name, preset=preset, path=path, width=width, height=height, fps=fps)
+    s = Store.create(name=name, preset=preset, path=path, width=width, height=height, fps=fps,
+                     size=size)
     key = str(Path(s.path).resolve())
     _stores[key] = s
     _current[0] = key
@@ -548,8 +551,15 @@ def export_subtitles(track: str, path: str, project: str | None = None) -> dict:
 def project_settings(width: int | None = None, height: int | None = None, fps: float | None = None,
                      background: str | None = None, sample_rate: int | None = None,
                      audio_layout: str | None = None, master_volume: Any = None,
+                     format: str | None = None, size: int | None = None, fill: bool = False,
                      project: str | None = None) -> dict:
-    """Cambia risoluzione, fps, colore di sfondo, sample rate o audio del progetto.
+    """Cambia formato, risoluzione, fps, colore di sfondo, sample rate o audio del progetto.
+
+    format: 16:9, 9:16 (reel/short/TikTok), 1:1, 4:5 (feed), 4:3, 3:4, 21:9, 2:3
+    o WxH. size e' il lato corto (720, 1080, 2160; di norma resta l'attuale).
+    fill=True mette fit=cover sulle clip video: riempiono il nuovo formato
+    tagliando i bordi invece di lasciare le bande. Per seguire il soggetto
+    nel taglio, dopo il cambio usa auto_reframe.
 
     audio_layout: stereo | 5.1. In 5.1 ogni traccia va dove dice il suo
     surround (set_track): il dialogo al centro, la musica davanti, l'ambiente
@@ -557,11 +567,14 @@ def project_settings(width: int | None = None, height: int | None = None, fps: f
     """
     s = _store(project)
     with s.batch():
+        if format:
+            s.set_format(format, size=size, fill=fill)
         st = s.set_settings(width=width, height=height, fps=fps, background=background,
                             sample_rate=sample_rate, audio_layout=audio_layout)
         if master_volume is not None:
             s.set_master_volume(master_volume)
-    return {"width": st.width, "height": st.height, "fps": st.fps, "background": st.background,
+    return {"width": st.width, "height": st.height, "format": rapporto(st.width, st.height),
+            "fps": st.fps, "background": st.background,
             "audio_layout": st.audio_layout, "master_volume": s.project.master.volume}
 
 
@@ -1574,8 +1587,8 @@ async def auto_reframe(clip: str, classes: list[str] | None = None, fps: float =
                        apply: bool = True, project: str | None = None) -> dict:
     """Tiene il soggetto al centro quando cambia il formato (16:9 -> 9:16).
 
-    Imposta prima il progetto al formato voluto (project_settings preset
-    'vertical'), poi chiama questo: calcola l'ingrandimento che copre il canvas e
+    Imposta prima il progetto al formato voluto (project_settings
+    format='9:16'), poi chiama questo: calcola l'ingrandimento che copre il canvas e
     la panoramica che segue il soggetto, come keyframe sulla trasformazione.
 
     La panoramica e' limitata ai bordi dell'immagine, quindi non compare mai il

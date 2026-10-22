@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { api, connectEvents } from './api.js'
 import Chat from './Chat.jsx'
-import { Confirm, FileBrowser, NewProject, RenderDialog } from './Dialogs.jsx'
+import { Confirm, FileBrowser, NewProject, ProjectFormat, RenderDialog } from './Dialogs.jsx'
 import Icon from './Icons.jsx'
 import Inspector from './Inspector.jsx'
 import Library from './Library.jsx'
@@ -57,7 +57,7 @@ export default function App() {
   const [pxPerSec, setPxPerSec] = useState(70)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
-  const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render' | 'particelle'
+  const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render' | 'particelle' | 'formato'
   const [job, setJob] = useState(null)
   const [nuovi, setNuovi] = useState(0)          // progetti creati in questa sessione
   const [source, setSource] = useState(null)     // media aperto nel monitor
@@ -504,6 +504,12 @@ export default function App() {
           onSuMisura={() => setDialog('particelle')} />
 
         <span className="spacer" />
+        {project && (
+          <button className="ghost" title="Video format: 16:9, 9:16, 1:1, 4:5…"
+            onClick={() => setDialog('formato')}>
+            {project.settings.format || project.settings.resolution}
+          </button>
+        )}
         <span className="path" title={path || ''}>{path || 'no project'}</span>
         <button className="ghost" disabled={!project}
           title="Make low-resolution copies: much faster previews"
@@ -678,10 +684,15 @@ export default function App() {
       </div>
 
       {dialog === 'new' && (
-        <NewProject presets={sys?.presets || ['1080p']} home={sys?.home}
+        <NewProject home={sys?.home}
           onClose={() => setDialog(null)}
-          onCreate={(p, name, preset) => api.createProject(p, name, preset)
+          onCreate={(p, name, preset, extra) => api.createProject(p, name, preset, extra)
             .then(progettoNuovo).catch((e) => setError(e.message))} />
+      )}
+      {dialog === 'formato' && project && (
+        <ProjectFormat resolution={project.settings.resolution} onClose={() => setDialog(null)}
+          onApply={(args) => run('set_format', args)
+            .then((st) => flash(`format ${st.width} x ${st.height}`)).catch((e) => setError(e.message))} />
       )}
       {dialog === 'particelle' && (
         <EditorParticelle titolo="Custom particles" applica="add to the timeline"

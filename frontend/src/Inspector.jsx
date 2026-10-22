@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import { Anim, Check, EffectParams, Num, Row, Select, Text } from './Params.jsx'
 import { EditorParticelle, PARTICELLE, parametriParticelle } from './Particelle.jsx'
-import { natura } from './util.js'
+import { FORMATI_VIDEO, formatoDi, natura } from './util.js'
 
 // come la clip si fonde con le tracce sotto (model.BLEND_MODES)
 const BLEND = ['normal', 'screen', 'add', 'multiply', 'overlay', 'softlight', 'hardlight',
@@ -540,6 +540,11 @@ function ProjectPanel({ project, effects, call, setBusy, setError, onProva }) {
       <div className="section-title">project</div>
       <div className="group">
         <h4>{project.name}</h4>
+        <Row label="format"><select value={formatoDi(...s.resolution.split('x').map(Number)) || ''}
+          onChange={(e) => call('set_format', { format: e.target.value })}>
+          {!formatoDi(...s.resolution.split('x').map(Number)) && <option value="">custom</option>}
+          {FORMATI_VIDEO.map((f) => <option key={f.id} value={f.id}>{f.id} · {f.uso}</option>)}
+        </select></Row>
         <Row label="resolution"><Text value={s.resolution} onChange={(v) => {
           const [w, h] = v.split('x').map((n) => parseInt(n, 10))
           if (w > 0 && h > 0) call('set_settings', { width: w, height: h })

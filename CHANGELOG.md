@@ -4,6 +4,16 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+### Aggiunto
+- **Formati per rapporto d'aspetto: 16:9, 9:16, 1:1, 4:5, 4:3, 3:4, 21:9, 2:3** (o `WxH`),
+  con la qualita' come lato corto (720, 1080, 1440, 4K). Nella UI il nuovo progetto ha i
+  riquadri dei formati, la qualita' e gli fps; a progetto aperto il pulsante del formato
+  nella barra in alto (e la voce *format* nelle proprieta' del progetto) lo cambia senza
+  toccare la timeline, con *fill* che fa riempire il nuovo fotogramma alle clip invece di
+  lasciare le bande. `Store.set_format`, `project_settings(format, size, fill)` e
+  `project_create(preset="9:16", size=...)` da MCP, `set_format` nella chat,
+  `vedit new --preset 4:5 --size 1080` e `vedit format progetto.json 9:16 --fill` da CLI.
+
 ### Corretto
 - **Export con grafica HTML da ore a minuti.** Un progetto di nove minuti fatto di clip html
   costava circa 2,5 ore di export a qualunque qualita': tutto il tempo era Chromium che
