@@ -67,6 +67,7 @@ export default function Chat({
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [settings, setSettings] = useState(false)
+  const [menuModello, setMenuModello] = useState(false)
   const [memoriaAperta, setMemoriaAperta] = useState(false)
   // stile di montaggio: resta scelto fra una sessione e l'altra, ma un
   // progetto nuovo riparte da "nessuno"
@@ -92,6 +93,14 @@ export default function Chat({
   const abortRef = useRef(null)
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy, domanda])
+
+  // ogni progetto ha la sua chat, salvata accanto al file: aprendolo torna
+  const percorso = project?.path || ''
+  useEffect(() => {
+    let vivo = true
+    api.chatStoria().then((r) => { if (vivo) setTurns(r.vista || []) }).catch(() => {})
+    return () => { vivo = false }
+  }, [percorso, nuovoProgetto])
 
   if (settings || !available?.ok) {
     return (
@@ -221,9 +230,11 @@ export default function Chat({
       }}>
       {sopra && <div className="chatdrop">drop to attach to the message</div>}
       <div className="section-title">
-        <button className="modelpill" title="Change model" onClick={() => setSettings(true)}>
+        <button className={`modelpill ${menuModello ? 'on' : ''}`} title="Model and effort"
+          onClick={() => setMenuModello((v) => !v)}>
           <span className="dot" />
           {available.nome}{available.model ? ` · ${available.model}` : ''}
+          {available.sforzo ? ` · ${available.sforzo}` : ''}
         </button>
         <span className="spacer" />
         <button className={`stilepill ${stile ? 'on' : ''}`} title="Editing style"
@@ -243,6 +254,12 @@ export default function Chat({
           <Icon name="cestino" size={14} />
         </button>
       </div>
+
+      {menuModello && (
+        <MenuModello available={available} setError={setError}
+          onCambiato={onAvailable}
+          onImpostazioni={() => { setMenuModello(false); setSettings(true) }} />
+      )}
 
       {memoriaAperta && <EditorMemoria setError={setError} onClose={() => setMemoriaAperta(false)} />}
 
@@ -634,6 +651,52 @@ function ModelSettings({ available, setError, onSaved }) {
         </div>
       )}
       <Accesso claudeCode={p?.tipo === 'claude_code'} setError={setError} />
+    </div>
+  )
+}
+
+const NOMI_SFORZO = { low: 'low', medium: 'medium', high: 'high', xhigh: 'extra high', max: 'max' }
+
+/**
+ * Cambio rapido di modello e sforzo del motore attivo, dalla pastiglia in
+ * cima alla chat. La conversazione resta: cambia solo chi risponde e quanto
+ * ragiona prima di farlo.
+ */
+function MenuModello({ available, setError, onCambiato, onImpostazioni }) {
+  const [libero, setLibero] = useState('')
+  const imposta = (body) => api.llmRapido(body).then(onCambiato).catch((e) => setError(e.message))
+  const modelli = available.modelli || []
+  return (
+    <div className="stilimenu menumodello">
+      <div className="hint">Model</div>
+      <div className="scelte">
+        {modelli.map((m) => (
+          <button key={m || 'default'} className={`scelta ${(available.model || '') === m ? 'on' : ''}`}
+            onClick={() => imposta({ modello: m })}>
+            {m || 'default'}
+          </button>
+        ))}
+        <input className="sceltalibera" placeholder="other model id" value={libero}
+          onChange={(e) => setLibero(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && libero.trim()) { imposta({ modello: libero.trim() }); setLibero('') } }} />
+      </div>
+      {available.sforzi?.length > 0 && (<>
+        <div className="hint">Effort: how much it thinks before acting. A whole video wants high or more.</div>
+        <div className="scelte">
+          <button className={`scelta ${!available.sforzo ? 'on' : ''}`} onClick={() => imposta({ sforzo: '' })}>
+            default
+          </button>
+          {available.sforzi.map((x) => (
+            <button key={x} className={`scelta ${available.sforzo === x ? 'on' : ''}`}
+              onClick={() => imposta({ sforzo: x })}>
+              {NOMI_SFORZO[x] || x}
+            </button>
+          ))}
+        </div>
+      </>)}
+      <button className="ghost stilenuovo" onClick={onImpostazioni}>
+        <Icon name="ingranaggio" size={14} />all model settings
+      </button>
     </div>
   )
 }

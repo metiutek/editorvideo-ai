@@ -143,6 +143,15 @@ export const api = {
     }),
 
   chatReset: () => req('/api/chat/reset', { method: 'POST' }),
+  // la conversazione del progetto aperto: si salva accanto al progetto
+  chatStoria: () => req('/api/chat/storia'),
+  // modello e sforzo del motore attivo, senza perdere la conversazione
+  llmRapido: (body) =>
+    req('/api/llm/rapido', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   // ferma il turno in corso: le modifiche gia' fatte restano e si annullano con Ctrl+Z
   chatStop: () => req('/api/chat/stop', { method: 'POST' }),
   // domande dell'assistente in attesa di risposta (ask_user, conferma export)

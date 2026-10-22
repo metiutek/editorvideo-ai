@@ -54,6 +54,8 @@ Qualcosa non va? `vedit doctor` dice cosa manca e come sistemarlo.
    modello — se hai Claude Code installato non c'è niente da configurare. Poi scrivi cosa
    vuoi: *"fammi un video verticale di 30 secondi con queste clip, a tempo di musica, con
    i titoli"*. Il montaggio compare in timeline mentre lavora; Ctrl+Z annulla tutto.
+   Un clic sulla pastiglia del modello in cima alla chat cambia modello e **sforzo**; ogni
+   progetto tiene **la sua conversazione**, e riaprendolo riparti da dove eri.
 4. **Voce fuori campo**: barra in alto → *voice*, scrivi il testo, *generate and add*. La
    voce di sistema funziona senza configurare niente; OpenAI, ElevenLabs o Piper suonano
    meglio.
@@ -549,7 +551,7 @@ claude mcp add vedit -- vedit-mcp
 Per gli altri client (Cursor, Codex, VS Code) la configurazione equivalente e il flusso
 consigliato degli strumenti stanno in [`AGENTS.md`](AGENTS.md).
 
-113 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
+114 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
 riordinare, solo, blocco), velocità e reverse, transform con keyframe, effetti video e audio,
 dissolvenze incrociate, normalizzazione EBU R128, render, e `preview_frame` che **restituisce
 l'immagine vera** del fotogramma — così l'agente vede quello che ha montato invece di
@@ -658,10 +660,26 @@ dialogo, dietro, tutto, LFE); il file esce a sei canali (AAC a bitrate doppio, O
 **Voce dal testo** — `generate_voice` (o il pulsante *voice*) trasforma un testo in voce su
 una traccia audio `VO`: una battuta alla testina, o tante in una chiamata, ognuna dopo la
 precedente. Motori: **OpenAI** e qualunque servizio con la stessa forma `/audio/speech` —
-anche server locali come Kokoro-FastAPI o LocalAI —, **ElevenLabs**, **Piper** tutto offline,
+anche server locali come Kokoro-FastAPI o LocalAI —, **ElevenLabs**, **Google Gemini** (ritmo e
+tono detti a parole: *"fast, punchy explainer"*), **Piper** tutto offline,
 oppure la **voce di sistema** (SAPI su Windows, `say` su macOS, `espeak-ng` su Linux) senza
 installare niente. Le chiavi stanno in `~/.vedit/tts.json`; i file audio accanto al progetto,
 e la stessa battuta con le stesse impostazioni non si genera due volte.
+
+**Video raccontati da una voce** (explainer, short faceless, animazioni senza girato) si
+montano al contrario: l'audio comanda, il video obbedisce. `speech_times` dice in che
+secondo della *timeline* la voce dice ogni frase del copione — tenendo conto di posizione,
+attacco e velocita' della clip, e cercando nell'ordine del copione, cosi' una frase detta due
+volte cade sull'occorrenza giusta — e ogni animazione parte da quei tempi, mai a occhio.
+L'assistente segue un metodo scritto per questi video: una fonte per ogni numero, un copione
+scritto per la voce, il ritmo chiesto al motore della voce (mai una traccia accelerata), una
+scena animata per capitolo con metafore visive invece di cartelli di testo, e piu' giri di
+controllo sui fotogrammi.
+
+**Una conversazione per progetto** — la chat si salva accanto al progetto
+(`<progetto>.chat.json`) e torna quando lo riapri: con Claude Code riprende la sessione, con
+i modelli via API ricarica la cronologia, e se nel frattempo hai cambiato modello gli passa
+la conversazione come testo. Il cestino la fa ricominciare.
 
 **Pubblicare** — il pulsante *publish* (o `publish_video`) carica un video esportato su
 **YouTube** (un tuo client OAuth, accesso una volta nel browser; il caricamento parte
@@ -727,6 +745,8 @@ backend/vedit/
   tts.py         voce dal testo: compatibili OpenAI, ElevenLabs, Piper, voce di sistema
   social.py      pubblicare: YouTube (OAuth, caricamento a riprese), casella TikTok
   memoria.py     memoria fra i progetti (~/.vedit/MEMORIA.md)
+  allinea.py     quando la voce dice cosa, in secondi di timeline (speech_times)
+  conversazioni.py  la chat di ogni progetto, salvata accanto
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito
   estensioni.py  skill e server MCP dell'utente per l'assistente nell'editor
   mcp_server.py  strumenti MCP

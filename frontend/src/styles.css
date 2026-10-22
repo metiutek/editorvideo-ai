@@ -1226,3 +1226,10 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .serverriga small { color: var(--faint); margin-left: auto; }
 .serverriga .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
 .serverriga .dot.ok { background: var(--ok); }
+
+/* menu rapido: modello e sforzo del motore attivo */
+.modelpill.on { border-color: var(--accent); }
+.menumodello .scelte { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.menumodello .scelta { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 13px; background: var(--panel-2); }
+.menumodello .scelta.on { border-color: var(--accent); color: var(--text); background: rgba(95,160,255,.14); }
+.menumodello .sceltalibera { width: 140px; height: 26px; font-size: 12px; border-radius: 13px; padding: 0 10px; }

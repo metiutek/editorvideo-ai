@@ -545,8 +545,12 @@ def applica(store, stile_id: str, track: str | None = None) -> dict:
         # musica che si muove
         if r["musica"]:
             fine_tl = clip(ids[-1]).end
-            musiche = [c.id for t in store.project.tracks if t.kind == "audio"
-                       for c in t.clips if c.type == "media" and c.duration >= 8]
+            # la voce fuori campo non e' musica: abbassarla la copre
+            from .allinea import e_traccia_voce
+            musiche = [c.id for t in store.project.tracks
+                       if t.kind == "audio" and not e_traccia_voce(t)
+                       for c in t.clips if c.type == "media" and c.duration >= 8
+                       and getattr(store.project.media_by_id(c.media), "folder", "") != "voice"]
             for mid in musiche:
                 m = clip(mid)
                 if kf.is_kf(m.audio.gain_db):

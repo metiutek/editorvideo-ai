@@ -4,6 +4,32 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+## v0.3.0 — 2026-10-22 · Video raccontati da una voce, chat per progetto, modello e sforzo
+
+### Aggiunto
+- **`speech_times`** (MCP e chat): in che secondo della timeline la voce dice ogni frase del
+  copione, con posizione, attacco e velocita' delle clip; ricerca nell'ordine del copione
+  (una frase ripetuta prende l'occorrenza giusta) e numeri confrontati in lettere. Senza
+  faster-whisper, stima dal testo delle battute di `generate_voice`.
+- **Metodo per i video raccontati da una voce** nelle istruzioni dell'agente MCP e
+  dell'assistente: fonti, copione per la voce, voce prima, tempi misurati, una scena html per
+  capitolo con metafore animate, controlli ripetuti sui fotogrammi, suono. Nasce dal
+  confronto fra uno short venuto male nell'editor e uno fatto bene a mano.
+- **Voce di Google Gemini** (`gemini` in `generate_voice`): ritmo e tono chiesti a parole
+  nello `style`.
+- **Ogni progetto ha la sua chat**, salvata in `<progetto>.chat.json` e ripresa quando lo si
+  riapre (sessione di Claude Code, cronologia dei modelli via API, oppure la conversazione
+  come testo se il modello e' cambiato).
+- **Modello e sforzo in un clic** dalla pastiglia in cima alla chat; Claude Code parte con
+  `--effort`, Claude via API con `output_config.effort`. Fra i modelli di Claude Code c'e'
+  anche `fable`.
+
+### Corretto
+- `apply_style` abbassava la voce fuori campo come fosse musica (-16 dB).
+- Cambiare modello o livello d'accesso cancellava la conversazione.
+- L'assistente con i modelli via API si fermava dopo 16 giri: un video intero ne vuole di
+  piu' (ora 80).
+
 ## v0.2.0 — 2026-10-22 · Voce, web, pubblicazione, memoria, skill e server MCP
 
 ### Aggiunto

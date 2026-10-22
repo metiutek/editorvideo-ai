@@ -6,6 +6,9 @@ Motori:
   forma — anche in locale, come Kokoro-FastAPI (``http://localhost:8880/v1``)
   o LocalAI: basta cambiare l'indirizzo;
 - ``elevenlabs``: le voci di ElevenLabs, multilingua;
+- ``gemini``: i modelli TTS di Google (AI Studio), con lo stile detto a parole
+  ("ritmo veloce, tono deciso"): il ritmo si chiede al modello, non si accelera
+  dopo con ``atempo``, che rende la voce artificiale;
 - ``piper``: Piper in locale, offline, con un modello ``.onnx`` scaricato;
 - ``system``: la voce del sistema operativo (SAPI su Windows, ``say`` su macOS,
   ``espeak-ng`` su Linux). Niente da installare ne' da pagare: e' la scelta di
@@ -45,6 +48,12 @@ MOTORI: list[dict] = [
      "base": "https://api.elevenlabs.io/v1", "modello": "eleven_multilingual_v2",
      "voce": "21m00Tcm4TlvDq8ikWAM", "voci": [],
      "nota": "Key from elevenlabs.io; the voice is a voice id from your voice library."},
+    {"id": "gemini", "nome": "Google Gemini", "chiave": True, "env": "GEMINI_API_KEY",
+     "base": "https://generativelanguage.googleapis.com/v1beta",
+     "modello": "gemini-3.1-flash-tts-preview", "voce": "Kore",
+     "voci": ["Kore", "Puck", "Charon", "Fenrir", "Aoede", "Leda", "Orus", "Zephyr"],
+     "nota": "Key from aistudio.google.com. Say the pace and tone in 'style' (e.g. fast, "
+             "punchy explainer): it sounds natural, unlike speeding the audio up."},
     {"id": "piper", "nome": "Piper (offline)", "chiave": False, "modello": "", "voce": "",
      "voci": [],
      "nota": "Local and free: install piper (pip install piper-tts) and give the path of "
@@ -128,10 +137,10 @@ def imposta(motore_id: str, chiave: str | None = None, voce: str | None = None,
 def _chiave(m: dict, cfg: dict) -> str:
     if k := cfg["chiavi"].get(m["id"]):
         return k
-    if m["id"] == "openai":
+    if m["id"] in ("openai", "gemini"):
         # la stessa chiave gia' data all'assistente della chat
         from . import llm
-        if k := llm.carica()["chiavi"].get("openai"):
+        if k := llm.carica()["chiavi"].get(m["id"]):
             return k
     return os.environ.get(m.get("env") or "", "")
 
@@ -150,8 +159,8 @@ def _sistema_disponibile() -> str | None:
 
 def _pronto(m: dict, cfg: dict) -> str | None:
     """None se il motore si puo' usare, altrimenti cosa manca, in parole."""
-    if m["chiave"] and not _chiave(m, cfg) and m["id"] == "elevenlabs":
-        return "paste the ElevenLabs API key"
+    if m["chiave"] and not _chiave(m, cfg) and m["id"] in ("elevenlabs", "gemini"):
+        return f"paste the {m['nome']} API key"
     if m["id"] == "openai" and not _chiave(m, cfg) and _indirizzo(m, cfg) == m["base"]:
         return "paste an OpenAI key, or set the address of a compatible local server"
     if m["id"] == "piper":
@@ -253,6 +262,37 @@ def _elevenlabs(m: dict, cfg: dict, testo: str, voce: str, velocita: float,
     out.write_bytes(_post(url, {"xi-api-key": _chiave(m, cfg)}, body))
 
 
+def _gemini(m: dict, cfg: dict, testo: str, voce: str, velocita: float,
+            istruzioni: str, out: Path) -> None:
+    import base64
+    import wave
+    # lo stile va nel testo: e' cosi' che il modello capisce come dirlo
+    prompt = f"{istruzioni.strip()}:\n{testo}" if istruzioni.strip() else testo
+    if abs(velocita - 1.0) > 0.01 and "pace" not in istruzioni.lower():
+        prompt = f"Speak at about {velocita:g}x the normal pace.\n{prompt}"
+    body = {"contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
+                "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voce}}}}}
+    url = f"{_indirizzo(m, cfg)}/models/{_modello(m, cfg)}:generateContent"
+    risposta = json.loads(_post(url, {"x-goog-api-key": _chiave(m, cfg)}, body))
+    try:
+        parti = risposta["candidates"][0]["content"]["parts"]
+        dati = next(p["inlineData"] for p in parti if "inlineData" in p)
+    except (KeyError, IndexError, StopIteration) as exc:
+        raise TtsError(f"Gemini returned no audio: {json.dumps(risposta)[:300]}") from exc
+    pcm = base64.b64decode(dati["data"])
+    # PCM 16 bit mono; la frequenza sta nel mime (audio/L16;codec=pcm;rate=24000)
+    rate = 24000
+    for pezzo in str(dati.get("mimeType", "")).split(";"):
+        if pezzo.strip().startswith("rate="):
+            rate = int(pezzo.split("=")[1])
+    with wave.open(str(out), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+
+
 def _esegui(cmd: list[str], **kw) -> None:
     r = subprocess.run(cmd, capture_output=True, timeout=600,
                        creationflags=ffmpeg._NO_WINDOW, **kw)
@@ -312,7 +352,7 @@ def _sistema(m: dict, cfg: dict, testo: str, voce: str, velocita: float,
             _esegui(cmd)
 
 
-_GENERATORI = {"openai": _openai, "elevenlabs": _elevenlabs, "piper": _piper, "system": _sistema}
+_GENERATORI = {"openai": _openai, "elevenlabs": _elevenlabs, "gemini": _gemini, "piper": _piper, "system": _sistema}
 _ESTENSIONE = {"elevenlabs": ".mp3"}
 
 

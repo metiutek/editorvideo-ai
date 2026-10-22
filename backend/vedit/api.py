@@ -88,6 +88,9 @@ class Session:
         # conversazione con l'assistente: contiene i blocchi tool_use/tool_result,
         # che i turni successivi devono rimandare intatti
         self.chat: dict = {}
+        # la stessa conversazione come la mostra la chat; con ``chat`` si salva
+        # accanto al progetto (conversazioni.py) e torna quando lo si riapre
+        self.vista: list[dict] = []
         # "ferma" premuto nella chat: il turno in corso si interrompe al primo passo utile
         self.fermo = threading.Event()
         # domanda in attesa di risposta nel browser (ask_user, conferma export)
@@ -394,7 +397,6 @@ def project_create(body: CreateBody) -> dict:
                             size=body.size, fps=body.fps))
     except (EditError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    S.chat.clear()
     ricorda_recente(S.store)
     S.publish({"type": "project"})
     return {**S.state_of_project(), "recenti": recenti()}
@@ -406,7 +408,6 @@ def project_open(body: OpenBody) -> dict:
         attach(Store.open(body.path))
     except (EditError, OSError, ValueError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    S.chat.clear()
     ricorda_recente(S.store)
     S.publish({"type": "project"})
     return {**S.state_of_project(), "recenti": recenti()}
@@ -1461,7 +1462,6 @@ def estensioni_imposta(body: AccessoBody) -> dict:
         llm.imposta_accesso(body.accesso, body.server_spenti)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    S.chat.clear()   # strumenti diversi: la conversazione riparte
     return estensioni_stato()
 
 
@@ -1512,7 +1512,21 @@ def llm_imposta(body: LlmBody) -> dict:
         llm.imposta(body.provider, body.chiave, body.modello, body.indirizzo, body.attiva)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    S.chat.clear()
+    return {**chat_available(), "mcp": mcp_url()}
+
+
+class RapidoBody(BaseModel):
+    modello: str | None = None
+    sforzo: str | None = None
+
+
+@app.post("/api/llm/rapido")
+def llm_rapido(body: RapidoBody) -> dict:
+    """Modello e sforzo del motore attivo, dal menu della chat: la conversazione resta."""
+    try:
+        llm.imposta_rapido(body.modello, body.sforzo)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
     return {**chat_available(), "mcp": mcp_url()}
 
 
@@ -1957,8 +1971,35 @@ def chat_stop() -> dict:
 
 @app.post("/api/chat/reset")
 def chat_reset() -> dict:
+    """Ricomincia la conversazione di questo progetto (e la toglie dal disco)."""
     S.chat.clear()
+    S.vista = []
+    salva_chat()
     return {"ok": True}
+
+
+@app.get("/api/chat/storia")
+def chat_storia() -> dict:
+    """La conversazione del progetto aperto, come la mostra la chat."""
+    return {"vista": S.vista}
+
+
+def carica_chat() -> None:
+    from . import conversazioni
+    stato, vista = conversazioni.carica(S.store.path if S.store else None)
+    S.chat.clear()
+    S.chat.update(stato)
+    S.vista = vista
+
+
+def salva_chat() -> None:
+    from . import conversazioni
+    if S.store is None:
+        return
+    try:
+        conversazioni.salva(S.store.path, S.chat, S.vista)
+    except OSError:
+        pass   # cartella in sola lettura: la chat resta per questa sessione
 
 
 @app.post("/api/chat")
@@ -1978,7 +2019,7 @@ def chat(body: ChatBody) -> StreamingResponse:
         if name == "generate_voice":
             # la sintesi puo' durare: fuori dal lock, la UI resta libera
             args = {**args, "_voci": chat_mod.prepara_voce(store, args)}
-        if name in ("web_search", "web_read", "use_skill", "read_skill_file", "list_skills") \
+        if name in ("web_search", "web_read", "speech_times", "use_skill", "read_skill_file", "list_skills") \
                 or name.startswith("mcp__"):
             # non toccano il progetto: niente lock (un server MCP puo' metterci minuti)
             return chat_mod.execute(store, name, args)
@@ -1990,19 +2031,30 @@ def chat(body: ChatBody) -> StreamingResponse:
         return out
 
     def events():
+        from . import conversazioni
+
         def send(obj: dict) -> str:
             return f"data: {json.dumps(obj, ensure_ascii=False, default=str)}\n\n"
 
+        precedente = conversazioni.testo(S.vista)
+        S.vista.append({"role": "user", "text": body.message, "refs": body.refs})
+        risposta: dict = {"role": "assistant", "text": "", "tools": []}
+        S.vista.append(risposta)
         try:
             S.fermo.clear()
             for ev in chat_mod.run(store, S.chat, body.message, run_op,
                                    refs=body.refs, mcp_url=mcp_url(), fermo=S.fermo.is_set,
-                                   stile=body.stile):
+                                   stile=body.stile, precedente=precedente):
+                _in_vista(risposta, ev)
                 yield send(ev)
         except chat_mod.ChatUnavailable as exc:
+            risposta["error"] = str(exc)
             yield send({"type": "error", "message": str(exc)})
         except Exception as exc:
+            risposta["error"] = str(exc)
             yield send({"type": "error", "message": str(exc)})
+        finally:
+            salva_chat()
         # il progetto e' cambiato: la UI ricarica lo stato completo
         yield send({"type": "end", **S.state_of_project()})
 
@@ -2099,6 +2151,32 @@ def serve(host: str = "127.0.0.1", port: int = 8760, project: str | None = None,
 _background: dict[str, Any] = {}
 
 
+def _in_vista(m: dict, ev: dict) -> None:
+    """Lo stesso turno che costruisce la chat nel browser, per salvarlo."""
+    t = ev.get("type")
+    if t == "text":
+        m["text"] += ev.get("text", "")
+    elif t == "tool":
+        # solo gli argomenti brevi: un documento html intero non serve a rileggere la chat
+        corti = {k: v for k, v in (ev.get("input") or {}).items()
+                 if len(json.dumps(v, ensure_ascii=False, default=str)) <= 300}
+        m["tools"].append({"name": ev.get("name"), "state": "run", "input": corti})
+    elif t in ("tool_done", "tool_error"):
+        for x in reversed(m["tools"]):
+            if x["name"] == ev.get("name") and x["state"] == "run":
+                x["state"] = "ok" if t == "tool_done" else "err"
+                if ev.get("message"):
+                    x["message"] = ev["message"]
+                break
+    elif t == "error":
+        m["error"] = ev.get("message")
+    elif t == "stopped":
+        for x in m["tools"]:
+            if x["state"] == "run":
+                x["state"] = "err"
+        m["note"] = "Stopped. The changes already made stay: Ctrl+Z to undo them."
+
+
 def attach(store: Store) -> None:
     """Fa lavorare l'interfaccia sullo *stesso* Store di chi la avvia.
 
@@ -2109,7 +2187,10 @@ def attach(store: Store) -> None:
     """
     if S.store is not None and S.store is not store:
         S.store.on_change = None
+    nuovo = S.store is not store
     S.store = store
+    if nuovo:
+        carica_chat()   # ogni progetto ha la sua conversazione
 
     def cambiato() -> None:
         S.publish({"type": "project"})

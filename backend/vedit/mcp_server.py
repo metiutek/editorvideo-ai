@@ -30,6 +30,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from . import analyze, captions, cleanup, colormatch, ops
 # domande_mod: in ask_user il parametro si chiama domande
+from .allinea import METODO as METODO_VOCE
 from . import domande as domande_mod
 from . import effects as fx
 from . import ffmpeg, hw, memoria, particelle, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
@@ -192,11 +193,12 @@ questo video ("i miei video sono sempre 9:16", "niente musica epica", "il canale
 si chiama...", "voce femminile calma"), salvala con remember, breve e concreta,
 senza chiedere. Una preferenza smentita va tolta con forget. memory la legge
 per intero. Non salvare cio' che riguarda solo il progetto aperto.
-"""
+
+""" + METODO_VOCE
 
 mcp = MCPServer(
     name="vedit",
-    version="0.2.0",
+    version="0.3.0",
     instructions=ISTRUZIONI,
 )
 
@@ -1288,6 +1290,29 @@ async def transcribe(path: str | None = None, clip: str | None = None,
 
 
 @_strumento()
+async def speech_times(phrases: list | None = None, clips: list[str] | None = None,
+                       track: str | None = None, words: bool = False,
+                       language: str | None = None, project: str | None = None) -> dict:
+    """Quando la voce dice cosa, in secondi di TIMELINE (non della sorgente).
+
+    E' il metronomo di un video spiegato a voce: ogni animazione, numero o
+    stacco parte dall'istante in cui la voce dice la sua frase, mai da un tempo
+    stimato a occhio. phrases = frasi del copione nell'ordine in cui le dice
+    (ogni ricerca riparte dalla precedente, quindi una frase ripetuta prende
+    l'occorrenza giusta; {"text", "after": t} forza l'inizio). Senza phrases:
+    le frasi dette con [inizio, fine, testo]. Di base guarda la traccia della
+    voce (VO); track= o clips= per sceglierne altre. Tiene conto di attacco e
+    velocita' delle clip. words=True aggiunge [t, parola] per ogni parola.
+    """
+    from . import allinea
+    s = _store(project)
+    try:
+        return await _off(allinea.tempi, s, phrases, clips, track, words, "small", language)
+    except allinea.AllineaError as exc:
+        raise EditError(str(exc)) from exc
+
+
+@_strumento()
 async def list_styles(style: str | None = None) -> dict:
     """Gli stili di montaggio disponibili e i numeri che li definiscono.
 
@@ -2364,7 +2389,7 @@ async def generate_voice(text: str | None = None, lines: list[dict] | None = Non
     text = una battuta sola (a ``start``); lines = tante battute in una
     chiamata: [{"text", "start", "voice"?, "speed"?, "style"?}], start assente =
     dopo la precedente. engine: openai (anche servizi compatibili e server
-    locali come Kokoro), elevenlabs, piper (offline), system (voce del sistema,
+    locali come Kokoro), elevenlabs, gemini, piper (offline), system (voce del sistema,
     sempre disponibile); senza, quello scelto dall'utente. voice: nome o id
     della voce del motore (voice_engines le elenca). style: come dirla (tono,
     ritmo, emozione) per i modelli che lo capiscono. apply=False genera solo i
@@ -2496,7 +2521,7 @@ _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "pro
                 "project_open", "install_ffmpeg", "preview_frame", "preview_media",
                 "preview_grid", "scope_image", "undo", "redo", "restore_snapshot",
                 "remember", "forget", "memory", "voice_engines", "publish_video",
-                "social_accounts", "web_search", "web_read", "web_download"}
+                "social_accounts", "web_search", "web_read", "web_download", "speech_times"}
 
 
 @_strumento()

@@ -11,7 +11,7 @@
   <a href="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml"><img src="https://github.com/metiutek/editorvideo-ai/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/v/vedit-mcp.svg?style=flat-square" alt="PyPI"/></a>
   <a href="https://pypi.org/project/vedit-mcp/"><img src="https://img.shields.io/pypi/pyversions/vedit-mcp.svg?style=flat-square" alt="Python versions"/></a>
-  <img src="https://img.shields.io/badge/AI%20tools-113-blueviolet?style=flat-square" alt="113 AI tools"/>
+  <img src="https://img.shields.io/badge/AI%20tools-114-blueviolet?style=flat-square" alt="114 AI tools"/>
   <img src="https://img.shields.io/badge/runs-100%25%20local-brightgreen?style=flat-square" alt="Runs locally"/>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"/>
 </p>
@@ -66,6 +66,10 @@ Something wrong? `vedit doctor` tells you what is missing and how to fix it.
    have Claude Code installed there is nothing to configure. Then write what you want:
    *"make a 30-second vertical video with these clips, on the beat of the music, with
    titles"*. The edit appears on the timeline while it works; Ctrl+Z undoes anything.
+   Click the model pill at the top of the chat to switch model and **effort** in one click;
+   every project keeps **its own conversation**, so reopening it picks up where you left.
+   Click the model pill at the top of the chat to switch model and **effort** in one click;
+   every project keeps **its own conversation**, so reopening it picks up where you left.
 4. **Voiceover**: top bar → *voice*, write the text, click *generate and add*. The system
    voice works with nothing to set up; OpenAI, ElevenLabs or Piper sound better.
 5. **Export** (top bar → *export*), then **publish** to YouTube or TikTok if you like
@@ -126,7 +130,7 @@ difference between a demo and something you would actually cut a video with:
 
 | | |
 |---|---|
-| **An agent can actually edit** | 113 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
+| **An agent can actually edit** | 114 MCP tools that are the *same* operations as the buttons: cut, split, speed, keyframes, effects, transitions, render. Nothing is agent-only, nothing is UI-only. |
 | **The agent can see what it did** | `preview_frame` returns the **real rendered frame**, `preview_grid` the whole edit as a contact sheet. An agent that guesses produces garbage; this one looks. |
 | **It cuts on the beat, for real** | `music_beats` returns BPM, beat and bar length, first-beat offset and an energy profile, so cuts land on the music instead of near it. |
 | **It picks the takes** | `plan_edit` splits shots longer than 12s into their own segments and scores them individually — three minutes of continuous footage becomes dozens of candidates with a real in-point. |
@@ -593,10 +597,26 @@ comes out with six channels (AAC at double bitrate, Opus, PCM), an `.mp3` folds 
 **Voiceover from text** — `generate_voice` (or the *voice* button) turns text into a voice on
 a `VO` audio track: one line at the playhead, or many lines in one call, each starting after
 the previous. Engines: **OpenAI** and any service with the same `/audio/speech` shape —
-including local servers like Kokoro-FastAPI or LocalAI —, **ElevenLabs**, **Piper** fully
+including local servers like Kokoro-FastAPI or LocalAI —, **ElevenLabs**, **Google Gemini**
+(pace and tone said in words: *"fast, punchy explainer"*), **Piper** fully
 offline, or the **system voice** (SAPI on Windows, `say` on macOS, `espeak-ng` on Linux) with
 nothing to install. Keys live in `~/.vedit/tts.json`; the audio files sit next to the project,
 and the same line with the same settings is never generated twice.
+
+**Videos told by a voice** (explainers, faceless shorts, animation with no footage) are cut
+the other way round: the audio leads, the picture follows. `speech_times` says at which
+second of the *timeline* the voice says each phrase of the script — taking clip position,
+in-point and speed into account, and searching in script order so a phrase said twice
+lands on the right occurrence — and every animation starts from those times, never from a
+guess. The assistant follows a written method for these videos: sources for every number,
+a script written for the voice, the pace asked to the voice engine (never a sped-up
+track), one animated scene per chapter with visual metaphors instead of text cards, and
+several rounds of frame checks.
+
+**One conversation per project** — the chat is saved next to the project
+(`<project>.chat.json`) and comes back when you reopen it: with Claude Code the session
+resumes, with API models the history is reloaded, and if the model changed the
+conversation is handed over as text. The trash button starts it over.
 
 **Publishing** — the *publish* button (or `publish_video`) uploads an exported file to
 **YouTube** (your own OAuth client, sign in once in the browser; uploads start **private**
@@ -660,6 +680,8 @@ backend/vedit/
   tts.py         voice from text: OpenAI-compatible, ElevenLabs, Piper, system voice
   social.py      publishing: YouTube (OAuth, resumable upload), TikTok inbox
   memoria.py     memory across projects (~/.vedit/MEMORIA.md)
+  allinea.py     when the voice says what, in timeline seconds (speech_times)
+  conversazioni.py  the chat of each project, saved next to it
   web.py         web search, page reading, media download from any site
   estensioni.py  the user's skills and MCP servers for the in-app assistant
   mcp_server.py  MCP tools

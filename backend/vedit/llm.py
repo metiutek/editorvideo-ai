@@ -35,12 +35,12 @@ from typing import Any, Callable, Iterator
 
 PROVIDERS: list[dict] = [
     {"id": "claude_code", "nome": "Claude Code", "tipo": "claude_code", "chiave": False,
-     "modello": "", "modelli": ["", "opus", "sonnet", "haiku"],
+     "modello": "", "modelli": ["", "fable", "opus", "sonnet", "haiku"],
      "nota": "Uses the Claude Code installed on this computer, with your subscription. "
              "No key to paste."},
     {"id": "anthropic", "nome": "Anthropic (Claude)", "tipo": "anthropic", "chiave": True,
      "env": "ANTHROPIC_API_KEY", "modello": "claude-opus-5-5",
-     "modelli": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5", "claude-fable-5-1"],
+     "modelli": ["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-haiku-5-5"],
      "nota": "Key from console.anthropic.com"},
     {"id": "openai", "nome": "OpenAI", "tipo": "openai", "chiave": True, "env": "OPENAI_API_KEY",
      "base": "https://api.openai.com/v1", "modello": "gpt-5", "modelli": ["gpt-5", "gpt-5-mini"],
@@ -79,7 +79,14 @@ PROVIDERS: list[dict] = [
 #   computer). Solo se l'utente lo sceglie, sapendo cosa vuol dire.
 ACCESSI = ("editor", "estensioni", "completo")
 
-MAX_TURNS = 16
+# Quanto ragiona il modello prima di agire: Claude Code (--effort) e Claude via
+# API (output_config.effort). "" = il default del motore. Un video intero
+# (ricerca, copione, voce, scene, controlli) vuole high o piu'; un ritocco no.
+SFORZI = ("low", "medium", "high", "xhigh", "max")
+
+# Un montaggio vero sono decine di giri (scene, controlli, correzioni): con 16
+# l'assistente si fermava a meta' di un video spiegato.
+MAX_TURNS = 80
 MAX_IMMAGINI = 6
 
 
@@ -110,6 +117,8 @@ def carica() -> dict:
     if cfg.get("accesso") not in ACCESSI:
         cfg["accesso"] = "editor"
     cfg.setdefault("server_spenti", [])
+    if cfg.get("sforzo") not in SFORZI:
+        cfg["sforzo"] = ""
     for k in ("chiavi", "modelli", "indirizzi"):
         cfg.setdefault(k, {})
     return cfg
@@ -137,6 +146,29 @@ def imposta_accesso(accesso: str | None = None, server_spenti: list[str] | None 
         cfg["server_spenti"] = sorted({str(x) for x in server_spenti})
     salva(cfg)
     return stato()
+
+
+def imposta_rapido(modello: str | None = None, sforzo: str | None = None) -> dict:
+    """Modello e sforzo del motore attivo, senza passare dalle impostazioni."""
+    cfg = carica()
+    pid = cfg["provider"] or _scelta_automatica(cfg)
+    if not pid:
+        raise RuntimeError("no model configured: open the assistant settings")
+    if modello is not None:
+        cfg["modelli"][pid] = modello.strip()
+    if sforzo is not None:
+        if sforzo and sforzo not in SFORZI:
+            raise ValueError(f"effort must be one of {', '.join(SFORZI)}")
+        cfg["sforzo"] = sforzo
+    if not cfg["provider"]:
+        cfg["provider"] = pid
+    salva(cfg)
+    return stato()
+
+
+def ha_sforzo(p: dict) -> bool:
+    """Solo Claude (Code o API) capisce lo sforzo."""
+    return p["tipo"] in ("claude_code", "anthropic")
 
 
 def imposta(provider_id: str, chiave: str | None = None, modello: str | None = None,
@@ -219,6 +251,9 @@ def stato() -> dict:
     a = next((e for e in elenco if e["id"] == attivo), None)
     return {
         "provider": attivo, "providers": elenco, "accesso": cfg["accesso"],
+        "sforzo": cfg["sforzo"],
+        "sforzi": list(SFORZI) if attivo and ha_sforzo(provider(attivo)) else [],
+        "modelli": a["modelli"] if a else [],
         "ok": bool(a and a["pronto"]),
         "model": a["modello"] if a else "", "nome": a["nome"] if a else "",
         "motivo": (a["motivo"] if a else "choose a model in the assistant settings"),
@@ -294,7 +329,7 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
                 cache_control={"type": "ephemeral"},
                 messages=history,
                 thinking={"type": "adaptive"},
-                output_config={"effort": "high"},
+                output_config={"effort": cfg.get("sforzo") or "high"},
                 betas=["server-side-fallback-2026-07-01"],
                 extra_body={"fallbacks": "default"},
             ) as stream:
@@ -534,6 +569,13 @@ momenti forti, e non dire che hai finito finche' review_edit da' avvisi.
 Se l'utente vuole uno stile che non esiste, crealo con create_style (guida piu'
 ricetta) e poi applicalo con apply_style.
 
+Per un video raccontato da una voce (explainer, short faceless, animazioni senza
+girato) segui il metodo "VIDEO RACCONTATI DA UNA VOCE" delle istruzioni di vedit:
+prima la voce, poi i tempi con speech_times, una clip html per capitolo con
+metafore animate (non cartelli di testo), e piu' giri di controllo sui fotogrammi.
+Se la voce la generi su un sito (AI Studio...), chiedi li' il ritmo nello stile e
+importa il file: mai set_speed sulla voce.
+
 Scrivi sempre nella lingua in cui ti scrive l'utente (l'interfaccia e' in inglese), anche
 le brevi note fra un passaggio e l'altro.
 
@@ -607,6 +649,8 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
     modello = _modello(p, cfg)
     if modello:
         args += ["--model", modello]
+    if cfg.get("sforzo"):
+        args += ["--effort", cfg["sforzo"]]
     if stato_chat.get("sessione"):
         args += ["--resume", stato_chat["sessione"]]
 

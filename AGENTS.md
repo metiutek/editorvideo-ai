@@ -114,6 +114,8 @@ backend/vedit/
   tts.py         voce dal testo (OpenAI e compatibili, ElevenLabs, Piper, sistema)
   social.py      pubblicare su YouTube e TikTok
   memoria.py     memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
+  allinea.py     tempi della voce in timeline (speech_times) e metodo dei video a voce
+  conversazioni.py  chat di ogni progetto, salvata in <progetto>.chat.json
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito
   estensioni.py  skill e server MCP dell'utente per l'assistente della chat
   mcp_server.py  strumenti MCP
@@ -350,6 +352,26 @@ aperte in un ciclo asincrono a parte, `GESTORE`; un server che non risponde non 
 ogni messaggio) e passa le skill (`SKILL.md` in `~/.claude/skills`, sincronizzate
 dall'account, dei plugin) come indice piu' `use_skill`. I connettori di claude.ai e il
 computer use passano solo da Claude Code.
+
+**Video raccontati da una voce.** `allinea.METODO` e' il metodo (fonti, copione per la voce,
+voce prima, tempi misurati, una clip html per capitolo con metafore animate, controlli sui
+fotogrammi): entra nelle istruzioni MCP, nel `SYSTEM` della chat e, come rimando, in
+`SISTEMA_CLAUDE_CODE`. Viene dal confronto fra uno short venuto male dall'assistente (una
+pagina html unica, voce accelerata con `set_speed`, tempi scritti a occhio, cartelli di testo)
+e uno venuto bene. `speech_times` (`allinea.tempi`) porta le parole della trascrizione dai
+secondi della sorgente a quelli della timeline e cerca le frasi del copione in ordine, con i
+numeri normalizzati in lettere (`$725` = "seven hundred twenty-five"); senza faster-whisper
+stima dal nome delle clip di `generate_voice`. `stili.applica` non tratta piu' la traccia
+della voce come musica.
+
+**Chat per progetto.** `api.S.vista` (i turni come li mostra la chat) e `api.S.chat` (lo
+stato del motore: cronologia API, sessione di Claude Code) si salvano in
+`<progetto>.chat.json` a ogni turno (`conversazioni.py`, cronologia ripulita da immagini e
+ragionamento) e tornano in `api.attach` quando cambia lo Store. Se la cronologia riparte vuota
+(altro modello, sessione persa) `chat.run(precedente=...)` passa la conversazione come testo.
+Cambiare modello o livello d'accesso non cancella piu' la chat. Modello e sforzo si cambiano
+dalla pastiglia in cima (`/api/llm/rapido`, `llm.imposta_rapido`): Claude Code riceve
+`--effort`, Claude via API `output_config.effort`.
 
 `memoria.py` tiene `~/.vedit/MEMORIA.md` (`VEDIT_MEMORIA` lo sposta): `remember` / `forget` /
 `memory` da MCP e dalla chat; `project_create` e `project_open` restituiscono `memoria`, e la
