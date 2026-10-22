@@ -4,6 +4,8 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+## v0.2.0 — 2026-10-22 · Voce, web, pubblicazione, memoria, skill e server MCP
+
 ### Aggiunto
 - **Skill, server MCP, plugin e browser dell'utente nell'assistente**: tre livelli di
   accesso nelle impostazioni del modello (solo editor / editor + skill e server MCP /

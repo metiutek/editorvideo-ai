@@ -196,7 +196,7 @@ per intero. Non salvare cio' che riguarda solo il progetto aperto.
 
 mcp = MCPServer(
     name="vedit",
-    version="0.1.4",
+    version="0.2.0",
     instructions=ISTRUZIONI,
 )
 
