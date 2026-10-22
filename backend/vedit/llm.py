@@ -70,6 +70,15 @@ PROVIDERS: list[dict] = [
      "nota": "Any service exposing /chat/completions: paste the address and key"},
 ]
 
+# A cosa puo' arrivare l'assistente della chat, oltre all'editor:
+# - editor: solo vedit (piu' lettura di file, pagine e ricerca web)
+# - estensioni: anche skill, server MCP, plugin e Chrome dell'utente; con
+#   Claude Code le azioni le approva la sua modalita' auto (le sicure passano,
+#   le rischiose no); con i modelli via API arrivano skill e server MCP locali
+# - completo: Claude Code senza nessuna richiesta di permesso (comandi, file,
+#   computer). Solo se l'utente lo sceglie, sapendo cosa vuol dire.
+ACCESSI = ("editor", "estensioni", "completo")
+
 MAX_TURNS = 16
 MAX_IMMAGINI = 6
 
@@ -98,6 +107,9 @@ def carica() -> dict:
     except (OSError, ValueError):
         cfg = {}
     cfg.setdefault("provider", "")
+    if cfg.get("accesso") not in ACCESSI:
+        cfg["accesso"] = "editor"
+    cfg.setdefault("server_spenti", [])
     for k in ("chiavi", "modelli", "indirizzi"):
         cfg.setdefault(k, {})
     return cfg
@@ -112,6 +124,19 @@ def salva(cfg: dict) -> None:
         os.chmod(f, 0o600)
     except OSError:
         pass
+
+
+def imposta_accesso(accesso: str | None = None, server_spenti: list[str] | None = None) -> dict:
+    """Livello di accesso dell'assistente e server MCP da lasciare fuori."""
+    cfg = carica()
+    if accesso is not None:
+        if accesso not in ACCESSI:
+            raise ValueError(f"access must be one of {', '.join(ACCESSI)}")
+        cfg["accesso"] = accesso
+    if server_spenti is not None:
+        cfg["server_spenti"] = sorted({str(x) for x in server_spenti})
+    salva(cfg)
+    return stato()
 
 
 def imposta(provider_id: str, chiave: str | None = None, modello: str | None = None,
@@ -193,7 +218,7 @@ def stato() -> dict:
     attivo = cfg["provider"] or _scelta_automatica(cfg)
     a = next((e for e in elenco if e["id"] == attivo), None)
     return {
-        "provider": attivo, "providers": elenco,
+        "provider": attivo, "providers": elenco, "accesso": cfg["accesso"],
         "ok": bool(a and a["pronto"]),
         "model": a["modello"] if a else "", "nome": a["nome"] if a else "",
         "motivo": (a["motivo"] if a else "choose a model in the assistant settings"),
@@ -491,6 +516,8 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
 # --------------------------------------------------------------------------
 
 PREFISSO_MCP = "mcp__vedit__"
+# passaggi interni di Claude Code che non dicono niente a chi monta
+_INTERNI = {"ToolSearch", "TodoWrite", "Task", "Agent", "ExitPlanMode", "EnterPlanMode"}
 
 SISTEMA_CLAUDE_CODE = """Stai lavorando dentro vedit, l'editor video che l'utente ha aperto nel browser.
 Il progetto aperto e' quello che vedi con gli strumenti mcp__vedit__ (project_info per lo
@@ -518,6 +545,47 @@ riferimenti (istanti, clip, aree dell'inquadratura) le immagini relative sono fi
 PNG che puoi aprire con Read. Rispondi nella lingua dell'utente, breve."""
 
 
+_NOTA_ACCESSO = {
+    "editor": "",
+    "estensioni": """
+
+Oltre a vedit hai le skill, i server MCP, i plugin e il browser (Chrome) che l'utente
+ha configurato in Claude Code: usali quando servono al lavoro (una skill per un compito
+specializzato, un server MCP per un programma esterno, il browser per cercare e
+scaricare materiale). Le azioni rischiose vengono rifiutate: se ne serve una, chiedila
+all'utente con mcp__vedit__ask_user.""",
+    "completo": """
+
+L'utente ti ha dato accesso completo al computer: oltre a vedit hai skill, server MCP,
+plugin, browser, comandi e file, senza richieste di permesso. Usalo per il lavoro che ti
+chiede e niente di piu'. Prima di cancellare, sovrascrivere, inviare o pubblicare
+qualcosa fuori dal progetto chiedi conferma con mcp__vedit__ask_user.""",
+}
+
+
+def argomenti_accesso(cfg: dict) -> list[str]:
+    """Le opzioni di Claude Code per il livello di accesso scelto.
+
+    editor: solo il server MCP di vedit (``--strict-mcp-config``) e strumenti in
+    sola lettura. Negli altri due livelli Claude Code carica la configurazione
+    dell'utente: server MCP, skill, plugin; ``--chrome`` accende il browser.
+    """
+    accesso = cfg.get("accesso", "editor")
+    if accesso == "editor":
+        return ["--strict-mcp-config",
+                # solo lettura oltre a vedit: immagini e PDF allegati, cartelle, link, ricerche
+                "--allowedTools", "mcp__vedit", "Read", "Glob", "WebFetch", "WebSearch"]
+    spenti = [f"mcp__{n}" for n in cfg.get("server_spenti") or []]
+    out = ["--chrome", "--allowedTools", "mcp__vedit", "Read", "Glob", "Grep", "WebFetch",
+           "WebSearch", "Skill"]
+    if spenti:
+        out += ["--disallowedTools", *spenti]
+    if accesso == "completo":
+        return out + ["--permission-mode", "bypassPermissions"]
+    # le azioni sicure le approva il classificatore di Claude Code, le altre no
+    return out + ["--permission-mode", "auto"]
+
+
 def _comando_claude(exe: str) -> list[str]:
     if exe.lower().endswith((".cmd", ".bat")):
         return ["cmd", "/c", exe]
@@ -533,10 +601,8 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
     config_mcp = json.dumps({"mcpServers": {"vedit": {"type": "http", "url": mcp_url}}})
     args = _comando_claude(exe) + [
         "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-        "--mcp-config", config_mcp, "--strict-mcp-config",
-        # solo lettura oltre a vedit: immagini e PDF allegati, cartelle indicate, link
-        "--allowedTools", "mcp__vedit", "Read", "Glob", "WebFetch", "WebSearch",
-        "--append-system-prompt", SISTEMA_CLAUDE_CODE,
+        "--mcp-config", config_mcp] + argomenti_accesso(cfg) + [
+        "--append-system-prompt", SISTEMA_CLAUDE_CODE + _NOTA_ACCESSO[cfg["accesso"]],
     ]
     modello = _modello(p, cfg)
     if modello:
@@ -604,8 +670,9 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
                         grezzo = b.get("name", "")
                         # i passaggi interni di Claude Code (ricerca strumenti...)
                         # non dicono niente a chi monta: si mostrano solo vedit e Read
-                        if not grezzo.startswith(PREFISSO_MCP) and grezzo not in (
-                                "Read", "Glob", "WebFetch", "WebSearch"):
+                        if grezzo in _INTERNI or (cfg["accesso"] == "editor" and not grezzo.startswith(
+                                PREFISSO_MCP) and grezzo not in ("Read", "Glob", "WebFetch",
+                                                                 "WebSearch")):
                             continue
                         nome = grezzo.removeprefix(PREFISSO_MCP)
                         aperti[b.get("id", "")] = nome

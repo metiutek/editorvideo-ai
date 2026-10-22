@@ -115,6 +115,7 @@ backend/vedit/
   social.py      pubblicare su YouTube e TikTok
   memoria.py     memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito
+  estensioni.py  skill e server MCP dell'utente per l'assistente della chat
   mcp_server.py  strumenti MCP
   api.py         API REST/WebSocket per la UI
   cli.py         riga di comando
@@ -337,6 +338,18 @@ SearXNG), `web_read` (testo e media di una pagina), `web_download` (file diretti
 video con yt-dlp, importati nella cartella `web` del bin, con la fonte in `FONTI.md`). Gli
 indirizzi locali e privati sono chiusi anche dopo un redirect: una pagina non deve poter
 parlare all'API dell'editor. I test usano `VEDIT_WEB_LOCALE=1` e un server finto.
+
+L'assistente della chat ha tre livelli di accesso (`llm.ACCESSI`, scelti nelle impostazioni
+del modello): `editor` (solo vedit, com'era), `estensioni` (anche skill, server MCP, plugin e
+Chrome dell'utente), `completo`. Con Claude Code come motore e' `llm.argomenti_accesso` a
+decidere le opzioni: `--strict-mcp-config` solo nel primo livello; poi `--chrome`, lo
+strumento `Skill` e `--permission-mode auto` (le azioni sicure passano, le rischiose no), e
+`bypassPermissions` solo nel livello completo. Con i modelli via API `estensioni.py` fa da
+client MCP verso i server di Claude Code, Claude Desktop e `~/.vedit/mcp.json` (sessioni
+aperte in un ciclo asincrono a parte, `GESTORE`; un server che non risponde non si ritenta a
+ogni messaggio) e passa le skill (`SKILL.md` in `~/.claude/skills`, sincronizzate
+dall'account, dei plugin) come indice piu' `use_skill`. I connettori di claude.ai e il
+computer use passano solo da Claude Code.
 
 `memoria.py` tiene `~/.vedit/MEMORIA.md` (`VEDIT_MEMORIA` lo sposta): `remember` / `forget` /
 `memory` da MCP e dalla chat; `project_create` e `project_open` restituiscono `memoria`, e la

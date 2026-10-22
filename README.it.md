@@ -654,6 +654,15 @@ Brave, Tavily o un tuo SearXNG. La provenienza di ogni file va in `FONTI.md` acc
 progetto: controlla la licenza prima di pubblicare. Gli indirizzi locali e di rete privata
 sono sempre rifiutati.
 
+**Le tue skill e i tuoi server MCP nell'assistente** — nelle impostazioni del modello, *what
+the assistant can use*: **solo l'editor**; **editor + skill e server MCP** (con Claude Code
+come modello carica i tuoi server MCP, le skill, i plugin, i connettori di claude.ai e Chrome:
+le azioni sicure partono da sole, quelle rischiose vengono rifiutate; con i modelli via API
+vedit si collega ai server MCP configurati in Claude Code, Claude Desktop o
+`~/.vedit/mcp.json` e passa al modello le tue skill); oppure **accesso completo** (Claude Code
+senza richieste di permesso: comandi, file, controllo del computer e del browser). Ogni server
+MCP si può spegnere da solo.
+
 **Memoria fra i progetti** — `~/.vedit/MEMORIA.md`: l'assistente e l'agente MCP ci annotano
 le tue preferenze durature (formato abituale, stile, voce, canale, cose che non vuoi) con
 `remember` / `forget`, e le rileggono a ogni progetto. Si modifica a mano, o dal pulsante col
@@ -694,6 +703,7 @@ backend/vedit/
   social.py      pubblicare: YouTube (OAuth, caricamento a riprese), casella TikTok
   memoria.py     memoria fra i progetti (~/.vedit/MEMORIA.md)
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito
+  estensioni.py  skill e server MCP dell'utente per l'assistente nell'editor
   mcp_server.py  strumenti MCP
   api.py         API REST/WebSocket per la UI
   cli.py         riga di comando

@@ -5,6 +5,12 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Skill, server MCP, plugin e browser dell'utente nell'assistente**: tre livelli di
+  accesso nelle impostazioni del modello (solo editor / editor + skill e server MCP /
+  accesso completo). Con Claude Code: configurazione dell'utente caricata, `--chrome`, skill,
+  modalita' `auto` per le azioni (o nessun permesso nel livello completo). Con i modelli via
+  API: client MCP verso i server di Claude Code, Claude Desktop e `~/.vedit/mcp.json`, piu'
+  le skill come `use_skill`. Ogni server si spegne da solo.
 - **Il web per il modello, senza siti fissi**: `web_search` (pagine, immagini, video,
   notizie), `web_read` (testo, immagini e video di una pagina), `web_download` (qualunque
   file, e le pagine video con yt-dlp, importati nel bin nella cartella `web`), da MCP e dalla

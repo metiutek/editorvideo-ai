@@ -1217,3 +1217,12 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
   -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .webtesto small.dim { color: var(--faint); -webkit-line-clamp: 1; }
 .webvoce button.sm { height: auto; padding: 2px 8px; font-size: 11px; align-self: flex-start; }
+
+/* a cosa arriva l'assistente: livelli, skill, server MCP */
+.accesso { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.serverlist { display: flex; flex-direction: column; gap: 3px; max-height: 220px; overflow: auto; }
+.serverriga { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.serverriga .snome { font-weight: 600; }
+.serverriga small { color: var(--faint); margin-left: auto; }
+.serverriga .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.serverriga .dot.ok { background: var(--ok); }

@@ -1441,6 +1441,40 @@ def chat_available() -> dict:
         return {"ok": False, "motivo": str(exc), "providers": []}
 
 
+class AccessoBody(BaseModel):
+    accesso: str | None = None
+    server_spenti: list[str] | None = None
+
+
+@app.get("/api/estensioni")
+def estensioni_stato() -> dict:
+    """Skill e server MCP dell'utente che l'assistente puo' usare, e il livello d'accesso."""
+    from . import estensioni
+    store = S.store
+    return {**estensioni.stato(store.path if store else None),
+            "accesso": llm.carica()["accesso"]}
+
+
+@app.post("/api/estensioni")
+def estensioni_imposta(body: AccessoBody) -> dict:
+    try:
+        llm.imposta_accesso(body.accesso, body.server_spenti)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    S.chat.clear()   # strumenti diversi: la conversazione riparte
+    return estensioni_stato()
+
+
+@app.post("/api/estensioni/collega")
+def estensioni_collega() -> dict:
+    """Collega adesso i server MCP (anche quelli che prima non rispondevano)."""
+    from . import estensioni
+    store = S.store
+    estensioni.GESTORE.collega(estensioni.server_attivi(store.path if store else None),
+                               riprova=True)
+    return estensioni_stato()
+
+
 class LlmBody(BaseModel):
     provider: str
     chiave: str | None = None
@@ -1944,8 +1978,9 @@ def chat(body: ChatBody) -> StreamingResponse:
         if name == "generate_voice":
             # la sintesi puo' durare: fuori dal lock, la UI resta libera
             args = {**args, "_voci": chat_mod.prepara_voce(store, args)}
-        if name in ("web_search", "web_read"):
-            # non toccano il progetto: niente lock
+        if name in ("web_search", "web_read", "use_skill", "read_skill_file", "list_skills") \
+                or name.startswith("mcp__"):
+            # non toccano il progetto: niente lock (un server MCP puo' metterci minuti)
             return chat_mod.execute(store, name, args)
         if name == "web_download":
             args = {**args, "_scaricati": chat_mod.prepara_download(store, args)}

@@ -218,6 +218,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+  // skill e server MCP dell'utente per l'assistente (estensioni.py)
+  estensioni: () => req('/api/estensioni'),
+  setEstensioni: (body) => req('/api/estensioni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  collegaEstensioni: () => req('/api/estensioni/collega', { method: 'POST' }),
   // web: cercare, scaricare (web.py)
   web: () => req('/api/web'),
   setWeb: (body) => req('/api/web', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),

@@ -589,6 +589,14 @@ image, video or audio — video pages too, with yt-dlp — and imports it into t
 into `FONTI.md` next to the project: check the license before publishing. Local and private
 network addresses are always refused.
 
+**Your skills and MCP servers in the assistant** — in the model settings, *what the assistant
+can use*: **only the editor**; **editor + my skills and MCP servers** (with Claude Code as the
+model it loads your MCP servers, skills, plugins, claude.ai connectors and Chrome, and safe
+actions run on their own while risky ones are refused; with API models vedit connects to the
+MCP servers configured in Claude Code, Claude Desktop or `~/.vedit/mcp.json` and hands the
+model your skills); or **full access** (Claude Code with no permission prompts: commands,
+files, computer and browser control). Each MCP server can be switched off on its own.
+
 **Memory across projects** — `~/.vedit/MEMORIA.md`: the assistant and the MCP agent note your
 lasting preferences there (usual format, style, voice, channel, things you don't want) with
 `remember` / `forget`, and read them back at every project. Edit it by hand, or from the
@@ -629,6 +637,7 @@ backend/vedit/
   social.py      publishing: YouTube (OAuth, resumable upload), TikTok inbox
   memoria.py     memory across projects (~/.vedit/MEMORIA.md)
   web.py         web search, page reading, media download from any site
+  estensioni.py  the user's skills and MCP servers for the in-app assistant
   mcp_server.py  MCP tools
   api.py         REST/WebSocket API for the UI
   cli.py         command line

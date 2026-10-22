@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from . import domande, llm, memoria, presets, stili, tts, web
+from . import domande, estensioni, llm, memoria, presets, stili, tts, web
 
 SYSTEM = """Sei l'assistente di montaggio dentro vedit, un editor video non lineare.
 
@@ -371,6 +371,9 @@ def execute(store: Any, name: str, args: dict) -> str:
                                       "name": m.name} for m in medie], "errori": ko},
                           ensure_ascii=False)
 
+    if name in ("use_skill", "read_skill_file", "list_skills") or name.startswith("mcp__"):
+        return estensioni.esegui(name, args, store.path)
+
     if name == "remember":
         return json.dumps(memoria.ricorda(args["note"], args.get("section") or "general"),
                           ensure_ascii=False)
@@ -638,9 +641,15 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
             return
         cwd = str(Path(store.path).parent) if store.path else None
         yield from llm.run_claude_code(p, cfg, stato_chat, contenuto, mcp_url, cwd, fermo)
-    elif p["tipo"] == "anthropic":
-        yield from llm.run_anthropic(p, cfg, SYSTEM, build_tools(), stato_chat["messaggi"],
-                                     contenuto, run_op, fermo)
     else:
-        yield from llm.run_openai(p, cfg, SYSTEM, build_tools(), stato_chat["messaggi"],
-                                  contenuto, run_op, fermo)
+        tools = build_tools()
+        if cfg["accesso"] != "editor":
+            # skill e server MCP dell'utente: il primo turno li collega (secondi)
+            yield {"type": "thinking"}
+            tools += estensioni.strumenti(store.path)
+            indice = estensioni.indice_skill(store.path)
+            if indice and indice != stato_chat.get("skill_inviate"):
+                contenuto.insert(len(contenuto) - 1, {"type": "text", "text": indice})
+                stato_chat["skill_inviate"] = indice
+        motore = llm.run_anthropic if p["tipo"] == "anthropic" else llm.run_openai
+        yield from motore(p, cfg, SYSTEM, tools, stato_chat["messaggi"], contenuto, run_op, fermo)

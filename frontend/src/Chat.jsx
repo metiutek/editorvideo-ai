@@ -633,6 +633,88 @@ function ModelSettings({ available, setError, onSaved }) {
           <div className="hint">Keys stay on this computer (~/.vedit/llm.json), never in the project.</div>
         </div>
       )}
+      <Accesso claudeCode={p?.tipo === 'claude_code'} setError={setError} />
+    </div>
+  )
+}
+
+const LIVELLI = [
+  { id: 'editor', nome: 'Only the editor',
+    desc: 'vedit tools, plus reading files, web pages and web search.' },
+  { id: 'estensioni', nome: 'Editor + my skills and MCP servers',
+    desc: 'Your skills, MCP servers, plugins and Chrome. With Claude Code, safe actions run on their own and risky ones are refused.' },
+  { id: 'completo', nome: 'Full access to this computer',
+    desc: 'Claude Code with no permission prompts: commands, files, computer and browser control. Only if you trust what you ask it.' },
+]
+
+/**
+ * A cosa arriva l'assistente oltre all'editor (llm.ACCESSI). Con Claude Code
+ * decide le opzioni con cui parte; con i modelli via API vedit collega i server
+ * MCP locali e passa le skill (estensioni.py).
+ */
+function Accesso({ claudeCode, setError }) {
+  const [st, setSt] = useState(null)
+  const [collegando, setCollegando] = useState(false)
+  useEffect(() => { api.estensioni().then(setSt).catch((e) => setError(e.message)) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  if (!st) return null
+  const imposta = (body) => api.setEstensioni(body).then(setSt).catch((e) => setError(e.message))
+  // risposta incompleta (server vecchio): il pannello resta vuoto, l'editor non cade
+  const server = Array.isArray(st.server) ? st.server : []
+  const skill = Array.isArray(st.skill) ? st.skill : []
+  const spenti = server.filter((x) => !x.on).map((x) => x.name)
+  const commuta = (nome) => imposta({
+    server_spenti: spenti.includes(nome) ? spenti.filter((n) => n !== nome) : [...spenti, nome],
+  })
+  const collega = async () => {
+    setCollegando(true)
+    try { setSt(await api.collegaEstensioni()) } catch (e) { setError(e.message) } finally { setCollegando(false) }
+  }
+  return (
+    <div className="provform accesso">
+      <div className="section-title">what the assistant can use</div>
+      <div className="opzioni">
+        {LIVELLI.map((l) => (
+          <button key={l.id} className={`opzione ${st.accesso === l.id ? 'on' : ''}`}
+            onClick={() => imposta({ accesso: l.id })}>
+            <span className="spunta" />
+            <span className="otesto"><b>{l.nome}</b><small>{l.desc}</small></span>
+          </button>
+        ))}
+      </div>
+      {st.accesso === 'completo' && (
+        <div className="hint warn">
+          The assistant can run commands and change files anywhere on this computer without asking.
+          {!claudeCode && ' This level needs Claude Code as the model: API models get skills and MCP servers only.'}
+        </div>
+      )}
+      {st.accesso !== 'editor' && (<>
+        <div className="hint">
+          {skill.length} skills
+          {skill.length ? `: ${skill.slice(0, 12).map((x) => x.name).join(', ')}${skill.length > 12 ? '…' : ''}` : ''}
+        </div>
+        {!!server.length && (
+          <div className="serverlist">
+            {server.map((x) => (
+              <label key={x.name} className="serverriga" title={x.errore || ''}>
+                <input type="checkbox" checked={x.on} onChange={() => commuta(x.name)} />
+                <span className={`dot ${x.ok ? 'ok' : ''}`} />
+                <span className="snome">{x.name}</span>
+                <small>{x.ok ? `${x.strumenti} tools` : x.errore ? 'not connected' : x.origin}</small>
+              </label>
+            ))}
+          </div>
+        )}
+        {claudeCode ? (
+          <div className="hint">
+            Claude Code loads these itself, together with your claude.ai connectors and Chrome.
+          </div>
+        ) : (
+          <div className="azioni">
+            <button disabled={collegando} onClick={collega}>{collegando ? 'connecting…' : 'connect MCP servers now'}</button>
+            <span className="hint">claude.ai connectors (Gmail, Drive…) only work with Claude Code.</span>
+          </div>
+        )}
+      </>)}
     </div>
   )
 }
