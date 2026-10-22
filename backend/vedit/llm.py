@@ -535,7 +535,7 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
         "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
         "--mcp-config", config_mcp, "--strict-mcp-config",
         # solo lettura oltre a vedit: immagini e PDF allegati, cartelle indicate, link
-        "--allowedTools", "mcp__vedit", "Read", "Glob", "WebFetch",
+        "--allowedTools", "mcp__vedit", "Read", "Glob", "WebFetch", "WebSearch",
         "--append-system-prompt", SISTEMA_CLAUDE_CODE,
     ]
     modello = _modello(p, cfg)
@@ -604,7 +604,8 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
                         grezzo = b.get("name", "")
                         # i passaggi interni di Claude Code (ricerca strumenti...)
                         # non dicono niente a chi monta: si mostrano solo vedit e Read
-                        if not grezzo.startswith(PREFISSO_MCP) and grezzo not in ("Read", "Glob", "WebFetch"):
+                        if not grezzo.startswith(PREFISSO_MCP) and grezzo not in (
+                                "Read", "Glob", "WebFetch", "WebSearch"):
                             continue
                         nome = grezzo.removeprefix(PREFISSO_MCP)
                         aperti[b.get("id", "")] = nome

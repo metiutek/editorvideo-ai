@@ -218,6 +218,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+  // web: cercare, scaricare (web.py)
+  web: () => req('/api/web'),
+  setWeb: (body) => req('/api/web', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  cercaWeb: (query, tipo, signal) =>
+    req('/api/web/cerca', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, tipo }), signal }),
+  scaricaWeb: (urls) => req('/api/web/scarica', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls }) }),
   // pubblicare sui social (social.py)
   social: () => req('/api/social'),
   setSocial: (body) => req('/api/social', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),

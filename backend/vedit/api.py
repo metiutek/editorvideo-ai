@@ -41,7 +41,7 @@ from pydantic import BaseModel
 from . import chat as chat_mod
 from . import effects as fx
 from . import (captions, domande, ffmpeg, figli, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
-               render, review, social, stili, tts)
+               render, review, social, stili, tts, web)
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
 from .store import FORMATI, PRESETS, EditError, Store
@@ -1608,6 +1608,55 @@ def social_pubblica_stato(job_id: str) -> dict:
     return job
 
 
+class WebBody(BaseModel):
+    motore: str
+    chiave: str | None = None
+    indirizzo: str | None = None
+
+
+class CercaBody(BaseModel):
+    query: str
+    tipo: str = "images"
+    n: int = 30
+
+
+class ScaricaBody(BaseModel):
+    urls: list[str]
+    max_height: int = 1080
+
+
+@app.get("/api/web")
+def web_stato() -> dict:
+    """Motore di ricerca scelto, quali sono pronti, se c'e' yt-dlp."""
+    return web.stato()
+
+
+@app.post("/api/web")
+def web_imposta(body: WebBody) -> dict:
+    try:
+        return web.imposta(body.motore, body.chiave, body.indirizzo)
+    except web.WebError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/web/cerca")
+def web_cerca(body: CercaBody) -> dict:
+    try:
+        return web.cerca(body.query, body.tipo, body.n)
+    except web.WebError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/web/scarica")
+def web_scarica(body: ScaricaBody) -> dict:
+    """Scarica nella cartella web del progetto; l'import lo fa la UI (import_media)."""
+    store = S.need()
+    ok, ko = web.scarica_molti(body.urls, web.cartella_progetto(store.path), body.max_height)
+    if not ok:
+        raise HTTPException(400, "; ".join(e["errore"] for e in ko) or "nothing downloaded")
+    return {"files": [d["path"] for d in ok], "errori": ko}
+
+
 class MemoriaBody(BaseModel):
     testo: str
 
@@ -1895,6 +1944,11 @@ def chat(body: ChatBody) -> StreamingResponse:
         if name == "generate_voice":
             # la sintesi puo' durare: fuori dal lock, la UI resta libera
             args = {**args, "_voci": chat_mod.prepara_voce(store, args)}
+        if name in ("web_search", "web_read"):
+            # non toccano il progetto: niente lock
+            return chat_mod.execute(store, name, args)
+        if name == "web_download":
+            args = {**args, "_scaricati": chat_mod.prepara_download(store, args)}
         with S.lock:
             out = chat_mod.execute(store, name, args)
         _avvisa(store)

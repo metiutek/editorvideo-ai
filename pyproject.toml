@@ -44,6 +44,9 @@ dependencies = [
     "pillow>=10.0",
     # importato direttamente da mcp_server, non solo di rimbalzo da mcp
     "anyio>=4.0",
+    # web.py: certificati di riserva quando quelli di sistema visti da Python
+    # sono vecchi (succede su Windows). Arriva gia' con mcp/httpx.
+    "certifi",
 ]
 
 [project.urls]
@@ -68,6 +71,9 @@ transcribe = ["faster-whisper>=1.0"]
 # Usa Chrome o Edge gia' installati; senza, add_html funziona e l'anteprima
 # dal vivo pure, ma il render dice cosa installare.
 html = ["playwright>=1.40"]
+# scaricare dalle pagine dei video (YouTube, Vimeo, social...) con web_download.
+# Senza, web_download scarica i file diretti e dice come installarlo.
+web = ["yt-dlp"]
 # plugin audio esterni (VST3, AU su Mac): pedalboard li carica, ffmpeg no.
 # Senza, l'effetto "vst" dice cosa installare e il resto non cambia.
 plugin = ["pedalboard>=0.9"]

@@ -4,6 +4,7 @@ import Chat from './Chat.jsx'
 import { Confirm, FileBrowser, NewProject, ProjectFormat, RenderDialog } from './Dialogs.jsx'
 import Voce from './Voce.jsx'
 import Pubblica from './Pubblica.jsx'
+import Web from './Web.jsx'
 import Icon from './Icons.jsx'
 import Inspector from './Inspector.jsx'
 import Library from './Library.jsx'
@@ -64,7 +65,7 @@ export default function App() {
   const [nuovi, setNuovi] = useState(0)          // progetti creati in questa sessione
   const [source, setSource] = useState(null)     // media aperto nel monitor
   const [tab, setTab] = useState('program')      // program | source
-  const [leftTab, setLeftTab] = useState('media')      // media | libreria
+  const [leftTab, setLeftTab] = useState('media')      // media | libreria | web
   // L'assistente e' il cuore dell'app: e' la scheda aperta di default. Se
   // l'utente preferisce le proprieta' la scelta resta fra una sessione e l'altra.
   const [rightTab, setRightTabState] = useState(() => {
@@ -536,8 +537,13 @@ export default function App() {
                 onClick={() => setLeftTab('media')}><Icon name="video" />media</button>
               <button className={leftTab === 'libreria' ? 'on' : ''}
                 onClick={() => setLeftTab('libreria')}><Icon name="libreria" />library</button>
+              <button className={leftTab === 'web' ? 'on' : ''} disabled={!project}
+                title="Search the web for images, videos and facts"
+                onClick={() => setLeftTab('web')}><Icon name="cerca" />web</button>
             </div>
-            {leftTab === 'media' ? (
+            {leftTab === 'web' && project ? (
+              <Web run={run} setError={setError} flash={flash} />
+            ) : leftTab === 'media' ? (
               <MediaBin project={project} run={run} setError={setError} uploading={uploading}
                 onAnnulla={() => fermaImport.current?.abort()}
                 onImport={importFiles} ask={ask}

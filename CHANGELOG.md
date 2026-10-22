@@ -5,6 +5,14 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Il web per il modello, senza siti fissi**: `web_search` (pagine, immagini, video,
+  notizie), `web_read` (testo, immagini e video di una pagina), `web_download` (qualunque
+  file, e le pagine video con yt-dlp, importati nel bin nella cartella `web`), da MCP e dalla
+  chat; Claude Code nella chat ha anche la sua ricerca web. Scheda *web* nel pannello
+  sinistro. Motore senza chiave (DuckDuckGo, Bing per le immagini) o Brave, Tavily, SearXNG.
+  Fonte di ogni file in `FONTI.md`; indirizzi locali e privati rifiutati anche dopo un
+  redirect. Nuovo extra `web` (yt-dlp); `certifi` dichiarato per i Windows con certificati
+  di sistema vecchi.
 - **Voce dal testo (TTS)**: `generate_voice` da MCP e dalla chat, pulsante *voice* nella UI.
   Motori OpenAI e compatibili (anche server locali come Kokoro-FastAPI), ElevenLabs, Piper
   offline e voce di sistema senza installare niente. Le battute vanno sulla traccia `VO` in un

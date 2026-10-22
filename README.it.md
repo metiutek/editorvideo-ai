@@ -246,6 +246,13 @@ VST2 (`.dll`) non sono supportati:
 pip install -e ".[plugin]"                   # aggiunge pedalboard
 ```
 
+**Video dalle pagine web (facoltativo).** `web_download` scarica i file diretti da solo; per
+le pagine dei video (YouTube, Vimeo, social) usa yt-dlp, che va tenuto aggiornato:
+
+```bash
+pip install -e ".[web]"                      # aggiunge yt-dlp
+```
+
 Senza gli extra, quegli strumenti dicono cosa manca e il resto dell'editor non se ne
 accorge. `numpy` e Pillow invece arrivano sempre: non sono extra, ci stanno sopra
 l'analisi del girato, il montaggio a tempo di musica e `preview_grid`.
@@ -638,6 +645,15 @@ e la stessa battuta con le stesse impostazioni non si genera due volte.
 tuo sì quando lo chiede l'agente. Instagram non c'è: la sua API vuole un account
 professionale legato a una pagina Facebook e un'app Meta approvata.
 
+**Il web** — nessun sito fisso: `web_search` cerca in tutto il web (pagine, immagini, video,
+notizie), `web_read` legge qualunque pagina ed elenca le sue immagini e i suoi video,
+`web_download` scarica qualunque immagine, video o audio — anche dalle pagine video, con
+yt-dlp — e lo importa nel bin, cartella `web`. La scheda *web* nel pannello sinistro fa lo
+stesso a mano. La ricerca funziona senza chiave (DuckDuckGo, Bing per le immagini) o con
+Brave, Tavily o un tuo SearXNG. La provenienza di ogni file va in `FONTI.md` accanto al
+progetto: controlla la licenza prima di pubblicare. Gli indirizzi locali e di rete privata
+sono sempre rifiutati.
+
 **Memoria fra i progetti** — `~/.vedit/MEMORIA.md`: l'assistente e l'agente MCP ci annotano
 le tue preferenze durature (formato abituale, stile, voce, canale, cose che non vuoi) con
 `remember` / `forget`, e le rileggono a ogni progetto. Si modifica a mano, o dal pulsante col
@@ -677,6 +693,7 @@ backend/vedit/
   tts.py         voce dal testo: compatibili OpenAI, ElevenLabs, Piper, voce di sistema
   social.py      pubblicare: YouTube (OAuth, caricamento a riprese), casella TikTok
   memoria.py     memoria fra i progetti (~/.vedit/MEMORIA.md)
+  web.py         ricerca web, lettura di pagine, download di media da qualunque sito
   mcp_server.py  strumenti MCP
   api.py         API REST/WebSocket per la UI
   cli.py         riga di comando

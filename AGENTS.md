@@ -114,6 +114,7 @@ backend/vedit/
   tts.py         voce dal testo (OpenAI e compatibili, ElevenLabs, Piper, sistema)
   social.py      pubblicare su YouTube e TikTok
   memoria.py     memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
+  web.py         ricerca web, lettura di pagine, download di media da qualunque sito
   mcp_server.py  strumenti MCP
   api.py         API REST/WebSocket per la UI
   cli.py         riga di comando
@@ -330,6 +331,13 @@ l'export, non e' una decisione dell'agente: con l'editor aperto chiede conferma
 YouTube parte privato. I test usano un server HTTP finto (`tests/test_social.py`): nessuna
 chiamata vera a Google o TikTok.
 
+`web.py` da' all'agente tutto il web, senza siti fissi: `web_search` (web, immagini, video,
+notizie; motore senza chiave DuckDuckGo + Bing per le immagini, oppure Brave, Tavily,
+SearXNG), `web_read` (testo e media di una pagina), `web_download` (file diretti e pagine
+video con yt-dlp, importati nella cartella `web` del bin, con la fonte in `FONTI.md`). Gli
+indirizzi locali e privati sono chiusi anche dopo un redirect: una pagina non deve poter
+parlare all'API dell'editor. I test usano `VEDIT_WEB_LOCALE=1` e un server finto.
+
 `memoria.py` tiene `~/.vedit/MEMORIA.md` (`VEDIT_MEMORIA` lo sposta): `remember` / `forget` /
 `memory` da MCP e dalla chat; `project_create` e `project_open` restituiscono `memoria`, e la
 chat la passa al modello una volta per conversazione. Ci va solo cio' che vale oltre il
@@ -369,11 +377,11 @@ l'ultimo che salva vince, non c'è un lock. Con `open_ui` il problema non si pon
   — quest'ultimo non è facoltativo: senza, restano fuori `music_beats`, `plan_edit`,
   `inspect_footage`, `match_color` e `check_cuts`, cioè scelta del materiale e montaggio a
   tempo. Stessa cosa per Pillow: `preview_grid` e `color_scopes` ci stanno sopra, e guardare
-  il montaggio è la regola prima. Gli extra veri sono cinque: `chat` (`anthropic`, l'assistente
+  il montaggio è la regola prima. Gli extra veri sono sei: `chat` (`anthropic`, l'assistente
   nella UI), `vision` (`ultralytics`, riconoscimento del soggetto — si tira dietro torch),
   `transcribe` (`faster-whisper`, sottotitoli e pulizia del parlato), `html` (`playwright`,
-  render delle clip html — usa Chrome o Edge gia' installati) e `plugin` (`pedalboard`,
-  plugin audio VST3/AU). Senza gli extra il resto
+  render delle clip html — usa Chrome o Edge gia' installati), `plugin` (`pedalboard`,
+  plugin audio VST3/AU) e `web` (`yt-dlp`, scaricare dalle pagine dei video). Senza gli extra il resto
   dell'editor funziona identico e gli strumenti che li vogliono dicono come installarli.
 - `tests/test_dipendenze.py` legge gli import del backend e pretende che ognuno sia dichiarato
   in `pyproject.toml`: un pacchetto che c'è sulla macchina di chi sviluppa ma non nel wheel

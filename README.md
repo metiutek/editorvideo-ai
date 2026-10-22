@@ -200,6 +200,7 @@ pip install -e ".[vision]"      # ultralytics — detect_subjects, track_mask, a
 pip install -e ".[transcribe]"  # faster-whisper — transcribe, make_captions, tighten_speech, censor_speech
 pip install -e ".[html]"        # playwright — renders HTML clips (uses the Chrome or Edge you already have)
 pip install -e ".[plugin]"      # pedalboard — VST3 / AU audio plugins (VST2 .dll are not supported)
+pip install -e ".[web]"         # yt-dlp — web_download from video pages (YouTube, Vimeo, social...)
 ```
 
 `numpy` and Pillow are **not** extras: footage analysis, music-timed editing, `preview_grid`
@@ -580,6 +581,14 @@ unless you pick otherwise) or to your **TikTok** inbox as a draft you post from 
 or your yes when the agent asks. Instagram is not supported: its API needs a business account
 tied to a Facebook page and an approved Meta app.
 
+**The web** — no fixed sites: `web_search` searches the whole web (pages, images, videos,
+news), `web_read` reads any page and lists its images and videos, `web_download` grabs any
+image, video or audio — video pages too, with yt-dlp — and imports it into the bin, folder
+`web`. The *web* tab in the left panel does the same by hand. Search works with no key
+(DuckDuckGo, Bing for images) or with Brave, Tavily or your SearXNG. Every file's origin goes
+into `FONTI.md` next to the project: check the license before publishing. Local and private
+network addresses are always refused.
+
 **Memory across projects** — `~/.vedit/MEMORIA.md`: the assistant and the MCP agent note your
 lasting preferences there (usual format, style, voice, channel, things you don't want) with
 `remember` / `forget`, and read them back at every project. Edit it by hand, or from the
@@ -619,6 +628,7 @@ backend/vedit/
   tts.py         voice from text: OpenAI-compatible, ElevenLabs, Piper, system voice
   social.py      publishing: YouTube (OAuth, resumable upload), TikTok inbox
   memoria.py     memory across projects (~/.vedit/MEMORIA.md)
+  web.py         web search, page reading, media download from any site
   mcp_server.py  MCP tools
   api.py         REST/WebSocket API for the UI
   cli.py         command line

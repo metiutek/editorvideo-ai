@@ -25,7 +25,9 @@ const TOOL_LABEL = {
   transcribe: 'transcribes the speech', make_captions: 'creates the subtitles', duck_music: 'ducks the music under the voice',
   normalize_audio: 'normalises the audio', audio_levels: 'measures the levels', check_cuts: 'checks the cuts',
   verify_edit: 'checks the edit', remember: 'remembers it for every project',
-  forget: 'forgets a preference', memory: 'reads the memory', snapshot: 'saves a version', match_color: 'matches the colours',
+  forget: 'forgets a preference', memory: 'reads the memory',
+  web_search: 'searches the web', web_read: 'reads a page', web_download: 'downloads from the web',
+  WebSearch: 'searches the web', generate_voice: 'generates the voice', snapshot: 'saves a version', match_color: 'matches the colours',
   Glob: 'searches files', WebFetch: 'reads a web page',
 }
 
