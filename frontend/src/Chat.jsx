@@ -205,11 +205,12 @@ export default function Chat({
         setCoda((c) => [...c, { text: q, refs }])
         setRefs([])
       } else {
-        try {
-          const r = await api.chatPosta(q)
-          if (r.ok) setInviati((x) => [...x, q])
-          else setCoda((c) => [...c, { text: q, refs: [] }])
-        } catch (e) { setError(e.message); return }
+        // se il server non lo prende (turno appena finito, server di una
+        // versione vecchia) il messaggio non si perde: va in coda
+        let preso = false
+        try { preso = (await api.chatPosta(q)).ok } catch { /* in coda */ }
+        if (preso) setInviati((x) => [...x, q])
+        else setCoda((c) => [...c, { text: q, refs: [] }])
       }
       setInput('')
       return
