@@ -6,7 +6,7 @@ Lo stesso documento gira in due posti:
   tempo reale, si vede mentre la si scrive e senza renderizzare niente;
 - al render, dentro Chromium (Playwright), che lo fotografa fotogramma per
   fotogramma con lo sfondo trasparente. ffmpeg ne fa un ``.mov`` con canale
-  alpha (qtrle) che il grafo tratta come una sorgente qualsiasi.
+  alpha (FFV1, senza perdita) che il grafo tratta come una sorgente qualsiasi.
 
 Perche' le due cose mostrino lo stesso fotogramma, il tempo della pagina non e'
 quello della macchina. ``OROLOGIO`` sostituisce ``performance.now``, ``Date``,
@@ -43,7 +43,8 @@ from typing import Callable, NamedTuple
 from . import ffmpeg
 
 # Si cambia quando cambia il modo di fotografare: invalida tutta la cache.
-VERSIONE = 1
+# 2: FFV1 al posto di qtrle.
+VERSIONE = 2
 
 MAX_HTML = 2_000_000  # caratteri: un documento piu' grande e' quasi certamente un errore
 
@@ -509,8 +510,13 @@ class _Pagina:
         args = [ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
                 "-f", "image2pipe", "-framerate", repr(float(x.fps)), "-c:v", "png", "-i", "-",
                 # dimensioni esatte: il fattore di scala del browser arrotonda
-                "-vf", f"scale={x.width}:{x.height}:flags=bicubic,format=argb",
-                "-c:v", "qtrle", "-f", "mov", str(tmp)]
+                "-vf", f"scale={x.width}:{x.height}:flags=bicubic,format=bgra",
+                # FFV1 e non qtrle: sempre senza perdita, alpha compreso, ma un
+                # blocco 1080p da 4 s pesa 100-150 MB invece di 500-700, e si
+                # scrive tre volte piu' in fretta. Con qtrle l'export di un video
+                # di nove minuti tutto in html riempiva 71 GB di disco.
+                "-c:v", "ffv1", "-level", "3", "-slices", "16", "-g", "1",
+                "-f", "mov", str(tmp)]
         proc = subprocess.Popen(args, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         try:
@@ -602,6 +608,11 @@ def prepare(project, *, width: int, height: int, fps: float,
                            da, a_, out)
                    for da, a_, out in _mancanti(c.html or "", t0=t0, t1=t1, **m)]
     if lavori:
+        from . import proxy
+
+        # prima di fotografare, non solo dopo: le versioni vecchie liberano il
+        # posto per le nuove, invece di trovare il disco gia' pieno
+        proxy.pota(_cache_dir(), proxy.tetto_mb("VEDIT_CACHE_HTML_MB", CACHE_HTML_MB))
         totale = sum(x.a - x.da for x in lavori)
         contati = [0]
         lock = threading.Lock()

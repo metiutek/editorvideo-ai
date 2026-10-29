@@ -4,6 +4,14 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+### Corretto
+- **Export con molta grafica html che riempiva il disco**: i blocchi fotografati stavano in
+  `.mov` qtrle, 500-700 MB ogni 4 secondi a 1080p; un video di nove minuti tutto in html
+  lasciava 71 GB in `~/.vedit/html` e il disco pieno. Ora sono FFV1 (sempre senza perdita,
+  alpha compreso): 100-150 MB a blocco e codifica tre volte più veloce. La cache si pota anche
+  prima di fotografare, così le versioni vecchie fanno posto alle nuove. La cache qtrle
+  esistente non si usa più e se ne va alla prima potatura.
+
 ## v0.3.2 — 2026-10-29 · Correzione
 
 ### Corretto

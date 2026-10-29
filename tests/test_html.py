@@ -280,6 +280,11 @@ def test_rasterizza_con_tempo_virtuale():
     except htmlclip.HtmlNonDisponibile as exc:
         pytest.skip(str(exc))
     assert t0 == 0.0
+    # FFV1 con alpha: qtrle pesava 500 MB ogni 4 s a 1080p e riempiva il disco
+    from vedit.probe import probe_raw
+
+    video = next(s for s in probe_raw(mov)["streams"] if s["codec_type"] == "video")
+    assert (video["codec_name"], video["pix_fmt"]) == ("ffv1", "bgra")
     # sfondo: trasparente
     assert _pixel(mov, 0.5, 160, 60)[3] == 0
     # a 0.5s l'animazione CSS e' a meta' strada: 100px
