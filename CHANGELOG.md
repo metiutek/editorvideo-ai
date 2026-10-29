@@ -4,6 +4,8 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+## v0.3.1 — 2026-10-29 · Menu "/" e messaggi durante il lavoro nella chat
+
 ### Aggiunto
 - **Menu `/` nella chat**: scrivendo `/` compaiono i comandi dell'editor (`/clear`, `/stop`,
   `/model`, `/style`, `/memory`, `/settings`) e le skill dell'utente, con frecce, Tab e Invio.
