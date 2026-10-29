@@ -8,13 +8,28 @@ import { leggiTrascinati } from './src/trascina.js'
 import { BLOCCO, PEZZO, caricaTrascinati, importaPercorsi, mandaFile } from './src/caricamento.js'
 import { IN_PARALLELO, _azzera, chiedi } from './src/mediaAssets.js'
 import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura, mostraEsatto,
-  dimensioni, formatoDi } from './src/util.js'
+  dimensioni, formatoDi, vociComando } from './src/util.js'
 
 let ok = 0
 const test = (name, fn) => {
   try { fn(); ok++; console.log('ok   ' + name) }
   catch (e) { console.log('FAIL ' + name + ': ' + e.message); process.exitCode = 1 }
 }
+
+test('menu "/": comandi dell\'editor, poi le skill', () => {
+  const skill = [{ name: 'caveman:caveman', description: 'talk short' }, { name: 'titoli', description: 'big titles' }]
+  assert.equal(vociComando('ciao', skill), null)
+  // con lo spazio si stanno scrivendo gli argomenti: il menu si chiude
+  assert.equal(vociComando('/titoli tre righe', skill), null)
+  const tutte = vociComando('/', skill)
+  assert.equal(tutte[0].name, 'clear')
+  assert.ok(tutte[0].locale && tutte.some((v) => v.name === 'titoli' && !v.locale))
+  // prima chi comincia cosi', poi chi lo contiene
+  assert.deepEqual(vociComando('/ti', skill).map((v) => v.name), ['titoli', 'settings'])
+  assert.deepEqual(vociComando('/st', skill).map((v) => v.name), ['stop', 'style'])
+  assert.deepEqual(vociComando('/man', skill).map((v) => v.name), ['caveman:caveman'])
+  assert.deepEqual(vociComando('/big', skill).map((v) => v.name), ['titoli'])
+})
 
 test('diretta: fotogramma esatto da fermi dove il browser non basta', () => {
   const base = { diretta: true, prova: null, approssimato: true, playing: false, url: 'f.jpg', pending: false }

@@ -129,11 +129,14 @@ def testo(vista: list[dict], limite: int = 8000) -> str:
         if t.get("role") == "user":
             righe.append(f"Utente: {t.get('text', '')}")
         else:
-            passi = ", ".join(x.get("name", "") for x in t.get("tools") or [])
+            passi = ", ".join(x.get("name", "") for x in t.get("tools") or []
+                              if not x.get("utente"))
             riga = f"Assistente: {t.get('text', '')}".rstrip()
             if passi:
                 riga += f" [strumenti: {passi}]"
             righe.append(riga)
+            righe += [f"Utente (durante il turno): {x['utente']}"
+                      for x in t.get("tools") or [] if x.get("utente")]
     out, tot = [], 0
     for r in reversed(righe):
         r = r[:1500]

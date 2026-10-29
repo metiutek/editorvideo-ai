@@ -12,6 +12,7 @@ servizio compatibile OpenAI, oppure il Claude Code installato sul computer.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -595,6 +596,28 @@ def riferimenti(store: Any, refs: list[dict]) -> tuple[str, list[dict]]:
 # --------------------------------------------------------------------------
 
 
+def comando_skill(question: str, claude_code: bool, progetto: str | None = None) -> str:
+    """``/nome argomenti`` scritto nella chat, se ``nome`` e' una skill dell'utente,
+    diventa la richiesta esplicita di usarla.
+
+    Il messaggio arriva al modello dopo stato, memoria e riferimenti: un
+    ``/nome`` lasciato com'e' non e' piu' in testa al prompt e Claude Code non
+    lo riconosce come comando; i modelli via API non conoscono la sintassi.
+    """
+    m = re.match(r"/([\w.:-]+)(?:\s+(.*))?$", question.strip(), re.S)
+    if not m:
+        return question
+    nomi = {s["name"].lower(): s["name"] for s in estensioni.skill(progetto)}
+    nome = nomi.get(m.group(1).lower())
+    if nome is None:
+        return question
+    come = "con lo strumento Skill" if claude_code else "con use_skill"
+    out = f"L'utente invoca la skill \"{nome}\" (/{nome}): caricala {come} e seguila."
+    if m.group(2) and m.group(2).strip():
+        out += f"\nArgomenti: {m.group(2).strip()}"
+    return out
+
+
 def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict], str],
         refs: list[dict] | None = None, mcp_url: str | None = None,
         fermo: Callable[[], bool] = lambda: False, stile: str | None = None,
@@ -653,7 +676,8 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
                                                       "di incollarne il testo se serve)"})
         else:
             contenuto.append(llm.documento(im["path"]) if pdf else llm.immagine(im["path"]))
-    contenuto.append({"type": "text", "text": question})
+    contenuto.append({"type": "text", "text": comando_skill(
+        question, p["tipo"] == "claude_code", store.path)})
 
     if p["tipo"] == "claude_code":
         if not mcp_url:

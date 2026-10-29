@@ -367,6 +367,59 @@ def test_api_stop(client):
     assert api_mod.S.fermo.is_set()
 
 
+def test_messaggio_durante_il_turno(client, monkeypatch):
+    """Scritto mentre l'assistente lavora: arriva col risultato del prossimo
+    strumento; quello che non fa in tempo a leggere torna alla chat."""
+    # senza turno in corso il messaggio non si accoda: la chat lo manda come turno
+    assert client.post("/api/chat/posta", json={"message": "ciao"}).json() == {"ok": False}
+    risultati = []
+
+    def finto_run(store, stato, domanda, run_op, **k):
+        api_mod.chat_posta(api_mod.PostaBody(message="fallo blu"))
+        yield {"type": "tool", "name": "project_info", "input": {}}
+        risultati.append(run_op("project_info", {}))
+        yield {"type": "tool_done", "name": "project_info"}
+        # questo arriva dopo l'ultimo strumento: il modello non lo legge
+        api_mod.chat_posta(api_mod.PostaBody(message="e il titolo piu' grande"))
+        yield {"type": "text", "text": "Fatto."}
+
+    monkeypatch.setattr(chat, "run", finto_run)
+    monkeypatch.setattr(chat, "execute", lambda store, name, args: '{"ok":true}')
+    corpo = client.post("/api/chat", json={"message": "metti un rosso"}).text
+    eventi = [json.loads(r[5:]) for r in corpo.split("\n\n") if r.startswith("data:")]
+    assert "fallo blu" in risultati[0] and risultati[0].startswith('{"ok":true}')
+    assert {"type": "injected", "text": "fallo blu"} in eventi
+    assert eventi[-1]["type"] == "end"
+    assert eventi[-1]["non_letti"] == ["e il titolo piu' grande"]
+    vista = client.get("/api/chat/storia").json()["vista"]
+    assert {"name": "_utente", "state": "ok", "utente": "fallo blu"} in vista[1]["tools"]
+    # turno finito: niente resta in sospeso per il prossimo
+    assert api_mod.consegna_posta("x") == "x"
+
+
+def test_consegna_posta_con_immagini(monkeypatch):
+    monkeypatch.setattr(api_mod.S, "in_turno", True)
+    monkeypatch.setattr(api_mod.S, "posta", ["piu' corto"])
+    monkeypatch.setattr(api_mod.S, "consegnati", [])
+    img = object()
+    out = api_mod.consegna_posta([img])
+    assert out[0] is img and "piu' corto" in out[1]
+    assert api_mod.S.posta == [] and api_mod.S.consegnati == ["piu' corto"]
+
+
+def test_comando_skill(monkeypatch):
+    """"/nome argomenti" di una skill diventa la richiesta di usarla."""
+    from vedit import estensioni
+    monkeypatch.setattr(estensioni, "skill", lambda progetto=None: [
+        {"name": "caveman:caveman", "description": ""}, {"name": "titoli", "description": ""}])
+    out = chat.comando_skill("/Titoli tre righe, gialli", False)
+    assert "use_skill" in out and '"titoli"' in out and "tre righe, gialli" in out
+    assert "strumento Skill" in chat.comando_skill("/caveman:caveman", True)
+    # non e' una skill, o non e' un comando: il testo resta com'e'
+    assert chat.comando_skill("/sconosciuta x", False) == "/sconosciuta x"
+    assert chat.comando_skill("taglia a 1/2", False) == "taglia a 1/2"
+
+
 # --------------------------------------------------------------------------
 # domande all'utente, export solo con il suo si', stili
 # --------------------------------------------------------------------------

@@ -93,6 +93,12 @@ class Session:
         self.vista: list[dict] = []
         # "ferma" premuto nella chat: il turno in corso si interrompe al primo passo utile
         self.fermo = threading.Event()
+        # messaggi scritti mentre l'assistente lavora: arrivano al modello col
+        # risultato del primo strumento che chiama (consegna_posta)
+        self.posta: list[str] = []
+        self.consegnati: list[str] = []
+        self.in_turno = False
+        self.posta_lock = threading.Lock()
         # domanda in attesa di risposta nel browser (ask_user, conferma export)
         self.domanda: dict | None = None
         # porta su cui ascolta l'interfaccia: serve a dire a Claude Code dov'e'
@@ -1969,6 +1975,48 @@ def chat_stop() -> dict:
     return {"ok": True}
 
 
+class PostaBody(BaseModel):
+    message: str
+
+
+@app.post("/api/chat/posta")
+def chat_posta(body: PostaBody) -> dict:
+    """Un messaggio per il turno in corso: il modello lo legge al prossimo passo.
+
+    ``ok`` falso se nessun turno e' in corso: la chat lo manda come turno nuovo.
+    """
+    testo = body.message.strip()
+    if not testo:
+        raise HTTPException(400, "empty message")
+    with S.posta_lock:
+        if not S.in_turno:
+            return {"ok": False}
+        S.posta.append(testo)
+    return {"ok": True}
+
+
+def consegna_posta(out):
+    """Il risultato di uno strumento con in coda i messaggi arrivati durante il turno.
+
+    E' l'unico momento in cui il modello rilegge qualcosa senza che il turno
+    finisca: lo usano ``run_op`` (modelli via API) e gli strumenti del server
+    MCP dell'editor (Claude Code). Un risultato che non e' testo ne' lista
+    (immagine sola) diventa una lista.
+    """
+    with S.posta_lock:
+        if not S.in_turno or not S.posta:
+            return out
+        arrivati, S.posta = S.posta, []
+        S.consegnati.extend(arrivati)
+    nota = ("\n\n[Messaggio dell'utente scritto mentre lavori: ha la precedenza sul piano "
+            "in corso, tienine conto da subito]\n" + "\n---\n".join(arrivati))
+    if isinstance(out, str):
+        return out + nota
+    if isinstance(out, list):
+        return [*out, nota]
+    return [out, nota] if out is not None else nota
+
+
 @app.post("/api/chat/reset")
 def chat_reset() -> dict:
     """Ricomincia la conversazione di questo progetto (e la toglie dal disco)."""
@@ -2013,6 +2061,9 @@ def chat(body: ChatBody) -> StreamingResponse:
     store = S.need()
 
     def run_op(name: str, args: dict) -> str:
+        return consegna_posta(esegui_op(name, args))
+
+    def esegui_op(name: str, args: dict) -> str:
         if name == "ask_user":
             # fuori dal lock: si aspetta l'utente, non si tocca il progetto
             return json.dumps(chiedi(args.get("domande", args)), ensure_ascii=False)
@@ -2040,13 +2091,25 @@ def chat(body: ChatBody) -> StreamingResponse:
         S.vista.append({"role": "user", "text": body.message, "refs": body.refs})
         risposta: dict = {"role": "assistant", "text": "", "tools": []}
         S.vista.append(risposta)
+        def arrivati():
+            with S.posta_lock:
+                letti, S.consegnati = S.consegnati, []
+            for testo in letti:
+                ev = {"type": "injected", "text": testo}
+                _in_vista(risposta, ev)
+                yield send(ev)
+
+        with S.posta_lock:
+            S.posta, S.consegnati, S.in_turno = [], [], True
         try:
             S.fermo.clear()
             for ev in chat_mod.run(store, S.chat, body.message, run_op,
                                    refs=body.refs, mcp_url=mcp_url(), fermo=S.fermo.is_set,
                                    stile=body.stile, precedente=precedente):
+                yield from arrivati()
                 _in_vista(risposta, ev)
                 yield send(ev)
+            yield from arrivati()
         except chat_mod.ChatUnavailable as exc:
             risposta["error"] = str(exc)
             yield send({"type": "error", "message": str(exc)})
@@ -2054,9 +2117,14 @@ def chat(body: ChatBody) -> StreamingResponse:
             risposta["error"] = str(exc)
             yield send({"type": "error", "message": str(exc)})
         finally:
+            # cio' che il modello non ha fatto in tempo a leggere torna alla
+            # chat, che lo manda come turno nuovo
+            with S.posta_lock:
+                S.in_turno = False
+                rimasti, S.posta = S.posta, []
             salva_chat()
         # il progetto e' cambiato: la UI ricarica lo stato completo
-        yield send({"type": "end", **S.state_of_project()})
+        yield send({"type": "end", "non_letti": rimasti, **S.state_of_project()})
 
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache",
@@ -2168,6 +2236,8 @@ def _in_vista(m: dict, ev: dict) -> None:
                 if ev.get("message"):
                     x["message"] = ev["message"]
                 break
+    elif t == "injected":
+        m["tools"].append({"name": "_utente", "state": "ok", "utente": ev.get("text", "")})
     elif t == "error":
         m["error"] = ev.get("message")
     elif t == "stopped":

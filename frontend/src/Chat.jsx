@@ -3,7 +3,7 @@ import { api, chat as sendChat } from './api.js'
 import { FileBrowser, Modal } from './Dialogs.jsx'
 import { useFineTrascinamento } from './trascina.js'
 import Icon from './Icons.jsx'
-import { dettaglioStrumento, fmt } from './util.js'
+import { dettaglioStrumento, fmt, vociComando } from './util.js'
 
 const TOOL_LABEL = {
   project_info: 'looks at the timeline', import_media: 'imports files', add_clip: 'adds a clip',
@@ -91,8 +91,37 @@ export default function Chat({
   const [sceltaCartella, setSceltaCartella] = useState(false)
   const endRef = useRef(null)
   const abortRef = useRef(null)
+  // scritti durante il lavoro: ``coda`` aspetta la fine del turno e parte come
+  // turno nuovo; ``inviati`` sono gia' al server e il modello li legge col
+  // risultato del prossimo strumento che chiama
+  const [coda, setCoda] = useState([])        // {text, refs}
+  const [inviati, setInviati] = useState([])  // testi
+  const [skill, setSkill] = useState([])
+  const [accesso, setAccesso] = useState('editor')
+  const [scelta, setScelta] = useState(0)     // voce evidenziata nel menu "/"
+  const [menuChiuso, setMenuChiuso] = useState(false)
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy, domanda])
+
+  // le skill per il menu "/": si rileggono tornando dalle impostazioni
+  useEffect(() => {
+    if (settings) return
+    api.estensioni().then((r) => {
+      setSkill(Array.isArray(r.skill) ? r.skill : [])
+      setAccesso(r.accesso || 'editor')
+    }).catch(() => {})
+  }, [settings])
+
+  // finito un turno, parte il primo messaggio in coda
+  // (con le impostazioni aperte la chat non e' montata: aspetta)
+  const chatVisibile = !settings && available?.ok
+  useEffect(() => {
+    if (busy || !coda.length || !chatVisibile) return
+    const [primo, ...resto] = coda
+    setCoda(resto)
+    avvia(primo.text, primo.refs || [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, coda, chatVisibile])
 
   // ogni progetto ha la sua chat, salvata accanto al file: aprendolo torna
   const percorso = project?.path || ''
@@ -145,14 +174,54 @@ export default function Chat({
     } catch (e) { setError(e.message) } finally { setCaricando((n) => Math.max(0, n - files.length)) }
   }
 
-  const send = async () => {
+  /** Un comando dell'editor scritto nella chat ("/clear"...): vero se l'ha fatto. */
+  const comando = (nome) => {
+    const fai = {
+      clear: reset,
+      stop: () => api.chatStop().catch(() => {}),
+      model: () => setMenuModello(true),
+      style: () => {
+        api.stili().then((r) => onStili?.(r.stili)).catch(() => {})
+        setMenuStili(true)
+      },
+      memory: () => setMemoriaAperta(true),
+      settings: () => setSettings(true),
+    }[nome.toLowerCase()]
+    if (!fai) return false
+    setInput('')
+    fai()
+    return true
+  }
+
+  const send = async (inCoda = false) => {
     const q = input.trim()
-    if (!q || busy) return
-    const sentRefs = refs
+    if (!q) return
+    const cmd = /^\/(\S+)$/.exec(q)
+    if (cmd && comando(cmd[1])) return
+    if (busy) {
+      // con dei riferimenti il messaggio vuole un turno suo: quello in corso
+      // riceve solo testo
+      if (inCoda || refs.length) {
+        setCoda((c) => [...c, { text: q, refs }])
+        setRefs([])
+      } else {
+        try {
+          const r = await api.chatPosta(q)
+          if (r.ok) setInviati((x) => [...x, q])
+          else setCoda((c) => [...c, { text: q, refs: [] }])
+        } catch (e) { setError(e.message); return }
+      }
+      setInput('')
+      return
+    }
     setInput('')
     setRefs([])
     setTratto(null)
     setPickArea(false)
+    avvia(q, refs)
+  }
+
+  const avvia = async (q, sentRefs) => {
     setBusy(true)
     setTurns((t) => [...t, { role: 'user', text: q, refs: sentRefs },
       { role: 'assistant', text: '', tools: [] }])
@@ -168,6 +237,13 @@ export default function Chat({
     try {
       await sendChat(q, sentRefs, stile || null, (ev) => {
         if (ev.type === 'text') patch((m) => ({ ...m, thinking: false, text: m.text + ev.text }))
+        else if (ev.type === 'injected') {
+          patch((m) => ({ ...m, tools: [...m.tools, { name: '_utente', state: 'ok', utente: ev.text }] }))
+          setInviati((x) => {
+            const i = x.indexOf(ev.text)
+            return i < 0 ? x : [...x.slice(0, i), ...x.slice(i + 1)]
+          })
+        }
         else if (ev.type === 'thinking') patch((m) => ({ ...m, thinking: true }))
         else if (ev.type === 'note') patch((m) => ({ ...m, note: ev.message }))
         else if (ev.type === 'tool') {
@@ -195,6 +271,11 @@ export default function Chat({
         } else if (ev.type === 'error') {
           patch((m) => ({ ...m, error: ev.message }))
         } else if (ev.type === 'end') {
+          // il modello non ha fatto in tempo a leggerli: diventano il turno dopo
+          if (ev.non_letti?.length) {
+            setCoda((c) => [{ text: ev.non_letti.join('\n\n'), refs: [] }, ...c])
+          }
+          setInviati([])
           onProject(ev)
         }
       }, ctrl.signal)
@@ -210,6 +291,16 @@ export default function Chat({
     abortRef.current?.abort()
     api.chatReset().catch(() => {})
     setTurns([])
+    setCoda([])
+    setInviati([])
+  }
+
+  const voci = menuChiuso ? null : vociComando(input, accesso === 'editor' ? [] : skill)
+  const sceltaVera = voci?.length ? Math.min(scelta, voci.length - 1) : 0
+  /** Completa la voce del menu: un comando dell'editor parte, una skill aspetta gli argomenti. */
+  const completa = (v) => {
+    if (v.locale && comando(v.name)) return
+    setInput(`/${v.name} `)
   }
 
   return (
@@ -343,9 +434,9 @@ export default function Chat({
               </>
             ) : (
               <>
-                {m.tools?.map((t, j) => (
-                  <Passo key={j} passo={t} project={project} />
-                ))}
+                {m.tools?.map((t, j) => (t.utente
+                  ? <div key={j} className="msginturno" title="Written while the assistant was working">{t.utente}</div>
+                  : <Passo key={j} passo={t} project={project} />))}
                 {m.thinking && !m.text && (
                   <div className="toolrow"><Icon size={13} name="attesa" className="spin" />thinking…</div>
                 )}
@@ -439,12 +530,62 @@ export default function Chat({
             memoria="chat-cartelle" onClose={() => setSceltaCartella(false)}
             onPick={([p]) => addRef({ kind: 'folder', path: p, name: p.split(/[\\/]/).filter(Boolean).pop() })} />
         )}
+        {(inviati.length > 0 || coda.length > 0) && (
+          <div className="codachat">
+            {inviati.map((t, j) => (
+              <div key={`i${j}`} className="codavoce" title="The assistant reads it at its next step">
+                <Icon name="invia" size={12} /><span className="codatesto">{t}</span>
+                <small>next step</small>
+              </div>
+            ))}
+            {coda.map((c, j) => (
+              <div key={`c${j}`} className="codavoce" title="Sent when the assistant finishes">
+                <Icon name="orologio" size={12} />
+                <span className="codatesto">{c.refs?.length ? `[${c.refs.length}] ` : ''}{c.text}</span>
+                <small>queued</small>
+                <button className="rifx" title="Edit: put it back in the box"
+                  onClick={() => {
+                    setCoda((x) => x.filter((_, k) => k !== j))
+                    setInput(c.text)
+                    if (c.refs?.length) setRefs((r) => [...r, ...c.refs])
+                  }}>
+                  <Icon name="testo" size={11} />
+                </button>
+                <button className="rifx" title="Remove" onClick={() => setCoda((x) => x.filter((_, k) => k !== j))}>
+                  <Icon name="chiudi" size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {voci && (
+          <div className="menucomandi" role="listbox">
+            {voci.length === 0 && (
+              <div className="hint">
+                {accesso === 'editor' && skill.length
+                  ? 'No editor command matches. Your skills appear here with "Editor + my skills" access (/settings).'
+                  : 'No command or skill matches.'}
+              </div>
+            )}
+            {voci.map((v, j) => (
+              <button key={`${v.locale ? 'c' : 's'}:${v.name}`} role="option" aria-selected={j === sceltaVera}
+                className={`comando ${j === sceltaVera ? 'on' : ''}`}
+                onMouseEnter={() => setScelta(j)}
+                // mousedown: il clic non deve togliere il fuoco alla casella
+                onMouseDown={(e) => { e.preventDefault(); completa(v) }}>
+                <b>/{v.name}</b>
+                <span>{v.description}</span>
+                {!v.locale && <small>skill</small>}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="chatbar">
           <textarea
-            rows={2} value={input} disabled={busy}
-            placeholder={busy ? 'working…'
-              : refs.length ? 'what should change? (you can write "in 1", "at 2"…)' : 'ask for a change…'}
-            onChange={(e) => setInput(e.target.value)}
+            rows={2} value={input}
+            placeholder={busy ? 'write to the assistant while it works… (Alt+Enter: queue for after)'
+              : refs.length ? 'what should change? (you can write "in 1", "at 2"…)' : 'ask for a change… (/ for commands and skills)'}
+            onChange={(e) => { setInput(e.target.value); setScelta(0); setMenuChiuso(false) }}
             onPaste={(e) => {
               // un'immagine copiata (uno screenshot) si incolla come allegato
               const files = [...(e.clipboardData?.files || [])]
@@ -454,14 +595,26 @@ export default function Chat({
               if (URL_SOLO.test(testo)) { e.preventDefault(); aggiungiLink(testo) }
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+              if (voci?.length) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setScelta((sceltaVera + 1) % voci.length); return }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setScelta((sceltaVera - 1 + voci.length) % voci.length); return }
+                if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+                  e.preventDefault(); completa(voci[sceltaVera]); return
+                }
+              }
+              if (voci && e.key === 'Escape') { e.preventDefault(); setMenuChiuso(true); return }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e.altKey) }
             }}
           />
-          {busy ? (
+          {busy ? (<>
+            <button className="icon" disabled={!input.trim()} onClick={() => send(true)}
+              title="Queue: send it when the assistant finishes (Alt+Enter)"><Icon name="orologio" /></button>
+            <button className="icon" disabled={!input.trim()} onClick={() => send()}
+              title="Send now: the assistant reads it at its next step (Enter)"><Icon name="invia" /></button>
             <button className="primary icon ferma" title="Stop the assistant"
               onClick={() => api.chatStop().catch(() => {})}><Icon name="ferma" /></button>
-          ) : (
-            <button className="primary icon" disabled={caricando > 0 || !input.trim()} onClick={send}
+          </>) : (
+            <button className="primary icon" disabled={caricando > 0 || !input.trim()} onClick={() => send()}
               title="Send (Enter)"><Icon name="invia" /></button>
           )}
         </div>

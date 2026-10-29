@@ -241,6 +241,16 @@ def _compatto(res):
     return _json(res)
 
 
+def _posta(res):
+    """I messaggi scritti nella chat dell'editor mentre Claude Code lavora.
+
+    Claude Code non riceve altro finche' il turno non finisce: li legge in
+    coda al risultato del primo strumento dell'editor (``api.consegna_posta``).
+    """
+    api = sys.modules.get("vedit.api")
+    return api.consegna_posta(res) if api is not None else res
+
+
 # nome -> funzione, per ``batch``
 _STRUMENTI: dict[str, Any] = {}
 
@@ -286,14 +296,14 @@ def _strumento(*args, **kwargs):
                 _CTX.set(contesto_mcp)
                 _avanza(None)
                 try:
-                    return _compatto(await fn(*a, **k))
+                    return _posta(_compatto(await fn(*a, **k)))
                 except _PREVISTI as exc:
                     raise ToolError(_messaggio(exc)) from exc
         else:
             @functools.wraps(fn)
             def avvolta(*a, contesto_mcp=None, **k):
                 try:
-                    return _compatto(fn(*a, **k))
+                    return _posta(_compatto(fn(*a, **k)))
                 except _PREVISTI as exc:
                     raise ToolError(_messaggio(exc)) from exc
         # il Context della richiesta arriva al wrapper (non alla funzione) e

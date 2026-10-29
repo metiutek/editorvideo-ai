@@ -154,6 +154,13 @@ export const api = {
     }),
   // ferma il turno in corso: le modifiche gia' fatte restano e si annullano con Ctrl+Z
   chatStop: () => req('/api/chat/stop', { method: 'POST' }),
+  // un messaggio per il turno in corso: il modello lo legge al prossimo strumento
+  chatPosta: (message) =>
+    req('/api/chat/posta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    }),
   // domande dell'assistente in attesa di risposta (ask_user, conferma export)
   domanda: () => req('/api/domanda'),
   rispondi: (qid, risposte) =>

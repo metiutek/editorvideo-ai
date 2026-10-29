@@ -4,6 +4,20 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+### Aggiunto
+- **Menu `/` nella chat**: scrivendo `/` compaiono i comandi dell'editor (`/clear`, `/stop`,
+  `/model`, `/style`, `/memory`, `/settings`) e le skill dell'utente, con frecce, Tab e Invio.
+  `/skill argomenti` arriva al modello come richiesta esplicita di usare quella skill
+  (`chat.comando_skill`): Claude Code non riconosceva il comando, che nel prompt non sta in
+  testa, e i modelli via API non conoscono la sintassi. Le skill compaiono con l'accesso
+  "Editor + my skills" o completo.
+- **Scrivere mentre l'assistente lavora**: Invio manda il messaggio al turno in corso
+  (`/api/chat/posta`), che il modello legge col risultato del prossimo strumento — sia via API
+  (`run_op`) sia con Claude Code (strumenti del server MCP dell'editor,
+  `api.consegna_posta`). Alt+Invio, o un messaggio con riferimenti, lo mette **in coda** e
+  parte come turno nuovo a fine lavoro; la coda si modifica e si svuota dalla chat. Quello che
+  il modello non fa in tempo a leggere torna in coda da solo.
+
 ## v0.3.0 — 2026-10-22 · Video raccontati da una voce, chat per progetto, modello e sforzo
 
 ### Aggiunto

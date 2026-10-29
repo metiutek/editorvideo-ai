@@ -240,3 +240,30 @@ export function formatoDi(w, h) {
   const f = FORMATI_VIDEO.find((x) => Math.abs(w * x.b - h * x.a) <= Math.max(x.a, x.b) * 2)
   return f ? f.id : null
 }
+
+// comandi della chat che fa l'editor da se': non arrivano al modello
+const COMANDI = [
+  { name: 'clear', description: 'Start the conversation over' },
+  { name: 'stop', description: 'Stop the assistant' },
+  { name: 'model', description: 'Model and effort' },
+  { name: 'style', description: 'Editing style' },
+  { name: 'memory', description: 'What the assistant remembers across projects' },
+  { name: 'settings', description: 'All model settings and what the assistant can use' },
+]
+
+/**
+ * Le voci del menu che si apre scrivendo "/": i comandi dell'editor, poi le
+ * skill dell'utente. Prima chi comincia con quanto scritto, poi chi lo
+ * contiene nel nome o nella descrizione. Il menu c'e' solo finche' si scrive
+ * il nome (niente spazi).
+ */
+export function vociComando(input, skill = []) {
+  const m = /^\/(\S*)$/.exec(input)
+  if (!m) return null
+  const q = m[1].toLowerCase()
+  const tutte = [...COMANDI.map((c) => ({ ...c, locale: true })), ...skill]
+  const inizio = tutte.filter((v) => v.name.toLowerCase().startsWith(q))
+  const dentro = tutte.filter((v) => !inizio.includes(v)
+    && (v.name.toLowerCase().includes(q) || (q.length > 2 && (v.description || '').toLowerCase().includes(q))))
+  return [...inizio, ...dentro].slice(0, 40)
+}

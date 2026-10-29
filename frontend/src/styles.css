@@ -957,6 +957,35 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
   font-family: ui-monospace, Consolas, 'Cascadia Mono', monospace; user-select: text;
 }
 .chatbar button.ferma { background: var(--danger); border-color: var(--danger); color: #2a0a10; }
+
+/* menu "/": comandi dell'editor e skill dell'utente */
+.menucomandi {
+  display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 4px;
+}
+.menucomandi .hint { padding: 6px 8px; }
+button.comando {
+  height: auto; min-height: 30px; padding: 5px 9px; justify-content: flex-start; gap: 8px;
+  background: transparent; border-color: transparent; text-align: left; font-size: 12px;
+}
+button.comando.on { background: var(--accent-soft); border-color: rgba(255,138,92,.35); }
+.comando b { color: var(--text); flex: none; }
+.comando span { color: var(--dim); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comando small { color: var(--faint); flex: none; }
+
+/* messaggi scritti mentre l'assistente lavora */
+.codachat { display: flex; flex-direction: column; gap: 4px; }
+.codavoce {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim);
+  background: var(--panel-2); border: 1px dashed var(--line); border-radius: var(--r); padding: 4px 6px 4px 9px;
+}
+.codavoce .codatesto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.codavoce small { color: var(--faint); flex: none; }
+.msginturno {
+  margin: 4px 0 6px auto; width: fit-content; max-width: 90%; font-size: 12px; padding: 5px 9px;
+  border-radius: 10px; background: var(--accent-soft); border: 1px solid rgba(255,138,92,.35);
+  white-space: pre-wrap;
+}
 .chatbar button.ferma:hover:not(:disabled) { background: #ff8592; border-color: #ff8592; }
 
 /* le pastiglie non escono mai dal pannello: il testo si accorcia, la x resta */
