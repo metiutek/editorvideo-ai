@@ -15,7 +15,10 @@ class FFmpegError(RuntimeError):
         self.cmd = cmd
         self.code = code
         self.log = log
-        tail = "\n".join(log.strip().splitlines()[-25:])
+        # una riga sola puo' essere un'espressione da 30.000 caratteri: senza
+        # taglio l'errore era illeggibile e pesava quasi un mega
+        tail = "\n".join(r if len(r) <= 400 else f"{r[:300]} ... ({len(r)} chars)"
+                         for r in log.strip().splitlines()[-25:])
         super().__init__(f"ffmpeg exited with code {code}\n{tail}")
 
 

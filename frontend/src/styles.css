@@ -662,6 +662,13 @@ input[type=range]::-moz-range-thumb {
 }
 .toast.ok { border-left-color: var(--accent); }
 
+/* errore di export: il log di ffmpeg e' lungo, si scorre invece di allargare il dialogo */
+.errore-export { display: flex; align-items: flex-start; gap: 8px; }
+.errore-export pre {
+  flex: 1; margin: 0; max-height: 160px; overflow: auto; color: var(--danger);
+  font: inherit; white-space: pre-wrap; word-break: break-all; user-select: text;
+}
+
 .progress { height: 4px; background: #0b0d11; border-radius: 2px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); transition: width .2s; }
 

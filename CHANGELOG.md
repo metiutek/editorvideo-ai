@@ -4,6 +4,11 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+### Aggiunto
+- **Copiare gli errori**: l'errore di export e l'avviso in basso hanno un pulsante che li copia
+  negli appunti. L'avviso resta finché ci sta sopra il puntatore, e l'errore di export si
+  scorre invece di allargare il dialogo.
+
 ### Corretto
 - **Export con molta grafica html che riempiva il disco**: i blocchi fotografati stavano in
   `.mov` qtrle, 500-700 MB ogni 4 secondi a 1080p; un video di nove minuti tutto in html
@@ -17,6 +22,12 @@ Le voci più recenti stanno in cima.
   dell'export (il 10% della barra dopo la grafica) durava più della grafica stessa. Con
   `duration` per blocco il pezzo salta dritto al suo blocco: a 96 s da 60 s a 8 s, a parità
   di fotogrammi.
+- **Export fallito a fine corsa con molti keyframe di volume**: un `duck_music` su nove minuti
+  di voce metteva centinaia di keyframe sulla musica, compilati in una catena di `if` uno
+  dentro l'altro; il parser di ffmpeg ne regge circa cento livelli e la passata audio falliva
+  con "Missing ')' or too many args". Ora l'espressione è una ricerca binaria sui tratti
+  (profondità log₂ n), con gli stessi valori. Le righe lunghissime del log di ffmpeg
+  nell'errore si accorciano.
 
 ## v0.3.2 — 2026-10-29 · Correzione
 

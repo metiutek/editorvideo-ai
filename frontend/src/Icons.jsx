@@ -72,6 +72,7 @@ const paths = {
   libreria: <><path d="m12 3 9 5-9 5-9-5z" /><path d="m3 13 9 5 9-5" /><path d="m3 17 9 4 9-4" /></>,
   proxy: <><rect x="3" y="5" width="18" height="14" rx="1.5" /><path d="M8 9.5h8M8 12.5h8M8 15.5h4" /></>,
   spunta: <path d="m5 12.5 4.5 4.5L19 7" />,
+  copia: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></>,
   attesa: <><circle cx="12" cy="12" r="8" opacity=".3" /><path d="M20 12a8 8 0 0 0-8-8" /></>,
 
   // --- effetti video. Il nome della chiave e' quello dell'effetto nel

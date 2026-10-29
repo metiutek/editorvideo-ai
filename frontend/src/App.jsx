@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { api, connectEvents } from './api.js'
 import Chat from './Chat.jsx'
-import { Confirm, FileBrowser, NewProject, ProjectFormat, RenderDialog } from './Dialogs.jsx'
+import { Confirm, CopiaErrore, FileBrowser, NewProject, ProjectFormat, RenderDialog } from './Dialogs.jsx'
 import Voce from './Voce.jsx'
 import Pubblica from './Pubblica.jsx'
 import Web from './Web.jsx'
@@ -59,6 +59,8 @@ export default function App() {
   const [playing, setPlaying] = useState(false)
   const [pxPerSec, setPxPerSec] = useState(70)
   const [error, setError] = useState(null)
+  // col puntatore sopra l'avviso non sparisce: si fa in tempo a leggerlo e copiarlo
+  const [erroreFermo, setErroreFermo] = useState(false)
   const [busy, setBusy] = useState(null)
   const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render' | 'particelle' | 'formato' | 'voce' | 'pubblica'
   const [job, setJob] = useState(null)
@@ -161,10 +163,10 @@ export default function App() {
   }, [applyState])
 
   useEffect(() => {
-    if (!error) return
+    if (!error || erroreFermo) return
     const t = setTimeout(() => setError(null), 6000)
     return () => clearTimeout(t)
-  }, [error])
+  }, [error, erroreFermo])
 
   // Conferma per le azioni che distruggono lavoro. Sostituisce confirm() del
   // browser: quello blocca tutta la pagina, non si puo' vestire e su Windows
@@ -755,8 +757,10 @@ export default function App() {
         <div className="toast ok"><Icon name="attesa" className="spin" />{busy}</div>
       )}
       {error && (
-        <div className="toast">
+        <div className="toast" onMouseEnter={() => setErroreFermo(true)}
+          onMouseLeave={() => setErroreFermo(false)}>
           <span>{error}</span>
+          <CopiaErrore testo={error} />
           <button className="icon sm" title="Close" onClick={() => setError(null)}>
             <Icon name="chiudi" size={13} />
           </button>

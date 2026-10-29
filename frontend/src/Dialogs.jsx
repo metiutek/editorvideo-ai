@@ -9,6 +9,43 @@ import { FORMATI_VIDEO, dimensioni, formatoDi } from './util.js'
  * Il fuoco entra nella finestra all'apertura e non ne esce con Tab: senza,
  * si tabula dentro l'editor sotto senza vederlo, e Esc non chiude niente.
  */
+/**
+ * Copia un testo negli appunti. Un errore di export si leggeva solo a schermo:
+ * per segnalarlo bisognava ricopiarlo a mano, e quello di ffmpeg e' lungo.
+ */
+export async function copiaTesto(testo) {
+  try {
+    await navigator.clipboard.writeText(testo)
+    return true
+  } catch {
+    // appunti negati (pagina non sicura, permesso): la vecchia via
+    const area = document.createElement('textarea')
+    area.value = testo
+    area.style.position = 'fixed'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.select()
+    const ok = document.execCommand('copy')
+    area.remove()
+    return ok
+  }
+}
+
+export function CopiaErrore({ testo }) {
+  const [copiato, setCopiato] = useState(false)
+  useEffect(() => {
+    if (!copiato) return
+    const t = setTimeout(() => setCopiato(false), 1500)
+    return () => clearTimeout(t)
+  }, [copiato])
+  return (
+    <button className="icon sm" title={copiato ? 'Copied' : 'Copy error'}
+      onClick={() => copiaTesto(testo).then(setCopiato)}>
+      <Icon name={copiato ? 'spunta' : 'copia'} size={13} />
+    </button>
+  )
+}
+
 export function Modal({ title, children, onClose, actions, narrow }) {
   const box = useRef(null)
 
@@ -492,7 +529,12 @@ export function RenderDialog({ project, path, job, onStart, onClose, onTimeline,
                 done: {job.output} ({job.mb} MB, {job.encoder}, {job.seconds_total}s)
               </span>
             )}
-            {job.state === 'error' && <span style={{ color: 'var(--danger)' }}>error: {job.error}</span>}
+            {job.state === 'error' && (
+              <div className="errore-export">
+                <pre>error: {job.error}</pre>
+                <CopiaErrore testo={job.error} />
+              </div>
+            )}
             {job.state === 'running' && (job.phase === 'html'
               ? `${(job.percent || 0).toFixed(1)}% · HTML graphics: frame ${job.frames}/${job.total_frames}`
               : `${(job.percent || 0).toFixed(1)}% · ${(job.seconds || 0).toFixed(1)}/${(job.duration || 0).toFixed(1)}s`)}

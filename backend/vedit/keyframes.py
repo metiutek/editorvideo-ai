@@ -124,8 +124,9 @@ def expr(value: Any, tvar: str = "t", default: float = 0.0) -> str:
     if len(keys) == 1:
         return _fmt(_num(keys[0].get("v")))
 
-    out = _fmt(_num(keys[-1].get("v")))  # dopo l'ultimo keyframe: tiene il valore
-    for a, b in reversed(list(zip(keys, keys[1:]))):
+    # (fine del tratto, espressione del tratto); dopo l'ultimo keyframe tiene il valore
+    tratti = []
+    for a, b in zip(keys, keys[1:]):
         t0, t1 = _num(a.get("t")), _num(b.get("t"))
         v0, v1 = _num(a.get("v")), _num(b.get("v"))
         span = t1 - t0
@@ -135,9 +136,22 @@ def expr(value: Any, tvar: str = "t", default: float = 0.0) -> str:
             p = f"(({tvar}-{_fmt(t0)})/{_fmt(span)})"
             e = _ease_expr(str(a.get("ease", "linear")), p)
             seg = f"({_fmt(v0)}+{_fmt(v1 - v0)}*({e}))"
-        out = f"if(lt({tvar},{_fmt(t1)}),{seg},{out})"
+        tratti.append((t1, seg))
+    ultimo = _fmt(_num(keys[-1].get("v")))
+
+    # Ricerca binaria sui tratti, non una catena di if uno dentro l'altro: il
+    # parser di ffmpeg regge circa cento livelli di annidamento, e un
+    # duck_music su nove minuti di voce mette centinaia di keyframe sul volume
+    # della musica ("Missing ')' or too many args" a fine export).
+    def albero(da: int, a: int) -> str:
+        """Il tratto giusto fra ``da`` e ``a`` compresi (``len(tratti)`` = dopo l'ultimo)."""
+        if da == a:
+            return tratti[da][1] if da < len(tratti) else ultimo
+        m = (da + a) // 2
+        return f"if(lt({tvar},{_fmt(tratti[m][0])}),{albero(da, m)},{albero(m + 1, a)})"
 
     first_t = _num(keys[0].get("t"))
+    out = albero(0, len(tratti))
     return f"if(lt({tvar},{_fmt(first_t)}),{_fmt(_num(keys[0].get('v')))},{out})"
 
 

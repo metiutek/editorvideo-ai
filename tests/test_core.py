@@ -29,6 +29,32 @@ def test_keyframe_expr_valido():
     assert kf.expr(3.5, "t") == "3.5"
 
 
+def test_keyframe_expr_con_centinaia_di_chiavi(tmp_path):
+    """Un duck_music su minuti di voce: ffmpeg deve leggere l'espressione e dare i valori giusti.
+
+    La catena di if uno dentro l'altro superava i cento livelli che il parser
+    di ffmpeg regge e l'export falliva alla fine, nella passata audio.
+    """
+    import subprocess
+
+    import numpy as np
+
+    from vedit import ffmpeg
+
+    chiavi = [{"t": i * 0.25, "v": float((i * 7) % 11) - 5,
+               "ease": "ease_in_out" if i % 3 == 0 else "linear"} for i in range(500)]
+    valore = {"kf": chiavi}
+    script = tmp_path / "fg.txt"
+    script.write_text(f"aevalsrc=exprs='{kf.expr(valore, 't')}':s=100:d=130[a]", encoding="utf-8")
+    out = tmp_path / "a.raw"
+    subprocess.run([ffmpeg.binary("ffmpeg"), "-v", "error", "-y", "-filter_complex_script",
+                    str(script), "-map", "[a]", "-f", "f64le", "-c:a", "pcm_f64le", str(out)],
+                   check=True)
+    letti = np.fromfile(out, dtype="<f8")
+    for i in range(0, len(letti), 37):
+        assert letti[i] == pytest.approx(kf.sample(valore, i / 100), abs=1e-3)
+
+
 def test_keyframe_validate():
     with pytest.raises(ValueError):
         kf.validate({"kf": [{"t": 0}]})
