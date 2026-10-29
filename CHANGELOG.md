@@ -4,6 +4,13 @@ Le voci più recenti stanno in cima.
 
 ## Non ancora rilasciato
 
+## v0.3.2 — 2026-10-29 · Correzione
+
+### Corretto
+- **Messaggi scritti mentre l'assistente lavora**: se il server non li accetta (turno appena
+  finito, interfaccia nuova su un server avviato prima dell'aggiornamento) vanno in coda e
+  partono a fine turno, invece di restare nella casella con un errore.
+
 ## v0.3.1 — 2026-10-29 · Menu "/" e messaggi durante il lavoro nella chat
 
 ### Aggiunto
