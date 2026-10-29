@@ -421,6 +421,9 @@ def test_tratto_su_piu_blocchi_uguale_alla_clip_intera(tmp_path):
     except htmlclip.HtmlNonDisponibile as exc:
         pytest.skip(str(exc))
     assert mov.endswith(".ffconcat") and t0 == 0.0
+    # la durata di ogni blocco: senza, il seek decodificava tutti i blocchi prima
+    righe = open(mov, encoding="utf-8").read().splitlines()
+    assert righe.count("duration 4.0") == 2
     # il render di un tratto a cavallo legge l'elenco e compone come sempre
     out = tmp_path / "f.png"
     render.render_frame(s.project, 4.5, str(out), width=320, use_proxy=False)

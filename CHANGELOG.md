@@ -11,6 +11,12 @@ Le voci più recenti stanno in cima.
   alpha compreso): 100-150 MB a blocco e codifica tre volte più veloce. La cache si pota anche
   prima di fotografare, così le versioni vecchie fanno posto alle nuove. La cache qtrle
   esistente non si usa più e se ne va alla prima potatura.
+- **Export fermo al 93% con clip html lunghe**: l'elenco `ffconcat` dei blocchi non diceva
+  la durata di ognuno, e ffmpeg, per arrivare all'attacco di un pezzo, decodificava tutti i
+  blocchi prima. Un pezzo al minuto otto rileggeva otto minuti di grafica: la parte finale
+  dell'export (il 10% della barra dopo la grafica) durava più della grafica stessa. Con
+  `duration` per blocco il pezzo salta dritto al suo blocco: a 96 s da 60 s a 8 s, a parità
+  di fotogrammi.
 
 ## v0.3.2 — 2026-10-29 · Correzione
 

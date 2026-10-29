@@ -380,12 +380,15 @@ def rasterize(html: str, *, base: str | None, duration: float, width: int, heigh
     primo = blocchi[0][0] / fps
     if len(blocchi) == 1:
         return _usato(blocchi[0][2]), primo
-    nomi = [x[2].name for x in blocchi]
-    elenco = _cache_dir() / f"{hashlib.sha1('|'.join(nomi).encode()).hexdigest()[:20]}.ffconcat"
+    # Con la durata di ogni blocco scritta, ffmpeg salta dritto al blocco
+    # dell'attacco; senza, per sapere dove cade decodificava tutti quelli
+    # prima: un pezzo d'export al minuto otto rileggeva otto minuti di
+    # grafica, e un video di nove minuti restava a lungo fermo al 93%.
+    righe = [f"file '{x[2].name}'\nduration {(x[1] - x[0]) / fps!r}\n" for x in blocchi]
+    elenco = _cache_dir() / f"{hashlib.sha1(''.join(righe).encode()).hexdigest()[:20]}.ffconcat"
     if not _pronto(elenco):
         tmp = elenco.with_name(f"~{os.getpid()}_{elenco.name}")
-        tmp.write_text("ffconcat version 1.0\n" + "".join(f"file '{n}'\n" for n in nomi),
-                       encoding="utf-8")
+        tmp.write_text("ffconcat version 1.0\n" + "".join(righe), encoding="utf-8")
         os.replace(tmp, elenco)
     return _usato(elenco, *(x[2] for x in blocchi)), primo
 
