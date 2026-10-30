@@ -1262,6 +1262,9 @@ button.comando.on { background: var(--accent-soft); border-color: rgba(255,138,9
 .serverriga small { color: var(--faint); margin-left: auto; }
 .serverriga .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
 .serverriga .dot.ok { background: var(--ok); }
+.serverriga .sdesc { margin-left: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.serverriga button.icon { flex: none; height: 22px; padding: 0 5px; }
+.skillsorgente { flex: 1; min-width: 0; }
 
 /* menu rapido: modello e sforzo del motore attivo */
 .modelpill.on { border-color: var(--accent); }

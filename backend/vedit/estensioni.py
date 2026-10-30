@@ -129,9 +129,10 @@ def skill(progetto: str | None = None) -> list[dict]:
     return sorted(viste.values(), key=lambda s: s["name"].lower())
 
 
-def indice_skill(progetto: str | None = None) -> str:
+def indice_skill(progetto: str | None = None, solo_vedit: bool = False,
+                 strumento: str = "use_skill") -> str:
     """L'elenco per il contesto del modello, o "" se non ce ne sono."""
-    voci = skill(progetto)
+    voci = skill_vedit(progetto) if solo_vedit else skill(progetto)
     if not voci:
         return ""
     righe = [f"- {s['name']}: {s['description']}" for s in voci]
@@ -139,14 +140,15 @@ def indice_skill(progetto: str | None = None) -> str:
     if len(testo) > MAX_INDICE:
         testo = testo[:MAX_INDICE] + "\n[...altre skill: list_skills per l'elenco intero]"
     return ("Skill dell'utente (istruzioni specializzate). Quando una richiesta corrisponde "
-            "a una descrizione, chiama use_skill con il suo nome PRIMA di procedere e segui "
+            f"a una descrizione, chiama {strumento} con il suo nome PRIMA di procedere e segui "
             "le istruzioni che ricevi:\n" + testo)
 
 
-def usa_skill(nome: str, progetto: str | None = None) -> dict:
-    s = next((x for x in skill(progetto) if x["name"] == nome), None)
+def usa_skill(nome: str, progetto: str | None = None, solo_vedit: bool = False) -> dict:
+    voci = skill_vedit(progetto) if solo_vedit else skill(progetto)
+    s = next((x for x in voci if x["name"] == nome), None)
     if s is None:
-        s = next((x for x in skill(progetto) if x["name"].split(":")[-1] == nome), None)
+        s = next((x for x in voci if x["name"].split(":")[-1] == nome), None)
     if s is None:
         raise ValueError(f"no skill named {nome!r}: list_skills shows the available ones")
     cartella = Path(s["dir"])
@@ -159,12 +161,252 @@ def usa_skill(nome: str, progetto: str | None = None) -> dict:
                     "them. Scripts cannot be run from here: do their job with the tools you have."}
 
 
-def leggi_file_skill(nome: str, percorso: str, progetto: str | None = None) -> str:
-    cartella = Path(usa_skill(nome, progetto)["dir"]).resolve()
+def leggi_file_skill(nome: str, percorso: str, progetto: str | None = None,
+                     solo_vedit: bool = False) -> str:
+    cartella = Path(usa_skill(nome, progetto, solo_vedit)["dir"]).resolve()
     f = (cartella / percorso).resolve()
     if cartella not in f.parents or not f.is_file():
         raise ValueError(f"{percorso} is not a file of the skill {nome}")
     return f.read_text(encoding="utf-8", errors="replace")[:MAX_SKILL]
+
+
+# --------------------------------------------------------------------------
+# skill di montaggio: quelle di vedit, che si aggiungono da qui
+# --------------------------------------------------------------------------
+#
+# Stanno in ~/.vedit/skills e arrivano a tutti: all'assistente della chat
+# a ogni livello d'accesso, a Claude Code dentro l'editor e a qualunque
+# agente MCP (list_skills / use_skill del server). Le altre skill dell'utente
+# (~/.claude, plugin) restano al livello "estensioni".
+
+MAX_PACCHETTO = 50 * 1024 * 1024    # zip scaricato o caricato
+MAX_FILE_SKILL = 300                # file estratti da un pacchetto
+_ORIGINI_VEDIT = ("project", "vedit")
+
+
+def cartella_vedit() -> Path:
+    return _vedit() / "skills"
+
+
+def skill_vedit(progetto: str | None = None) -> list[dict]:
+    """Le skill di montaggio: ~/.vedit/skills e ``.claude/skills`` del progetto."""
+    return [s for s in skill(progetto) if s["origin"] in _ORIGINI_VEDIT]
+
+
+def _nome_cartella(nome: str) -> str:
+    pulito = _NOME.sub("-", nome.strip().lower()).strip("-_")[:64]
+    if not pulito:
+        raise ValueError("the skill needs a name (letters, digits, - and _)")
+    return pulito
+
+
+def crea_skill(nome: str, descrizione: str, istruzioni: str,
+               file: dict[str, str] | None = None) -> dict:
+    """Scrive (o riscrive) una skill di montaggio: SKILL.md piu' file di supporto."""
+    cartella = _nome_cartella(nome)
+    descrizione = " ".join(descrizione.split())
+    if not descrizione:
+        raise ValueError("the description says when to use the skill: it cannot be empty")
+    if not istruzioni.strip():
+        raise ValueError("the skill has no instructions")
+    dest = cartella_vedit() / cartella
+    radice = dest.resolve()
+    # i percorsi si controllano prima di scrivere: o tutto o niente
+    scritti = []
+    for rel, contenuto in (file or {}).items():
+        f = (radice / rel).resolve()
+        if radice not in f.parents or f.name == "SKILL.md":
+            raise ValueError(f"{rel} is not a valid file path inside the skill")
+        scritti.append((f, contenuto))
+    esisteva = dest.exists()
+    dest.mkdir(parents=True, exist_ok=True)
+    testo = (f"---\nname: {cartella}\ndescription: {json.dumps(descrizione, ensure_ascii=False)}\n"
+             f"---\n\n{istruzioni.strip()}\n")
+    (dest / "SKILL.md").write_text(testo, encoding="utf-8")
+    for f, contenuto in scritti:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(contenuto, encoding="utf-8")
+    return {"name": cartella, "dir": str(dest), "aggiornata": esisteva}
+
+
+def elimina_skill(nome: str) -> dict:
+    """Toglie una skill da ~/.vedit/skills (le altre non sono di vedit)."""
+    import shutil
+
+    s = next((x for x in skill() if x["name"] == nome and x["origin"] == "vedit"), None)
+    if s is None:
+        raise ValueError(f"no vedit skill named {nome!r}: only skills added to vedit "
+                         f"can be removed here")
+    shutil.rmtree(s["dir"])
+    return {"eliminata": nome}
+
+
+def _cerca_skill(radice: Path) -> list[Path]:
+    """Le cartelle con SKILL.md sotto ``radice``: una skill o una raccolta."""
+    if (radice / "SKILL.md").is_file():
+        return [radice]
+    trovate = []
+    for dirpath, dirs, files in os.walk(radice):
+        livello = len(Path(dirpath).relative_to(radice).parts)
+        dirs[:] = [d for d in dirs if not d.startswith((".", "__")) and livello < 5]
+        if "SKILL.md" in files:
+            trovate.append(Path(dirpath))
+            dirs[:] = []  # dentro una skill non se ne cercano altre
+    return sorted(trovate)
+
+
+def _copia_skill(sorgente: Path) -> dict:
+    import shutil
+
+    testo = (sorgente / "SKILL.md").read_text(encoding="utf-8", errors="replace")
+    meta, corpo = _frontmatter(testo)
+    if not corpo.strip():
+        raise ValueError(f"{sorgente.name}/SKILL.md has no instructions")
+    nome = _nome_cartella(meta.get("name") or sorgente.name)
+    file = [p for p in sorgente.rglob("*") if p.is_file()
+            and not any(x.startswith(".") for x in p.relative_to(sorgente).parts)]
+    if len(file) > MAX_FILE_SKILL:
+        raise ValueError(f"{nome}: too many files ({len(file)}) for a skill")
+    dest = cartella_vedit() / nome
+    esisteva = dest.exists()
+    if esisteva:
+        shutil.rmtree(dest)
+    for p in file:
+        f = dest / p.relative_to(sorgente)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(p, f)
+    if not meta.get("description"):
+        # senza descrizione il modello non sa quando usarla: la prima riga del corpo
+        prima = next((r.strip("# ").strip() for r in corpo.splitlines() if r.strip()), nome)
+        (dest / "SKILL.md").write_text(
+            f"---\nname: {nome}\ndescription: {json.dumps(prima[:200], ensure_ascii=False)}\n"
+            f"---\n\n{corpo.strip()}\n", encoding="utf-8")
+    return {"name": nome, "aggiornata": esisteva}
+
+
+def _estrai_zip(dati: bytes, dest: Path) -> None:
+    import io
+    import zipfile
+
+    try:
+        z = zipfile.ZipFile(io.BytesIO(dati))
+    except zipfile.BadZipFile as exc:
+        raise ValueError("the file is not a valid zip archive") from exc
+    radice = dest.resolve()
+    totale = 0
+    for voce in z.infolist():
+        f = (radice / voce.filename).resolve()
+        if radice not in f.parents and f != radice:
+            raise ValueError(f"unsafe path in the archive: {voce.filename}")
+        totale += voce.file_size
+        if totale > MAX_PACCHETTO * 4:
+            raise ValueError("the archive is too big once extracted")
+    z.extractall(radice)
+
+
+def _scarica(url: str) -> tuple[bytes, str]:
+    from . import web
+
+    try:
+        with web._richiesta(url, timeout=60) as r:
+            dati = r.read(MAX_PACCHETTO + 1)
+            tipo = r.headers.get_content_type()
+    except web.WebError as exc:
+        raise ValueError(str(exc)) from exc
+    if len(dati) > MAX_PACCHETTO:
+        raise ValueError("the download is too big for a skill")
+    return dati, tipo
+
+
+def _url_github(url: str) -> tuple[str, str]:
+    """(indirizzo da scaricare, sottocartella) per i link alle pagine di GitHub."""
+    import urllib.parse
+
+    p = urllib.parse.urlparse(url)
+    if p.hostname not in ("github.com", "www.github.com"):
+        return url, ""
+    parti = [x for x in p.path.split("/") if x]
+    if len(parti) < 2:
+        return url, ""
+    utente, repo = parti[0], parti[1].removesuffix(".git")
+    if len(parti) >= 4 and parti[2] == "blob":
+        # un file solo: il SKILL.md grezzo
+        return (f"https://raw.githubusercontent.com/{utente}/{repo}/"
+                + "/".join(parti[3:]), "")
+    ref, sotto = "HEAD", ""
+    if len(parti) >= 4 and parti[2] == "tree":
+        ref, sotto = parti[3], "/".join(parti[4:])
+    return f"https://github.com/{utente}/{repo}/archive/{ref}.zip", sotto
+
+
+def installa_skill(sorgente: str | Path, nome_file: str = "",
+                   dati: bytes | None = None) -> dict:
+    """Aggiunge a vedit le skill che stanno in ``sorgente``.
+
+    ``sorgente``: una cartella con SKILL.md (o una raccolta di cartelle), un
+    file .md o .zip, un indirizzo web (pagina GitHub di un repo, di una
+    cartella o di un SKILL.md, uno zip, un .md grezzo). Con ``dati`` il
+    contenuto e' gia' qui (file caricato dalla UI) e ``nome_file`` ne dice il tipo.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="vedit-skill-") as tmp:
+        lavoro = Path(tmp)
+        sotto = ""
+        testo_md: str | None = None
+        if dati is not None:
+            if nome_file.lower().endswith(".zip"):
+                _estrai_zip(dati, lavoro)
+            else:
+                testo_md = dati.decode("utf-8", errors="replace")
+                nome_file = Path(nome_file or "skill.md").stem
+        elif str(sorgente).startswith(("http://", "https://")):
+            url, sotto = _url_github(str(sorgente))
+            scaricati, tipo = _scarica(url)
+            if url.lower().endswith(".zip") or tipo in ("application/zip",
+                                                        "application/x-zip-compressed"):
+                _estrai_zip(scaricati, lavoro)
+            elif tipo == "text/html":
+                raise ValueError("that address is a web page, not a skill: link a SKILL.md, "
+                                 "a .zip or a GitHub folder")
+            else:
+                testo_md = scaricati.decode("utf-8", errors="replace")
+                # .../nome-skill/SKILL.md: il nome e' la cartella
+                parti = [x for x in url.split("?")[0].split("/") if x]
+                nome_file = parti[-2] if Path(parti[-1]).stem.upper() == "SKILL" else Path(parti[-1]).stem
+        else:
+            p = Path(sorgente).expanduser()
+            if p.is_dir():
+                lavoro = p
+            elif p.is_file() and p.suffix.lower() == ".zip":
+                if p.stat().st_size > MAX_PACCHETTO:
+                    raise ValueError("the archive is too big for a skill")
+                _estrai_zip(p.read_bytes(), lavoro)
+            elif p.is_file():
+                testo_md = p.read_text(encoding="utf-8", errors="replace")
+                nome_file = p.parent.name if p.stem.upper() == "SKILL" else p.stem
+            else:
+                raise ValueError(f"not found: {sorgente}")
+        if testo_md is not None:
+            meta, _ = _frontmatter(testo_md)
+            nome = meta.get("name") or (nome_file if nome_file.upper() != "SKILL" else "skill")
+            cartella = lavoro / _nome_cartella(nome)
+            cartella.mkdir(parents=True, exist_ok=True)
+            (cartella / "SKILL.md").write_text(testo_md, encoding="utf-8")
+            trovate = [cartella]
+        else:
+            base = lavoro
+            if sotto:
+                # l'archivio di GitHub ha una cartella in testa: repo-ref/
+                testa = [d for d in lavoro.iterdir() if d.is_dir()]
+                base = (testa[0] if len(testa) == 1 else lavoro) / sotto
+                if not base.is_dir():
+                    raise ValueError(f"folder {sotto} not found in the repository")
+            trovate = _cerca_skill(base)
+        if not trovate:
+            raise ValueError("no SKILL.md found: a skill is a folder with a SKILL.md inside")
+        installate = [_copia_skill(c) for c in trovate]
+    return {"installate": installate, "dir": str(cartella_vedit())}
 
 
 # --------------------------------------------------------------------------
@@ -398,14 +640,19 @@ def strumenti(progetto: str | None = None) -> list[dict]:
     return out
 
 
-def esegui(nome: str, args: dict, progetto: str | None = None) -> str | None:
-    """Esegue uno strumento di questo modulo; None se il nome non e' suo."""
+def esegui(nome: str, args: dict, progetto: str | None = None,
+           solo_vedit: bool = False) -> str | None:
+    """Esegue uno strumento di questo modulo; None se il nome non e' suo.
+
+    ``solo_vedit``: al livello "editor" il modello vede solo le skill di montaggio.
+    """
     if nome == "use_skill":
-        return json.dumps(usa_skill(args["name"], progetto), ensure_ascii=False)
+        return json.dumps(usa_skill(args["name"], progetto, solo_vedit), ensure_ascii=False)
     if nome == "read_skill_file":
-        return leggi_file_skill(args["name"], args["path"], progetto)
+        return leggi_file_skill(args["name"], args["path"], progetto, solo_vedit)
     if nome == "list_skills":
-        return json.dumps([{k: s[k] for k in ("name", "description")} for s in skill(progetto)],
+        voci = skill_vedit(progetto) if solo_vedit else skill(progetto)
+        return json.dumps([{k: s[k] for k in ("name", "description")} for s in voci],
                           ensure_ascii=False)
     if nome.startswith("mcp__"):
         return GESTORE.chiama(nome, args)
@@ -418,6 +665,7 @@ def stato(progetto: str | None = None) -> dict:
     spenti = _spenti()
     return {
         "skill": [{k: s[k] for k in ("name", "description", "origin")} for s in skill(progetto)],
+        "skill_dir": str(cartella_vedit()),
         "server": [{"name": n, "origin": c.get("_origine"),
                     "type": c.get("type") or ("stdio" if c.get("command") else "http"),
                     "on": n not in spenti, **GESTORE.stato.get(n, {})}

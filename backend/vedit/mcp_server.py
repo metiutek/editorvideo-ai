@@ -33,7 +33,7 @@ from . import analyze, captions, cleanup, colormatch, ops
 from .allinea import METODO as METODO_VOCE
 from . import domande as domande_mod
 from . import effects as fx
-from . import ffmpeg, hw, memoria, particelle, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
+from . import apprendi, estensioni, ffmpeg, hw, memoria, particelle, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
 from .store import EditError, Store, rapporto
 
@@ -61,7 +61,10 @@ da' avvisi, non e' finito.
 Se nessuno stile integrato va bene (l'utente descrive un modo di montare suo,
 o lo chiede), crealo con create_style: guida a parole piu' una ricetta
 (look, movimento, transizioni, musica, accenti) che apply_style applica davvero.
-list_styles mostra stili, ricette e look ammessi.
+list_styles mostra stili, ricette e look ammessi. Se l'utente porta un video
+di riferimento ("montalo come questo", un file o un link), learn_style ne
+misura il montaggio e ne fa uno stile: guarda il foglio che restituisce e
+completa la guida con cio' che le misure non vedono (testi, grafica).
 
 I tempi sono in secondi. Ogni parametro animabile accetta anche
 {'kf':[{'t':0,'v':0},{'t':2,'v':1,'ease':'ease_in_out'}]}, con t relativo
@@ -193,6 +196,12 @@ questo video ("i miei video sono sempre 9:16", "niente musica epica", "il canale
 si chiama...", "voce femminile calma"), salvala con remember, breve e concreta,
 senza chiedere. Una preferenza smentita va tolta con forget. memory la legge
 per intero. Non salvare cio' che riguarda solo il progetto aperto.
+
+SKILL DI MONTAGGIO. project_create e project_open restituiscono anche "skill":
+i modi di montare che l'utente ha aggiunto a vedit (nome e quando usarli).
+Quando la richiesta corrisponde a una descrizione, use_skill PRIMA di montare e
+segui le istruzioni. Se l'utente vuole riusare un modo di lavorare, salvalo con
+create_skill; install_skill (da cartella, zip o link) solo su sua richiesta.
 
 """ + METODO_VOCE
 
@@ -482,10 +491,20 @@ def project_open(path: str) -> dict:
 
 
 def _con_memoria(out: dict) -> dict:
-    """Aggiunge la memoria fra i progetti, se c'e': e' il primo giro di ogni lavoro."""
+    """Aggiunge la memoria fra i progetti e le skill di montaggio, se ci sono:
+    e' il primo giro di ogni lavoro."""
     if m := memoria.contesto():
         out["memoria"] = m
+    if voci := estensioni.skill_vedit(out.get("path")):
+        out["skill"] = {s["name"]: s["description"] for s in voci}
     return out
+
+
+def _percorso_corrente() -> str | None:
+    try:
+        return _store().path
+    except (EditError, ValueError, KeyError):
+        return None
 
 
 @_strumento()
@@ -2162,10 +2181,112 @@ def create_style(name: str, guide: str, short: str = "", base: str = "vlog",
 
 
 @_strumento()
+async def learn_style(source: str | None = None, media: str | None = None,
+                      name: str | None = None, style: str | None = None,
+                      save: bool = True, max_seconds: float = 600,
+                      project: str | None = None) -> list:
+    """Impara uno stile di montaggio da un video gia' montato e lo salva.
+
+    ``source``: file o link (YouTube, TikTok, Instagram, Vimeo... scaricato con
+    yt-dlp, o un .mp4 diretto); oppure ``media``: id di un media importato.
+    Misura ritmo dei tagli (e come cambia), dissolvenze e passaggi al nero,
+    flash, zoom lenti e punch-in, scosse, colore e look piu' vicino, formato,
+    aperture e chiusure, BPM e quanti tagli cadono sul battito. Ne fa uno stile
+    personale (guida con i numeri veri + ricetta per apply_style); ``style``
+    aggiorna uno stile esistente, ``save=False`` misura soltanto.
+    ``max_seconds``: quanto analizzare dall'inizio (10-3600; da un link si
+    scarica solo quel tratto).
+
+    Restituisce anche il foglio dei fotogrammi (uno per inquadratura): GUARDALO.
+    Testi, grafica, sottotitoli e inquadrature non si misurano: aggiungili alla
+    guida con create_style(style=<id>, guide=...) — la guida va riscritta per
+    intero, partendo da quella restituita.
+    """
+    if media:
+        fonte = _store(project).media_or_die(media).path
+    elif source:
+        fonte = source
+    else:
+        raise EditError("give source (file or link) or media (id of an imported media)")
+    _avanza(0.05, "reading the reference video")
+    res = await _off(apprendi.impara, fonte, name, save, style, max_seconds)
+    foglio = res["misure"].pop("foglio", None)
+    out: dict = {"misure": res["misure"], "piano": res["piano"], "ricetta": res["ricetta"],
+                 "guida": res["guida"]}
+    if "stile" in res:
+        out["stile"] = res["stile"]
+        out["prossimo_passo"] = (f"guarda il foglio, completa la guida con create_style("
+                                 f"style='{res['stile']['id']}', ...), poi apply_style("
+                                 f"style='{res['stile']['id']}') dopo aver messo le clip")
+    return [out, Image(path=foglio)] if foglio else [out]
+
+
+@_strumento()
 def delete_style(style: str) -> dict:
     """Elimina uno stile personale (quelli integrati non si toccano)."""
     stili.elimina(style)
     return {"eliminato": style, "stili": [s["id"] for s in stili.tutti()]}
+
+
+@_strumento()
+def list_skills() -> dict:
+    """Le skill di montaggio aggiunte a vedit: nome e quando usarle."""
+    voci = estensioni.skill_vedit(_percorso_corrente())
+    return {"skill": {s["name"]: s["description"] for s in voci},
+            "dir": str(estensioni.cartella_vedit())}
+
+
+@_strumento()
+def use_skill(name: str, file: str | None = None) -> dict:
+    """Le istruzioni di una skill di montaggio (list_skills), da seguire prima di
+    montare. Con ``file`` legge uno dei suoi file di supporto."""
+    progetto = _percorso_corrente()
+    if file:
+        return {"file": file, "testo": estensioni.leggi_file_skill(name, file, progetto, True)}
+    return estensioni.usa_skill(name, progetto, solo_vedit=True)
+
+
+@_strumento()
+def create_skill(name: str, description: str, instructions: str,
+                 files: dict[str, str] | None = None) -> dict:
+    """Salva (o con lo stesso nome aggiorna) una skill di montaggio dell'utente.
+
+    Una skill e' un modo di lavorare da riusare: "il mio formato podcast",
+    "reel di viaggio come piacciono a me". ``description`` dice QUANDO usarla
+    (e' cio' che il modello legge per sceglierla); ``instructions`` sono i
+    passi concreti, in Markdown, con gli strumenti di vedit; ``files`` sono
+    file di supporto (percorso -> testo: modelli html, esempi). Resta in
+    ~/.vedit/skills e vale per ogni progetto, nella chat e da MCP.
+    """
+    return estensioni.crea_skill(name, description, instructions, files)
+
+
+@_strumento()
+async def install_skill(source: str, confirmed: bool = False) -> dict:
+    """Aggiunge a vedit una o piu' skill da una cartella con SKILL.md (anche una
+    raccolta), un file .md o .zip, o un link (repo o cartella GitHub, zip, .md).
+
+    Solo se l'utente l'ha chiesto: una skill sono istruzioni che il modello
+    seguira'. Con l'editor aperto gli si chiede conferma; senza, serve
+    confirmed=True dopo il suo si' per *questa* sorgente.
+    """
+    api = sys.modules.get("vedit.api")
+    if api is not None and (api.MCP_ATTIVO or api.background_info())             and (api.S.store is not None):
+        esito = await _off(api.chiedi, domande_mod.conferma_skill(source))
+        if not domande_mod.approvato(esito):
+            return {"installate": [],
+                    "motivo": esito.get("motivo") or "l'utente ha scelto di non installarla"}
+    elif not confirmed:
+        return {"installate": [],
+                "motivo": "serve la conferma dell'utente: chiediglielo e richiama con "
+                          "confirmed=True solo se dice di installare questa skill"}
+    return await _off(estensioni.installa_skill, source)
+
+
+@_strumento()
+def delete_skill(name: str) -> dict:
+    """Toglie una skill di montaggio aggiunta a vedit."""
+    return estensioni.elimina_skill(name)
 
 
 @_strumento()
@@ -2531,7 +2652,8 @@ _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "pro
                 "project_open", "install_ffmpeg", "preview_frame", "preview_media",
                 "preview_grid", "scope_image", "undo", "redo", "restore_snapshot",
                 "remember", "forget", "memory", "voice_engines", "publish_video",
-                "social_accounts", "web_search", "web_read", "web_download", "speech_times"}
+                "social_accounts", "web_search", "web_read", "web_download", "speech_times",
+                "list_skills", "use_skill", "create_skill", "install_skill", "delete_skill"}
 
 
 @_strumento()

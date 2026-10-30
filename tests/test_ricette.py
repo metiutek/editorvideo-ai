@@ -148,7 +148,9 @@ def test_aggiornare_lo_stile_tiene_la_ricetta(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("ricetta, errore", [
-    ({"colore": "blu"}, "unknown recipe entries"),
+    ({"tinta": "blu"}, "unknown recipe entries"),
+    ({"colore": "blu"}, "colore: "),
+    ({"colore": {"mean": [2, 0, 0], "std": [0, 0, 0]}}, "between 0 and 1"),
     ({"look": "barocco"}, "unknown look"),
     ({"movimento": "volo"}, "unknown movimento"),
     ({"zoom": 3}, "zoom out of range"),

@@ -81,6 +81,7 @@ export default function Chat({
   useEffect(() => { if (nuovoProgetto) setStileState('') }, [nuovoProgetto])
   const [menuStili, setMenuStili] = useState(false)
   const [editStile, setEditStile] = useState(null)   // stile personale in scrittura
+  const [impara, setImpara] = useState(false)        // stile da un video di riferimento
   const [tratto, setTratto] = useState(null)   // inizio di un tratto in costruzione
   const [caricando, setCaricando] = useState(0)  // allegati in arrivo
   const [sopra, setSopra] = useState(false)      // file trascinati sopra la chat
@@ -357,7 +358,16 @@ export default function Chat({
 
       {menuStili && (
         <div className="stilimenu">
-          {editStile ? (
+          {impara ? (
+            <ImparaStile setError={setError} onClose={() => setImpara(false)}
+              onImparato={(r) => {
+                onStili?.(r.stili)
+                setStile(r.stile)
+                setImpara(false)
+                // si apre lo stile imparato: la guida si legge e si corregge
+                setEditStile(r.stili.find((s) => s.id === r.stile) || null)
+              }} />
+          ) : editStile ? (
             <EditorStile stile={editStile} setError={setError}
               onClose={() => setEditStile(null)}
               onSalvato={(r) => { onStili?.(r.stili); if (r.stile) setStile(r.stile); setEditStile(null) }}
@@ -393,6 +403,9 @@ export default function Chat({
             <button className="ghost stilenuovo"
               onClick={() => setEditStile({ nome: '', breve: '', guida: '', piano: 'vlog' })}>
               <Icon name="piu" size={14} />create your own style
+            </button>
+            <button className="ghost stilenuovo" onClick={() => setImpara(true)}>
+              <Icon name="libreria" size={14} />learn a style from a video
             </button>
           </>)}
         </div>
@@ -898,6 +911,7 @@ function Accesso({ claudeCode, setError }) {
           </button>
         ))}
       </div>
+      <SkillMontaggio st={st} setSt={setSt} setError={setError} />
       {st.accesso === 'completo' && (
         <div className="hint warn">
           The assistant can run commands and change files anywhere on this computer without asking.
@@ -933,6 +947,104 @@ function Accesso({ claudeCode, setError }) {
         )}
       </>)}
     </div>
+  )
+}
+
+/**
+ * Skill di montaggio aggiunte a vedit (~/.vedit/skills, estensioni.py): un
+ * modo di montare che l'assistente segue quando la richiesta corrisponde.
+ * Valgono a ogni livello d'accesso, nella chat e per gli agenti MCP.
+ */
+function SkillMontaggio({ st, setSt, setError }) {
+  const [sorgente, setSorgente] = useState('')
+  const [nuova, setNuova] = useState(null)
+  const [occupato, setOccupato] = useState(false)
+  const [esito, setEsito] = useState('')
+  const fileRef = useRef(null)
+  const mie = (Array.isArray(st.skill) ? st.skill : []).filter((x) => x.origin === 'vedit' || x.origin === 'project')
+  const esegui = async (fn) => {
+    setOccupato(true); setEsito('')
+    try {
+      const r = await fn()
+      setSt(r)
+      const inst = r.esito?.installate
+      if (inst) setEsito(`added: ${inst.map((x) => x.name).join(', ')}`)
+      return true
+    } catch (e) { setError(e.message); return false } finally { setOccupato(false) }
+  }
+  const aggiungi = () => sorgente.trim() && esegui(() => api.installaSkill(sorgente.trim())).then((ok) => ok && setSorgente(''))
+  const carica = (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (f) esegui(() => api.caricaSkill(f))
+  }
+  const salva = () => esegui(() => api.creaSkill(nuova)).then((ok) => ok && setNuova(null))
+  return (
+    <>
+      <div className="section-title">editing skills</div>
+      <div className="hint">
+        Your own ways of editing — a format, a channel's look, a workflow. The assistant follows one
+        when a request matches it, at every access level and for MCP agents too.
+      </div>
+      {!!mie.length && (
+        <div className="serverlist">
+          {mie.map((x) => (
+            <div key={x.name} className="serverriga" title={x.description}>
+              <span className="snome">{x.name}</span>
+              <small className="sdesc">{x.description}</small>
+              {x.origin === 'vedit' && (
+                <button className="ghost icon" title="remove" disabled={occupato}
+                  onClick={() => esegui(() => api.eliminaSkill(x.name))}>
+                  <Icon name="cestino" size={13} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="azioni">
+        <input className="skillsorgente" value={sorgente} disabled={occupato}
+          placeholder="GitHub link, .zip, .md or folder path"
+          onChange={(e) => setSorgente(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') aggiungi() }} />
+        <button disabled={occupato || !sorgente.trim()} onClick={aggiungi}>{occupato ? 'adding…' : 'add'}</button>
+      </div>
+      <div className="azioni">
+        <button className="ghost" disabled={occupato} onClick={() => fileRef.current?.click()}>upload .md / .zip</button>
+        <input ref={fileRef} type="file" accept=".md,.zip,.markdown,.txt" hidden onChange={carica} />
+        <button className="ghost" disabled={occupato}
+          onClick={() => setNuova(nuova ? null : { name: '', description: '', instructions: '' })}>
+          <Icon name="piu" size={13} />write one
+        </button>
+        {esito && <span className="hint">{esito}</span>}
+      </div>
+      {nuova && (
+        <div className="provform">
+          <label className="campo">
+            <span>name</span>
+            <input value={nuova.name} placeholder="travel-reel"
+              onChange={(e) => setNuova({ ...nuova, name: e.target.value })} />
+          </label>
+          <label className="campo">
+            <span>when to use it</span>
+            <input value={nuova.description} placeholder="vertical travel reels for my channel"
+              onChange={(e) => setNuova({ ...nuova, description: e.target.value })} />
+          </label>
+          <label className="campo">
+            <span>how to edit</span>
+            <textarea className="memoria-testo" value={nuova.instructions} spellCheck={false}
+              placeholder={'- 9:16, 20-30 seconds\n- open on the best shot, cut on the beat\n- warm look, captions at the bottom'}
+              onChange={(e) => setNuova({ ...nuova, instructions: e.target.value })} />
+          </label>
+          <div className="azioni">
+            <button className="primary" disabled={occupato || !nuova.name.trim() || !nuova.description.trim() || !nuova.instructions.trim()}
+              onClick={salva}><Icon name="spunta" />save skill</button>
+            <button className="ghost" onClick={() => setNuova(null)}>cancel</button>
+          </div>
+        </div>
+      )}
+      {st.skill_dir && <div className="hint">Kept in <code>{st.skill_dir}</code>.</div>}
+    </>
   )
 }
 
@@ -988,6 +1100,56 @@ const PIANI = [
  * sue, che arriva al modello a ogni messaggio come gli stili gia' pronti.
  * Resta su questo computer (~/.vedit/stili.json), non nel progetto.
  */
+/**
+ * Uno stile imparato da un video gia' montato (apprendi.py): un file, un link
+ * (YouTube, TikTok, Instagram...) o un video caricato. Le misure diventano
+ * guida e ricetta; poi lo stile si apre nell'editor per correggerlo.
+ */
+function ImparaStile({ setError, onClose, onImparato }) {
+  const [fonte, setFonte] = useState('')
+  const [nome, setNome] = useState('')
+  const [lavoro, setLavoro] = useState('')
+  const fileRef = useRef(null)
+  const esegui = async (fn, cosa) => {
+    setLavoro(cosa)
+    try { onImparato(await fn()) } catch (e) { setError(e.message) } finally { setLavoro('') }
+  }
+  const daFonte = () => fonte.trim() && esegui(() => api.imparaStile(fonte.trim(), nome.trim() || null),
+    fonte.trim().startsWith('http') ? 'downloading and analysing…' : 'analysing…')
+  const carica = (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (f) esegui(() => api.imparaStileFile(f, nome.trim()), 'uploading and analysing…')
+  }
+  return (
+    <div className="editorstile">
+      <b>Learn a style from a video</b>
+      <div className="hint">
+        Give an edited video you like: vedit measures its pace, cuts on the beat, transitions,
+        zooms and punch-ins, colour and format, and turns them into a style the assistant follows.
+      </div>
+      <label>video link or file path
+        <input value={fonte} disabled={!!lavoro} autoFocus
+          placeholder="https://youtube.com/shorts/… or C:\videos\reference.mp4"
+          onChange={(e) => setFonte(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') daFonte() }} />
+      </label>
+      <label>style name (optional)
+        <input value={nome} disabled={!!lavoro} placeholder="e.g. Like my favourite channel"
+          onChange={(e) => setNome(e.target.value)} />
+      </label>
+      {lavoro && <div className="hint">{lavoro} it can take a minute.</div>}
+      <div className="editorstile-azioni">
+        <button className="ghost" disabled={!!lavoro} onClick={() => fileRef.current?.click()}>upload a video</button>
+        <input ref={fileRef} type="file" accept="video/*" hidden onChange={carica} />
+        <span className="spacer" />
+        <button className="ghost" disabled={!!lavoro} onClick={onClose}>cancel</button>
+        <button className="primary" disabled={!!lavoro || !fonte.trim()} onClick={daFonte}>learn</button>
+      </div>
+    </div>
+  )
+}
+
 function EditorStile({ stile, setError, onClose, onSalvato, onEliminato }) {
   const [f, setF] = useState(stile)
   const [salvo, setSalvo] = useState(false)

@@ -73,7 +73,7 @@ transcribe = ["faster-whisper>=1.0"]
 html = ["playwright>=1.40"]
 # scaricare dalle pagine dei video (YouTube, Vimeo, social...) con web_download.
 # Senza, web_download scarica i file diretti e dice come installarlo.
-web = ["yt-dlp"]
+web = ["yt-dlp[default]>=2026.10.26"]
 # plugin audio esterni (VST3, AU su Mac): pedalboard li carica, ffmpeg no.
 # Senza, l'effetto "vst" dice cosa installare e il resto non cambia.
 plugin = ["pedalboard>=0.9"]

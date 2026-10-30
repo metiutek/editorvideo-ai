@@ -179,6 +179,14 @@ export const api = {
       body: JSON.stringify(body),
     }),
   eliminaStile: (id) => req(`/api/stili/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  // stile imparato da un video di riferimento (apprendi.py)
+  imparaStile: (source, nome) => req('/api/stili/impara', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source, nome }) }),
+  imparaStileFile: (file, nome) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('nome', nome || '')
+    return req('/api/stili/impara/carica', { method: 'POST', body: fd })
+  },
 
   // una traccia di testi come .srt o .vtt
   esportaSottotitoli: (track, path) =>
@@ -238,6 +246,15 @@ export const api = {
   estensioni: () => req('/api/estensioni'),
   setEstensioni: (body) => req('/api/estensioni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   collegaEstensioni: () => req('/api/estensioni/collega', { method: 'POST' }),
+  // skill di montaggio in ~/.vedit/skills: valgono a ogni livello d'accesso
+  creaSkill: (body) => req('/api/estensioni/skill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  installaSkill: (source) => req('/api/estensioni/skill/installa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) }),
+  caricaSkill: (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return req('/api/estensioni/skill/carica', { method: 'POST', body: fd })
+  },
+  eliminaSkill: (nome) => req(`/api/estensioni/skill/${encodeURIComponent(nome)}`, { method: 'DELETE' }),
   // web: cercare, scaricare (web.py)
   web: () => req('/api/web'),
   setWeb: (body) => req('/api/web', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),

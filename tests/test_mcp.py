@@ -674,3 +674,41 @@ async def test_formato_video(tmp_path):
     assert (r["width"], r["height"]) == (3840, 2160)
     with pytest.raises(ToolError):
         await call("project_settings", format="boh")
+
+
+@pytest.mark.anyio
+async def test_skill_di_montaggio(tmp_path, monkeypatch):
+    """L'agente crea, legge e toglie le skill; installarle vuole il si' dell'utente."""
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path / "cache"))
+    s = await call("create_skill", name="podcast", description="Podcast con due camere",
+                   instructions="Alterna le camere.", files={"esempio.md": "ciao"})
+    assert s["name"] == "podcast"
+    p = await call("project_create", path=str(tmp_path / "s.json"), preset="720p")
+    assert p["skill"] == {"podcast": "Podcast con due camere"}
+    assert (await call("list_skills"))["skill"] == {"podcast": "Podcast con due camere"}
+    assert "Alterna" in (await call("use_skill", name="podcast"))["istruzioni"]
+    assert (await call("use_skill", name="podcast", file="esempio.md"))["testo"] == "ciao"
+    altra = tmp_path / "altra"
+    altra.mkdir()
+    (altra / "SKILL.md").write_text("---\nname: altra\ndescription: d\n---\ncorpo",
+                                    encoding="utf-8")
+    assert (await call("install_skill", source=str(altra)))["installate"] == []
+    assert (await call("install_skill", source=str(altra), confirmed=True))["installate"]
+    await call("delete_skill", name="podcast")
+    assert set((await call("list_skills"))["skill"]) == {"altra"}
+
+
+@pytest.mark.anyio
+async def test_learn_style_da_mcp(tmp_path, monkeypatch, assets):
+    """learn_style misura un video, salva lo stile e restituisce il foglio da guardare."""
+    monkeypatch.setenv("VEDIT_CACHE", str(tmp_path / "cache"))
+    await call("project_create", path=str(tmp_path / "ls.json"), preset="720p")
+    media = await call("import_media", paths=[assets["blue"]])
+    mid = media[0]["id"] if isinstance(media, list) else media["media"][0]["id"]
+    res = await srv.mcp.call_tool("learn_style", {"media": mid, "name": "Dal blu"})
+    tipi = [c.type for c in res.content]
+    assert "image" in tipi
+    dati = json.loads(next(c.text for c in res.content if c.type == "text"))
+    assert dati["stile"]["nome"] == "Dal blu" and "guida" in dati
+    with pytest.raises(ToolError):
+        await call("learn_style")

@@ -150,3 +150,25 @@ def test_chat_scarica(sito, tmp_path):
     assert out["media"][0]["kind"] == "image" and s.project.media[0].folder == "web"
     nomi = {t["name"] for t in chat.build_tools()}
     assert {"web_search", "web_read", "web_download"} <= nomi
+
+
+def test_tratto_con_ripiego(sito, tmp_path, monkeypatch):
+    """Da una pagina video si chiede solo l'inizio; se il sito rifiuta il taglio
+    (YouTube con ffmpeg diretto) si scarica tutto invece di fallire."""
+    chieste = []
+
+    def finto(url, cartella, altezza, secondi=None):
+        chieste.append(secondi)
+        if secondi:
+            raise web.WebError("ffmpeg exited with code 1")
+        f = cartella / "intero.mp4"
+        f.write_bytes(b"x")
+        return f
+
+    monkeypatch.setattr(web, "_scarica_ytdlp", finto)
+    d = web.scarica(f"{sito}/pagina", tmp_path, 480, secondi=95)
+    assert d["path"].endswith("intero.mp4") and chieste == [95, None]
+    with pytest.raises(web.WebError):
+        monkeypatch.setattr(web, "_scarica_ytdlp", lambda *a, **k: (_ for _ in ()).throw(
+            web.WebError("rotto")))
+        web.scarica(f"{sito}/pagina", tmp_path)

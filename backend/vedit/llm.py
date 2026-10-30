@@ -391,7 +391,13 @@ def run_anthropic(p: dict, cfg: dict, system: str, tools: list[dict], history: l
             yield {"type": "tool", "name": b.name, "input": b.input}
             try:
                 out = run_op(b.name, dict(b.input))
-                risultati.append({"type": "tool_result", "tool_use_id": b.id, "content": out})
+                im = _immagine_di(out)
+                contenuto_r = out if im is None else [
+                    {"type": "text", "text": str(out)},
+                    {"type": "image", "source": {"type": "base64", "media_type": im["mime"],
+                                                 "data": im["b64"]}}]
+                risultati.append({"type": "tool_result", "tool_use_id": b.id,
+                                  "content": contenuto_r})
                 yield {"type": "tool_done", "name": b.name}
             except Exception as exc:
                 risultati.append({"type": "tool_result", "tool_use_id": b.id,
@@ -519,6 +525,7 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
             yield {"type": "done"}
             return
 
+        da_vedere: list[tuple[str, dict]] = []
         for tc in msg["tool_calls"]:
             nome = tc["function"]["name"]
             if fermo():
@@ -539,7 +546,15 @@ def run_openai(p: dict, cfg: dict, system: str, tools: list[dict], history: list
             except Exception as exc:
                 out = f"errore: {exc}"
                 yield {"type": "tool_error", "name": nome, "message": str(exc)}
-            history.append({"role": "tool", "tool_call_id": tc["id"], "content": out})
+            history.append({"role": "tool", "tool_call_id": tc["id"], "content": str(out)})
+            if (im := _immagine_di(out)) is not None:
+                da_vedere.append((nome, im))
+        # i messaggi "tool" non portano immagini: arrivano subito dopo, come utente
+        for nome_im, im in da_vedere:
+            history.append({"role": "user", "content": [
+                {"type": "text", "text": f"Immagine restituita da {nome_im}:"},
+                {"type": "image_url", "image_url": {"url": f"data:{im['mime']};base64,"
+                                                           + im["b64"]}}]})
         if fermo():
             yield {"type": "stopped"}
             return
@@ -755,6 +770,29 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
 # --------------------------------------------------------------------------
 # immagini dei riferimenti
 # --------------------------------------------------------------------------
+
+
+class ConImmagine(str):
+    """Il testo del risultato di uno strumento, con un'immagine da far vedere al
+    modello (il foglio dei fotogrammi di learn_style). Resta una stringa: chi
+    non sa delle immagini la tratta come prima."""
+
+    immagine: str | None = None
+
+    def __new__(cls, testo: str, immagine: str | None = None):
+        s = super().__new__(cls, testo)
+        s.immagine = immagine
+        return s
+
+
+def _immagine_di(out) -> dict | None:
+    f = getattr(out, "immagine", None)
+    if not f or not Path(f).is_file():
+        return None
+    try:
+        return immagine(f)
+    except OSError:
+        return None
 
 
 def immagine(path: str) -> dict:

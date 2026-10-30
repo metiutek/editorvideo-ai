@@ -9,6 +9,28 @@ Le voci più recenti stanno in cima.
   negli appunti. L'avviso resta finché ci sta sopra il puntatore, e l'errore di export si
   scorre invece di allargare il dialogo.
 
+- **Stile imparato da un video**: nel menu stili, *learn a style from a video* prende un
+  link (YouTube, TikTok, Instagram, mp4 diretto), un file o un video caricato e ne misura il
+  montaggio: ritmo e accelerazioni, stacchi sul battito, dissolvenze e passaggi al nero,
+  flash, zoom lenti e punch-in, scosse, colore e look, formato e bande nere, cartelli su nero,
+  aperture e chiusure. Ne esce uno stile personale (guida con i numeri e ricetta per
+  `apply_style`) che si apre per essere corretto. Anche da chat, da MCP (`learn_style`, con il
+  foglio dei fotogrammi da guardare) e da terminale (`vedit style learn`). Lo stile porta il
+  colore vero del riferimento (`colormatch` su ogni ripresa, non solo il look più vicino); il
+  foglio dei fotogrammi arriva anche all'assistente della chat; da un link si scarica solo il
+  tratto analizzato (`--max-seconds`, di norma 10 minuti).
+- **YouTube con yt-dlp aggiornata**: l'extra `web` ora installa `yt-dlp[default]>=2026.10.26`
+  (con il risolutore JavaScript) e vedit usa Node.js come runtime quando manca Deno. Con la
+  yt-dlp di giugno YouTube rispondeva 403.
+- **Skill di montaggio**: un modo semplice per aggiungere i propri modi di montare. Dalle
+  impostazioni del modello (*editing skills*) si incolla un link GitHub, uno zip, un `.md` o
+  una cartella, si carica un file o se ne scrive una al volo; da terminale `vedit skill
+  add|new|list|rm`. Stanno in `~/.vedit/skills` e valgono a ogni livello d'accesso della chat,
+  per Claude Code dentro l'editor e per gli agenti MCP (`list_skills`, `use_skill`,
+  `create_skill`, `install_skill` con conferma, `delete_skill`). L'assistente puo' salvare da
+  se' una skill quando glielo si chiede. Al livello *solo l'editor* la chat vede solo queste,
+  non le altre skill di Claude Code.
+
 ### Corretto
 - **Export con molta grafica html che riempiva il disco**: i blocchi fotografati stavano in
   `.mov` qtrle, 500-700 MB ogni 4 secondi a 1080p; un video di nove minuti tutto in html

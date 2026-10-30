@@ -1481,6 +1481,57 @@ def estensioni_collega() -> dict:
     return estensioni_stato()
 
 
+class SkillBody(BaseModel):
+    name: str
+    description: str
+    instructions: str
+
+
+class SkillSorgente(BaseModel):
+    source: str
+
+
+def _skill_risposta(fn, *args) -> dict:
+    """Le skill di montaggio (estensioni.py): l'esito e lo stato aggiornato."""
+    from . import estensioni
+    try:
+        esito = fn(*args)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(400, f"cannot write the skill: {exc}") from exc
+    return {**estensioni_stato(), "esito": esito}
+
+
+@app.post("/api/estensioni/skill")
+def skill_crea(body: SkillBody) -> dict:
+    from . import estensioni
+    return _skill_risposta(estensioni.crea_skill, body.name, body.description, body.instructions)
+
+
+@app.post("/api/estensioni/skill/installa")
+def skill_installa(body: SkillSorgente) -> dict:
+    """Da una cartella, un .md o .zip sul disco, o un link (GitHub, zip, .md)."""
+    from . import estensioni
+    return _skill_risposta(estensioni.installa_skill, body.source.strip())
+
+
+@app.post("/api/estensioni/skill/carica")
+async def skill_carica(file: UploadFile = File(...)) -> dict:
+    """Un SKILL.md o uno zip scelto dall'utente nel browser."""
+    from . import estensioni
+    dati = await file.read(estensioni.MAX_PACCHETTO + 1)
+    if len(dati) > estensioni.MAX_PACCHETTO:
+        raise HTTPException(400, "the file is too big for a skill")
+    return _skill_risposta(lambda: estensioni.installa_skill("", file.filename or "", dati))
+
+
+@app.delete("/api/estensioni/skill/{nome}")
+def skill_elimina(nome: str) -> dict:
+    from . import estensioni
+    return _skill_risposta(estensioni.elimina_skill, nome)
+
+
 class LlmBody(BaseModel):
     provider: str
     chiave: str | None = None
@@ -1753,6 +1804,41 @@ def stili_salva(body: StileBody) -> dict:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"stile": nuovo["id"], "stili": stili.descrivi()}
+
+
+class ImparaBody(BaseModel):
+    source: str
+    nome: str | None = None
+
+
+def _impara(fonte: str, nome: str | None) -> dict:
+    """Uno stile imparato da un video (apprendi.py): misure, guida e stile salvato."""
+    from . import apprendi
+    try:
+        res = apprendi.impara(fonte, nome)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - rete, yt-dlp, ffmpeg: il messaggio serve all'utente
+        raise HTTPException(400, f"cannot learn from that video: {exc}") from exc
+    return {"stile": res["stile"]["id"], "guida": res["guida"], "ricetta": res["ricetta"],
+            "misure": res["misure"], "stili": stili.descrivi()}
+
+
+@app.post("/api/stili/impara")
+def stili_impara(body: ImparaBody) -> dict:
+    """Da un file sul disco o da un link (YouTube, TikTok, Instagram, mp4 diretto)."""
+    return _impara(body.source.strip(), body.nome)
+
+
+@app.post("/api/stili/impara/carica")
+async def stili_impara_carica(file: UploadFile = File(...), nome: str = Form("")) -> dict:
+    """Un video scelto nel browser: resta in ~/.vedit/riferimenti."""
+    from . import apprendi
+    dest = apprendi.cartella() / Path(file.filename or "riferimento.mp4").name
+    with open(dest, "wb") as f:
+        while blocco := await file.read(1 << 20):
+            f.write(blocco)
+    return await asyncio.to_thread(_impara, str(dest), nome or None)
 
 
 @app.delete("/api/stili/{stile_id}")
@@ -2070,7 +2156,8 @@ def chat(body: ChatBody) -> StreamingResponse:
         if name == "generate_voice":
             # la sintesi puo' durare: fuori dal lock, la UI resta libera
             args = {**args, "_voci": chat_mod.prepara_voce(store, args)}
-        if name in ("web_search", "web_read", "speech_times", "use_skill", "read_skill_file", "list_skills") \
+        if name in ("web_search", "web_read", "speech_times", "use_skill", "read_skill_file", "list_skills",
+                    "learn_style") \
                 or name.startswith("mcp__"):
             # non toccano il progetto: niente lock (un server MCP puo' metterci minuti)
             return chat_mod.execute(store, name, args)

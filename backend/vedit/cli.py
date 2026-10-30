@@ -217,6 +217,43 @@ def cmd_ui(a) -> int:
     return 0
 
 
+def cmd_skill(a) -> int:
+    """Skill di montaggio in ~/.vedit/skills: elenco, aggiunta, nuova, rimozione."""
+    from . import estensioni
+
+    if a.azione == "list":
+        voci = estensioni.skill_vedit()
+        for s in voci:
+            print(f"{s['name']}: {s['description']}")
+        if not voci:
+            print("nessuna skill: vedit skill add <cartella|file .md/.zip|link>")
+        print(f"cartella: {estensioni.cartella_vedit()}")
+    elif a.azione == "add":
+        for s in estensioni.installa_skill(a.sorgente)["installate"]:
+            print(f"{'aggiornata' if s['aggiornata'] else 'aggiunta'}: {s['name']}")
+    elif a.azione == "new":
+        istruzioni = Path(a.file).read_text(encoding="utf-8") if a.file else sys.stdin.read()
+        s = estensioni.crea_skill(a.nome, a.description, istruzioni)
+        print(f"{'aggiornata' if s['aggiornata'] else 'creata'}: {s['dir']}")
+    elif a.azione == "rm":
+        estensioni.elimina_skill(a.nome)
+        print(f"eliminata: {a.nome}")
+    return 0
+
+
+def cmd_style_learn(a) -> int:
+    """Uno stile di montaggio imparato da un video (file o link)."""
+    from . import apprendi
+
+    res = apprendi.impara(a.sorgente, a.name, salva=not a.dry_run, limite=a.max_seconds)
+    print(res["guida"])
+    if res["misure"].get("foglio"):
+        print(f"\nfotogrammi: {res['misure']['foglio']}")
+    if "stile" in res:
+        print(f"\nstile salvato: {res['stile']['id']} ({res['stile']['nome']})")
+    return 0
+
+
 def cmd_mcp(a) -> int:
     from .mcp_server import main as mcp_main
 
@@ -336,6 +373,29 @@ def build_parser() -> argparse.ArgumentParser:
                         help="scarica ffmpeg/ffprobe nella cache di vedit (niente amministratore)")
     fi.add_argument("--force", action="store_true", help="riscarica anche se ci sono gia'")
     fi.set_defaults(func=cmd_install_ffmpeg)
+
+    st = sub.add_parser("style", help="stili di montaggio")
+    sts = st.add_subparsers(dest="azione", required=True)
+    stl = sts.add_parser("learn", help="impara lo stile di un video gia' montato (file o link)")
+    stl.add_argument("sorgente")
+    stl.add_argument("--name", help="nome dello stile")
+    stl.add_argument("--dry-run", action="store_true", help="misura soltanto, non salva")
+    stl.add_argument("--max-seconds", type=float, default=600,
+                     help="secondi analizzati dall'inizio (default 600)")
+    stl.set_defaults(func=cmd_style_learn)
+
+    sk = sub.add_parser("skill", help="skill di montaggio per l'assistente e gli agenti MCP")
+    sks = sk.add_subparsers(dest="azione", required=True)
+    sks.add_parser("list", help="le skill aggiunte a vedit")
+    ska = sks.add_parser("add", help="aggiunge da cartella, file .md/.zip o link (GitHub, zip, .md)")
+    ska.add_argument("sorgente")
+    skn = sks.add_parser("new", help="scrive una skill: istruzioni da --file o da stdin")
+    skn.add_argument("nome")
+    skn.add_argument("-d", "--description", required=True, help="quando usarla")
+    skn.add_argument("-f", "--file", help="istruzioni in Markdown")
+    skr = sks.add_parser("rm", help="toglie una skill aggiunta a vedit")
+    skr.add_argument("nome")
+    sk.set_defaults(func=cmd_skill)
 
     m = sub.add_parser("mcp", help="avvia il server MCP su stdio")
     m.set_defaults(func=cmd_mcp)

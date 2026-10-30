@@ -309,6 +309,24 @@ def build_tools() -> list[dict]:
               {"note": _STR, "section": _STR}, ["note"]),
         _tool("forget", "Toglie dalla memoria comune le voci che contengono match.",
               {"match": _STR}, ["match"]),
+        _tool("learn_style",
+              "Impara uno stile di montaggio da un video di riferimento (file, link "
+              "YouTube/TikTok/Instagram o media importato): misura ritmo, transizioni, "
+              "movimento, colore, battito e lo salva come stile personale applicabile con "
+              "apply_style. Usalo quando l'utente dice 'montalo come questo video'.",
+              {"source": {"type": "string", "description": "file o link del video"},
+               "media": {"type": "string", "description": "id di un media importato"},
+               "name": _STR,
+               "max_seconds": {"type": "number", "description": "secondi analizzati (default 600)"}},
+              []),
+        _tool("create_skill",
+              "Salva una skill di montaggio dell'utente (~/.vedit/skills): un modo di "
+              "lavorare che vuole riusare (\"il mio formato podcast\", \"i miei reel di "
+              "viaggio\"). description = quando usarla; instructions = i passi concreti "
+              "con gli strumenti di vedit. Stesso nome = la aggiorna. Solo se l'utente lo chiede.",
+              {"name": _STR, "description": _STR, "instructions": _STR,
+               "files": {"type": "object", "description": "file di supporto: percorso -> testo"}},
+              ["name", "description", "instructions"]),
         _tool("undo", "Annulla l'ultima modifica.", {}, []),
     ]
 
@@ -319,6 +337,7 @@ def build_tools() -> list[dict]:
 
 # strumenti che non sono metodi di Store
 _SPECIAL = {"speech_times", "project_info", "apply_preset", "apply_style", "review_edit", "create_style",
+            "create_skill", "learn_style",
             "remember", "forget", "generate_voice", "web_search", "web_read", "web_download"}
 
 
@@ -387,7 +406,30 @@ def execute(store: Any, name: str, args: dict) -> str:
                           ensure_ascii=False)
 
     if name in ("use_skill", "read_skill_file", "list_skills") or name.startswith("mcp__"):
-        return estensioni.esegui(name, args, store.path)
+        return estensioni.esegui(name, args, store.path,
+                                 solo_vedit=llm.carica()["accesso"] == "editor")
+
+    if name == "learn_style":
+        from . import apprendi
+        fonte = store.media_or_die(args["media"]).path if args.get("media") else args.get("source")
+        if not fonte:
+            raise ValueError("give source (file or link) or media")
+        res = apprendi.impara(fonte, args.get("name"),
+                              limite=float(args.get("max_seconds") or apprendi.LIMITE))
+        foglio = res["misure"].pop("foglio", None)
+        testo = json.dumps({"stile": res.get("stile"), "guida": res["guida"],
+                            "ricetta": res["ricetta"], "misure": res["misure"],
+                            "nota": "nell'immagine un fotogramma per inquadratura del "
+                                    "riferimento: testi, grafica e sottotitoli che vedi vanno "
+                                    "aggiunti alla guida con create_style(style=id, ...)"},
+                           ensure_ascii=False, default=str)
+        # il foglio arriva al modello come immagine (llm.ConImmagine)
+        return llm.ConImmagine(testo, foglio)
+
+    if name == "create_skill":
+        return json.dumps(estensioni.crea_skill(args["name"], args["description"],
+                                                args["instructions"], args.get("files")),
+                          ensure_ascii=False)
 
     if name == "remember":
         return json.dumps(memoria.ricorda(args["note"], args.get("section") or "general"),
@@ -607,11 +649,17 @@ def comando_skill(question: str, claude_code: bool, progetto: str | None = None)
     m = re.match(r"/([\w.:-]+)(?:\s+(.*))?$", question.strip(), re.S)
     if not m:
         return question
-    nomi = {s["name"].lower(): s["name"] for s in estensioni.skill(progetto)}
-    nome = nomi.get(m.group(1).lower())
-    if nome is None:
+    voci = {s["name"].lower(): s for s in estensioni.skill(progetto)}
+    s = voci.get(m.group(1).lower())
+    if s is None:
         return question
-    come = "con lo strumento Skill" if claude_code else "con use_skill"
+    nome = s["name"]
+    if not claude_code:
+        come = "con use_skill"
+    elif s.get("origin") in ("vedit", "project"):
+        come = "con use_skill del server MCP vedit"  # Claude Code non guarda ~/.vedit
+    else:
+        come = "con lo strumento Skill"
     out = f"L'utente invoca la skill \"{nome}\" (/{nome}): caricala {come} e seguila."
     if m.group(2) and m.group(2).strip():
         out += f"\nArgomenti: {m.group(2).strip()}"
@@ -680,6 +728,12 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
         question, p["tipo"] == "claude_code", store.path)})
 
     if p["tipo"] == "claude_code":
+        # le sue skill Claude Code le trova da se'; quelle di vedit passano dal server MCP
+        indice = estensioni.indice_skill(store.path, solo_vedit=True,
+                                         strumento="use_skill (server MCP vedit)")
+        if indice and indice != stato_chat.get("skill_inviate"):
+            contenuto.insert(len(contenuto) - 1, {"type": "text", "text": indice})
+            stato_chat["skill_inviate"] = indice
         if not mcp_url:
             yield {"type": "error", "message": "the editor's MCP server is not running"}
             return
@@ -692,8 +746,13 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
             yield {"type": "thinking"}
             tools += estensioni.strumenti(store.path)
             indice = estensioni.indice_skill(store.path)
-            if indice and indice != stato_chat.get("skill_inviate"):
-                contenuto.insert(len(contenuto) - 1, {"type": "text", "text": indice})
-                stato_chat["skill_inviate"] = indice
+        else:
+            # le skill di montaggio aggiunte a vedit valgono a ogni livello
+            indice = estensioni.indice_skill(store.path, solo_vedit=True)
+            if indice:
+                tools += estensioni.STRUMENTI_SKILL
+        if indice and indice != stato_chat.get("skill_inviate"):
+            contenuto.insert(len(contenuto) - 1, {"type": "text", "text": indice})
+            stato_chat["skill_inviate"] = indice
         motore = llm.run_anthropic if p["tipo"] == "anthropic" else llm.run_openai
         yield from motore(p, cfg, SYSTEM, tools, stato_chat["messaggi"], contenuto, run_op, fermo)

@@ -118,6 +118,7 @@ backend/vedit/
   conversazioni.py  chat di ogni progetto, salvata in <progetto>.chat.json
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito
   estensioni.py  skill e server MCP dell'utente per l'assistente della chat
+  apprendi.py    stile di montaggio imparato da un video di riferimento
   mcp_server.py  strumenti MCP
   api.py         API REST/WebSocket per la UI
   cli.py         riga di comando
@@ -377,6 +378,41 @@ dalla pastiglia in cima (`/api/llm/rapido`, `llm.imposta_rapido`): Claude Code r
 `memory` da MCP e dalla chat; `project_create` e `project_open` restituiscono `memoria`, e la
 chat la passa al modello una volta per conversazione. Ci va solo cio' che vale oltre il
 progetto aperto.
+
+### Stile da un video di riferimento
+
+`learn_style` (`apprendi.impara`) prende un file, un link (scaricato con `web.scarica`, quindi
+anche yt-dlp) o un media importato e misura come e' montato, con un solo flusso ffmpeg a
+96 px e 10 fps piu' lo scene score per i tagli netti: un secondo rilevatore di salti trova i
+punch-in che lo scene score non vede; le dissolvenze sono fotogrammi che valgono la media dei
+vicini, e le sfumature dal nero (stessa immagine, solo piu' scura) non contano; i tratti di
+nero fra due scene sono passaggi sul nero; bande nere e cartelli su nero si leggono sulle
+righe sempre nere e sui pixel chiari di un'inquadratura buia; il BPM viene da
+`analyze.beats`. `ricetta()` e `guida()` traducono le misure in stile (`stili.salva`):
+quello che esce deve passare `stili.valida_ricetta`. Il colore non e' un look indovinato:
+la ricetta porta `colore` (media e deviazione per canale, senza bande nere) e
+`stili.applica` mette `colormatch` su ogni ripresa a `FORZA_COLORE`. Il foglio dei
+fotogrammi arriva anche ai modelli via API: `chat.execute` restituisce `llm.ConImmagine`
+(una stringa con un'immagine attaccata), che `run_anthropic` mette nel `tool_result` e
+`run_openai` in un messaggio utente subito dopo. Da un link si scarica solo il tratto
+analizzato (`web.scarica(secondi=)`, `--download-sections`), e se il sito rifiuta il
+taglio si ripiega sul video intero. I numeri si tarano su video veri: un
+riferimento sintetico fatto con vedit stesso (`tests/test_apprendi.py`, anche `slow`) deve
+restituire esattamente tagli, dissolvenze e punch-in che ci sono stati messi.
+
+### Skill di montaggio
+
+Le skill che l'utente aggiunge a vedit stanno in `~/.vedit/skills/<nome>/SKILL.md` (piu'
+`.claude/skills` accanto al progetto): `estensioni.crea_skill`, `installa_skill` (cartella o
+raccolta, `.md`, `.zip`, link GitHub/zip/.md scaricato con `web._richiesta`, quindi niente
+indirizzi locali; zip controllati contro i percorsi che escono), `elimina_skill` (solo quelle
+di vedit). A differenza delle altre skill dell'utente arrivano a ogni livello d'accesso:
+nella chat con `indice_skill(solo_vedit=True)` e `esegui(..., solo_vedit=...)`, a Claude Code
+e agli agenti dal server MCP (`list_skills`, `use_skill`, `create_skill`, `delete_skill`;
+`project_create`/`project_open` restituiscono `skill`). `install_skill` da MCP chiede
+conferma come `publish_video` (`domande.conferma_skill`): una skill sono istruzioni che il
+modello seguira'. UI: `SkillMontaggio` in `Chat.jsx`, API `/api/estensioni/skill*`; CLI
+`vedit skill`.
 
 ### Domande all'utente ed export
 

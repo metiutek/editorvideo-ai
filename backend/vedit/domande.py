@@ -120,6 +120,21 @@ def conferma_pubblica(piattaforma: str, file: str, titolo: str, privacy: str) ->
     }]
 
 
+def conferma_skill(sorgente: str) -> list[dict]:
+    """La domanda che precede l'installazione di una skill chiesta dall'assistente:
+    una skill sono istruzioni che il modello seguira'."""
+    return [{
+        "domanda": f"The assistant wants to add the editing skill from \"{sorgente}\". "
+                   "Its instructions will guide the assistant from now on. Go ahead?",
+        "titolo": "Add skill",
+        "opzioni": [
+            {"etichetta": "Yes, add it", "descrizione": "it goes in ~/.vedit/skills, removable any time"},
+            {"etichetta": "No", "descrizione": "nothing is installed"},
+        ],
+        "multipla": False,
+    }]
+
+
 def approvato(esito: dict) -> bool:
     """Vero solo se l'utente ha scelto esplicitamente di esportare."""
     if esito.get("annullata"):

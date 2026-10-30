@@ -548,7 +548,7 @@ def _scarica_diretto(r, url: str, cartella: Path) -> Path:
     return dest
 
 
-def _scarica_ytdlp(url: str, cartella: Path, altezza: int) -> Path:
+def _scarica_ytdlp(url: str, cartella: Path, altezza: int, secondi: float | None = None) -> Path:
     cmd = _yt_dlp()
     if not cmd:
         raise WebError("this address is a web page, not a media file. Install yt-dlp "
@@ -559,6 +559,14 @@ def _scarica_ytdlp(url: str, cartella: Path, altezza: int) -> Path:
     args = cmd + ["--no-playlist", "--no-progress", "--restrict-filenames",
                   "-f", f"bv*[height<={altezza}]+ba/b[height<={altezza}]/b",
                   "--merge-output-format", "mp4", "-o", modello, "--print", "after_move:filepath"]
+    if secondi:
+        # solo l'inizio: per imparare uno stile non serve un film intero
+        args += ["--download-sections", f"*0-{int(secondi)}"]
+        modello_parte = str(cartella / f"%(title).80B [%(id)s] 0-{int(secondi)}s.%(ext)s")
+        args[args.index(modello)] = modello_parte
+    if shutil.which("node") and not shutil.which("deno"):
+        # YouTube vuole un runtime JavaScript: senza, alcuni formati mancano
+        args += ["--js-runtimes", "node"]
     try:
         args += ["--ffmpeg-location", str(Path(ff.binary("ffmpeg")).parent)]
     except Exception:
@@ -575,7 +583,8 @@ def _scarica_ytdlp(url: str, cartella: Path, altezza: int) -> Path:
     return Path(righe[-1])
 
 
-def scarica(url: str, cartella: str | Path, altezza: int = 1080, titolo: str = "") -> dict:
+def scarica(url: str, cartella: str | Path, altezza: int = 1080, titolo: str = "",
+            secondi: float | None = None) -> dict:
     """Scarica un'immagine, un video o un audio; da una pagina video passa da yt-dlp."""
     url = (url or "").strip()
     cartella = Path(cartella)
@@ -586,7 +595,13 @@ def scarica(url: str, cartella: str | Path, altezza: int = 1080, titolo: str = "
             f = _scarica_diretto(r, url, cartella)
             _annota(cartella, f, r.geturl(), titolo=titolo)
             return {"path": str(f), "url": url}
-    f = _scarica_ytdlp(url, cartella, altezza)
+    try:
+        f = _scarica_ytdlp(url, cartella, altezza, secondi)
+    except WebError:
+        if not secondi:
+            raise
+        # alcuni siti (YouTube) rifiutano il taglio diretto: allora tutto il video
+        f = _scarica_ytdlp(url, cartella, altezza)
     _annota(cartella, f, url, titolo=titolo)
     return {"path": str(f), "url": url}
 

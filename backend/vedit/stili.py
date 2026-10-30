@@ -265,7 +265,10 @@ MOVIMENTI = ("spinta", "punch")
 MUSICHE = ("arco", "crescendo", "sotto_voce")
 ACCENTI = ("shake", "glitch")
 VOCI_RICETTA = ("look", "movimento", "zoom", "transizioni", "apertura", "chiusura",
-                "musica", "accenti", "atti", "attese", "da_fare")
+                "musica", "accenti", "atti", "attese", "da_fare", "colore")
+# quanto apply_style porta le riprese verso il colore di un riferimento: al 100%
+# le statistiche di un contenuto diverso (cielo contro volto) trascinerebbero troppo
+FORZA_COLORE = 0.6
 
 
 def valida_ricetta(r: dict) -> dict:
@@ -359,6 +362,17 @@ def valida_ricetta(r: dict) -> dict:
             raise ValueError(f"unknown expectations: {', '.join(map(str, ignote))}; "
                              f"allowed: {', '.join(review._RIMEDI)}")
         out["attese"] = v
+    if "colore" in r:
+        v = r["colore"]
+        if v is not None:
+            try:
+                v = {k: [round(float(x), 5) for x in v[k]] for k in ("mean", "std")}
+            except (TypeError, ValueError, KeyError):
+                raise ValueError('colore: {"mean": [r, g, b], "std": [r, g, b]} in 0..1, '
+                                 "or null") from None
+            if any(len(x) != 3 or not all(0 <= c <= 1 for c in x) for x in v.values()):
+                raise ValueError("colore: three values between 0 and 1 for mean and for std")
+        out["colore"] = v
     if "da_fare" in r:
         v = r["da_fare"] or []
         if isinstance(v, str):
@@ -471,6 +485,27 @@ def applica(store, stile_id: str, track: str | None = None) -> dict:
             else:
                 store.add_effects(None, presets.find(r["look"])["effects"])
                 fatto["look"] = r["look"]
+
+        # colore di un video di riferimento (stile imparato): ogni ripresa portata
+        # verso le sue statistiche, una correzione per sorgente
+        if r.get("colore") and tipo == "media":
+            from . import colormatch
+            misure: dict[str, dict] = {}
+            allineate = 0
+            for t in tracce:
+                for c in t.clips:
+                    if c.type != "media" or any(e.type == "colormatch" for e in c.effects):
+                        continue
+                    path = store.media_or_die(c.media).path
+                    try:
+                        if path not in misure:
+                            misure[path] = colormatch.stats(path, 6)
+                    except (ValueError, OSError):
+                        continue  # un'immagine o un file illeggibile: resta com'e'
+                    store.add_effect(c.id, "colormatch", colormatch.match_params(
+                        misure[path], r["colore"], FORZA_COLORE))
+                    allineate += 1
+            fatto["colore"] = f"colore del riferimento su {allineate} clip"
 
         # movimento dentro l'inquadratura
         if r["movimento"]:

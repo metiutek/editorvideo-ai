@@ -706,6 +706,35 @@ vedit si collega ai server MCP configurati in Claude Code, Claude Desktop o
 senza richieste di permesso: comandi, file, controllo del computer e del browser). Ogni server
 MCP si può spegnere da solo.
 
+**Imparare uno stile da un video** — fagli vedere un video montato che ti piace e vedit impara
+come è tagliato. Nel menu stili, *learn a style from a video*: incolla un link (YouTube,
+TikTok, Instagram, Vimeo — con yt-dlp, l'extra `web` — o un `.mp4` diretto), il percorso di un
+file, oppure carica il video. vedit misura il ritmo (tagli al minuto, durata delle
+inquadrature, quanto varia e se il montaggio accelera), gli stacchi sul battito rispetto ai
+BPM della musica, dissolvenze e passaggi al nero, flash bianchi, zoom lenti e punch-in, scosse
+sui tagli, colore e look più vicino, formato e bande nere, cartelli su nero, aperture e
+chiusure. Ne fa uno stile personale: una guida con i numeri veri più una ricetta che
+`apply_style` applica — compreso il colore vero del riferimento, portato su ogni ripresa con
+`colormatch` — e lo apre perché tu lo legga e lo corregga. Testi, grafica e sottotitoli non si
+misurano: l'assistente (chat o MCP) riceve un foglio con un fotogramma per inquadratura e li
+aggiunge alla guida. Anche dalla chat ("montalo come questo video"), da MCP (`learn_style`) e
+da terminale (`vedit style learn <link|file> --name … --max-seconds 600`). Di norma si
+analizzano i primi dieci minuti, e da una pagina video si scarica solo quel tratto; i
+download vanno in `~/.vedit/riferimenti`. YouTube vuole una yt-dlp recente con il suo
+risolutore JavaScript: l'extra `web` installa `yt-dlp[default]`, e usa Node.js se manca Deno.
+
+**Skill di montaggio** — i tuoi modi di montare (un formato podcast, i reel di viaggio, il look
+di un canale) salvati come skill: una cartella con un `SKILL.md`, lo stesso formato delle
+skill di Claude Code. Si aggiungono dalle impostazioni del modello, sotto *editing skills*:
+incolla un link GitHub (repo, cartella o `SKILL.md`), il percorso di un `.zip`, di un `.md` o
+di una cartella, carica un file, oppure scrivine una lì (*write one*). Da terminale:
+`vedit skill add <link|percorso>`, `vedit skill new <nome> -d "quando usarla" -f passi.md`,
+`vedit skill list`, `vedit skill rm <nome>`. Stanno in `~/.vedit/skills` (e in
+`.claude/skills` accanto al progetto) e valgono ovunque: l'assistente dell'editor a ogni
+livello d'accesso (`/nome` la invoca), Claude Code dentro l'editor e qualunque agente MCP
+(`list_skills`, `use_skill`, `create_skill`; `install_skill` prima chiede). Chiedi
+all'assistente di *salvarlo come skill* e la scrive lui.
+
 **Memoria fra i progetti** — `~/.vedit/MEMORIA.md`: l'assistente e l'agente MCP ci annotano
 le tue preferenze durature (formato abituale, stile, voce, canale, cose che non vuoi) con
 `remember` / `forget`, e le rileggono a ogni progetto. Si modifica a mano, o dal pulsante col
@@ -749,6 +778,7 @@ backend/vedit/
   conversazioni.py  la chat di ogni progetto, salvata accanto
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito
   estensioni.py  skill e server MCP dell'utente per l'assistente nell'editor
+  apprendi.py    imparare uno stile di montaggio da un video gia' montato
   mcp_server.py  strumenti MCP
   api.py         API REST/WebSocket per la UI
   cli.py         riga di comando
