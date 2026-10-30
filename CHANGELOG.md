@@ -2,7 +2,7 @@
 
 Le voci più recenti stanno in cima.
 
-## Non ancora rilasciato
+## v0.4.0 — 2026-10-31 · Stile imparato da un video, skill di montaggio
 
 ### Aggiunto
 - **Copiare gli errori**: l'errore di export e l'avviso in basso hanno un pulsante che li copia
