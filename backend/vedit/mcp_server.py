@@ -207,7 +207,7 @@ create_skill; install_skill (da cartella, zip o link) solo su sua richiesta.
 
 mcp = MCPServer(
     name="vedit",
-    version="0.4.0",
+    version="0.4.1",
     instructions=ISTRUZIONI,
 )
 

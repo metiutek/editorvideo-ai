@@ -2,7 +2,9 @@
 
 Le voci più recenti stanno in cima.
 
-## v0.4.0 — 2026-10-31 · Stile imparato da un video, skill di montaggio
+## v0.4.1 — 2026-10-31 · Stile imparato da un video, skill di montaggio
+
+La v0.4.0 non è mai arrivata su PyPI: la verifica dell'interfaccia l'ha fermata (due campi file senza etichetta). Contenuto identico, più la correzione.
 
 ### Aggiunto
 - **Copiare gli errori**: l'errore di export e l'avviso in basso hanno un pulsante che li copia
@@ -32,6 +34,11 @@ Le voci più recenti stanno in cima.
   non le altre skill di Claude Code.
 
 ### Corretto
+- **Schede a destra**: modello e stile si aprono uno alla volta, sopra la chat invece di
+  schiacciarla, e si chiudono con Esc o con un clic fuori; riaperto, il menu stili riparte
+  dall'elenco. Passare a proprietà, scope o mixer non smonta più l'assistente: un turno in
+  corso, il testo scritto e la coda restano. All'avvio non lampeggia più la scelta del modello
+  prima che arrivi lo stato.
 - **Export con molta grafica html che riempiva il disco**: i blocchi fotografati stavano in
   `.mov` qtrle, 500-700 MB ogni 4 secondi a 1080p; un video di nove minuti tutto in html
   lasciava 71 GB in `~/.vedit/html` e il disco pieno. Ora sono FFV1 (sempre senza perdita,

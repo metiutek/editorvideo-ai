@@ -72,6 +72,7 @@ globalThis.ResizeObserver = class { observe() {} disconnect() {} }
 globalThis.localStorage = { _d: {}, getItem(k) { return this._d[k] ?? null }, setItem(k, v) { this._d[k] = String(v) } }
 dom.window.HTMLMediaElement.prototype.play = () => Promise.resolve()
 dom.window.HTMLMediaElement.prototype.pause = () => {}
+dom.window.Element.prototype.scrollIntoView = () => {}   // jsdom non la ha: la chat la usa
 
 // finestre di sistema: se qualcuno le chiama lo si scopre qui
 const nativeDialogs = []
@@ -87,6 +88,8 @@ globalThis.fetch = async (url) => {
   if (path === '/api/browse') {
     return { ok: true, status: 200, json: async () => ({ path: 'C:/', parent: null, dirs: [{ name: 'video', path: 'C:/video' }], files: [{ name: 'a.mp4', path: 'C:/a.mp4', size: 1e6 }] }) }
   }
+  // modello pronto: la chat si monta, non la scelta del modello
+  if (path === '/api/llm') return { ok: true, status: 200, json: async () => STATE.chat }
   const body = path === '/api/state' ? STATE : { result: { id: 'c1' }, project: FAKE_PROJECT, revision: 'r1' }
   return { ok: true, status: 200, json: async () => body }
 }
@@ -238,6 +241,31 @@ const rowGap = 3, pad = 2
 const needed = btnH * 2 + rowGap + pad
 if (minH < needed) {
   fail('tracce', `all'altezza minima (${minH}px) la testata ne chiede ${needed}px: i comandi escono`)
+}
+
+// ------------------------------------ 10. schede e menu del pannello destro
+// modello e stile si aprono uno alla volta; cambiare scheda non smonta
+// l'assistente (testo scritto, turno in corso e coda restano)
+const tick = () => new Promise((r) => setTimeout(r, 30))
+const pill = (cls) => root.querySelector(`.chat .${cls}`)
+click(pill('modelpill')); await tick()
+click(pill('stilepill')); await tick()
+const menuAperti = root.querySelectorAll('.chattesta > .stilimenu').length
+if (menuAperti !== 1) fail('pannello destro', `${menuAperti} menu della testata aperti insieme invece di uno`)
+key('Escape'); await tick()
+if (root.querySelector('.chattesta > .stilimenu')) fail('pannello destro', 'Esc non chiude il menu dello stile')
+
+const area = root.querySelector('.chat textarea')
+const setVal = Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set
+setVal.call(area, 'bozza')
+area.dispatchEvent(new dom.window.Event('input', { bubbles: true })); await tick()
+const scheda = (nome) => [...root.querySelectorAll('.tabs.destra button')]
+  .find((b) => b.textContent.trim() === nome)
+click(scheda('properties')); await tick()
+if (root.querySelector('.chat')?.style.display !== 'none') fail('pannello destro', 'la chat resta visibile sotto le proprieta\'')
+click(scheda('assistant')); await tick()
+if (root.querySelector('.chat textarea')?.value !== 'bozza') {
+  fail('pannello destro', 'cambiando scheda si perde il testo scritto all\'assistente')
 }
 
 // ------------------------------------------------------------- referto

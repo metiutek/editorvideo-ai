@@ -1272,3 +1272,14 @@ button.comando.on { background: var(--accent-soft); border-color: rgba(255,138,9
 .menumodello .scelta { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 13px; background: var(--panel-2); }
 .menumodello .scelta.on { border-color: var(--accent); color: var(--text); background: rgba(95,160,255,.14); }
 .menumodello .sceltalibera { width: 140px; height: 26px; font-size: 12px; border-radius: 13px; padding: 0 10px; }
+
+/* testata dell'assistente: modello e stile si aprono sopra la chat, uno alla
+   volta, senza schiacciarla */
+.chattesta { position: relative; flex: none; z-index: 5; }
+.chattesta > .stilimenu {
+  position: absolute; top: 100%; left: 0; right: 0; max-height: min(70vh, 520px);
+  border: 1px solid var(--line); border-top: none; border-radius: 0 0 var(--r-lg) var(--r-lg);
+  box-shadow: 0 12px 28px rgba(0,0,0,.45);
+}
+.chattesta > .stilimenu:has(.editorstile) { max-height: min(85vh, 720px); }
+.stilepill.aperto { border-color: var(--accent); }

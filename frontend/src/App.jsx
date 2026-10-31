@@ -668,18 +668,22 @@ export default function App() {
               <button className={rightTab === 'mixer' ? 'on' : ''} title="Faders, mute/solo, meters, stereo or 5.1"
                 onClick={() => setRightTab('mixer')}><Icon name="altoparlante" />mixer</button>
             </div>
-            {rightTab === 'mixer' ? (
+            {rightTab === 'mixer' && (
               <Mixer project={project} playhead={playhead} revision={revision} run={run} setError={setError} />
-            ) : rightTab === 'scope' ? (
+            )}
+            {rightTab === 'scope' && (
               <Scopes project={project} playhead={playhead} playing={playing} revision={revision} />
-            ) : rightTab === 'props' ? (
+            )}
+            {rightTab === 'props' && (
               <Inspector project={project} effects={sys?.effects || []}
                 transitions={sys?.transitions || []} clip={selectedClip}
                 playhead={playhead} run={run} setError={setError} setBusy={setBusy}
                 onProva={setProvaFx}
                 onRif={(id) => aggiungiRif({ kind: 'clip', id })} />
-            ) : (
-              <Chat available={llmSt || sys?.chat} onAvailable={setLlmSt} setError={setError}
+            )}
+            {/* l'assistente resta montato anche dietro le altre schede: un turno
+                in corso, il testo scritto e la coda non si perdono cambiando scheda */}
+            <Chat visibile={rightTab === 'chat'} available={llmSt || sys?.chat} onAvailable={setLlmSt} setError={setError}
                 onProject={applyState} project={project} playhead={playhead} seek={seek}
                 selected={selected} refs={refs} setRefs={setRefs}
                 stili={sys?.stili || []} domanda={domanda} nuovoProgetto={nuovi}
@@ -695,7 +699,6 @@ export default function App() {
                   setPickArea(next)
                   if (next) { setTab('program'); setPlaying(false) }
                 }} />
-            )}
           </div>
         </div>
       </div>

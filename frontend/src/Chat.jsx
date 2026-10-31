@@ -62,12 +62,14 @@ const URL_SOLO = /^https?:\/\/\S+$/i
 export default function Chat({
   available, onAvailable, onProject, setError, project, playhead, seek, selected,
   refs, setRefs, pickArea, setPickArea, stili = [], onStili, domanda, onRisposta, nuovoProgetto = 0,
+  visibile = true,
 }) {
   const [turns, setTurns] = useState([])   // {role, text, tools:[], refs}
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [settings, setSettings] = useState(false)
-  const [menuModello, setMenuModello] = useState(false)
+  // un solo menu della testata aperto alla volta: 'modello' | 'stili' | null
+  const [menu, setMenuState] = useState(null)
   const [memoriaAperta, setMemoriaAperta] = useState(false)
   // stile di montaggio: resta scelto fra una sessione e l'altra, ma un
   // progetto nuovo riparte da "nessuno"
@@ -79,9 +81,29 @@ export default function Chat({
     try { localStorage.setItem('vedit.stile', v) } catch { /* senza storage resta per questa sessione */ }
   }
   useEffect(() => { if (nuovoProgetto) setStileState('') }, [nuovoProgetto])
-  const [menuStili, setMenuStili] = useState(false)
   const [editStile, setEditStile] = useState(null)   // stile personale in scrittura
   const [impara, setImpara] = useState(false)        // stile da un video di riferimento
+  const testaRef = useRef(null)
+  /** Apre un menu e chiude l'altro; richiuso, il menu stili riparte dall'elenco. */
+  const setMenu = (m) => {
+    setMenuState(m)
+    if (m !== 'stili') { setEditStile(null); setImpara(false) }
+    // l'agente puo' aver creato uno stile nel frattempo (create_style)
+    if (m === 'stili') api.stili().then((r) => onStili?.(r.stili)).catch(() => {})
+  }
+  // si chiude con Esc o con un clic fuori, ma non mentre si scrive uno stile:
+  // si perderebbe il testo
+  const scrivendo = !!(editStile || impara)
+  useEffect(() => {
+    if (!menu || scrivendo) return
+    const fuori = (e) => { if (!testaRef.current?.contains(e.target)) setMenuState(null) }
+    const esc = (e) => { if (e.key === 'Escape') setMenuState(null) }
+    window.addEventListener('mousedown', fuori)
+    window.addEventListener('keydown', esc)
+    return () => { window.removeEventListener('mousedown', fuori); window.removeEventListener('keydown', esc) }
+  }, [menu, scrivendo])
+  // scheda nascosta: niente menu sospesi al ritorno
+  useEffect(() => { if (!visibile) { setMenuState(null); setEditStile(null); setImpara(false) } }, [visibile])
   const [tratto, setTratto] = useState(null)   // inizio di un tratto in costruzione
   const [caricando, setCaricando] = useState(0)  // allegati in arrivo
   const [sopra, setSopra] = useState(false)      // file trascinati sopra la chat
@@ -132,9 +154,14 @@ export default function Chat({
     return () => { vivo = false }
   }, [percorso, nuovoProgetto])
 
-  if (settings || !available?.ok) {
+  const nascosta = visibile ? undefined : { display: 'none' }
+  // stato del modello non ancora arrivato: non e' "manca il modello"
+  if (!available) {
+    return <div className="chat" style={nascosta}><div className="chatempty hint">connecting…</div></div>
+  }
+  if (settings || !available.ok) {
     return (
-      <div className="chat">
+      <div className="chat" style={nascosta}>
         <div className="section-title">
           choose the model
           <span className="spacer" />
@@ -180,13 +207,10 @@ export default function Chat({
     const fai = {
       clear: reset,
       stop: () => api.chatStop().catch(() => {}),
-      model: () => setMenuModello(true),
-      style: () => {
-        api.stili().then((r) => onStili?.(r.stili)).catch(() => {})
-        setMenuStili(true)
-      },
-      memory: () => setMemoriaAperta(true),
-      settings: () => setSettings(true),
+      model: () => setMenu('modello'),
+      style: () => setMenu('stili'),
+      memory: () => { setMenu(null); setMemoriaAperta(true) },
+      settings: () => { setMenu(null); setSettings(true) },
     }[nome.toLowerCase()]
     if (!fai) return false
     setInput('')
@@ -306,7 +330,7 @@ export default function Chat({
   }
 
   return (
-    <div className={`chat ${sopra ? 'sopra' : ''}`}
+    <div className={`chat ${sopra ? 'sopra' : ''}`} style={nascosta}
       // i file lasciati qui sono allegati per l'assistente, non media del
       // progetto: il trascinamento non deve arrivare all'import della finestra
       onDragOver={(e) => {
@@ -322,24 +346,21 @@ export default function Chat({
         allega(e.dataTransfer.files)
       }}>
       {sopra && <div className="chatdrop">drop to attach to the message</div>}
+      <div className="chattesta" ref={testaRef}>
       <div className="section-title">
-        <button className={`modelpill ${menuModello ? 'on' : ''}`} title="Model and effort"
-          onClick={() => setMenuModello((v) => !v)}>
+        <button className={`modelpill ${menu === 'modello' ? 'on' : ''}`} title="Model and effort"
+          onClick={() => setMenu(menu === 'modello' ? null : 'modello')}>
           <span className="dot" />
           {available.nome}{available.model ? ` · ${available.model}` : ''}
           {available.sforzo ? ` · ${available.sforzo}` : ''}
         </button>
         <span className="spacer" />
-        <button className={`stilepill ${stile ? 'on' : ''}`} title="Editing style"
-          onClick={() => {
-            // l'agente puo' aver creato uno stile nel frattempo (create_style)
-            if (!menuStili) api.stili().then((r) => onStili?.(r.stili)).catch(() => {})
-            setMenuStili((v) => !v)
-          }}>
+        <button className={`stilepill ${stile ? 'on' : ''} ${menu === 'stili' ? 'aperto' : ''}`}
+          title="Editing style" onClick={() => setMenu(menu === 'stili' ? null : 'stili')}>
           <Icon name="libreria" size={13} />
           {stili.find((s) => s.id === stile)?.nome || 'style'}
         </button>
-        <button className="icon sm" onClick={() => setMemoriaAperta(true)}
+        <button className="icon sm" onClick={() => { setMenu(null); setMemoriaAperta(true) }}
           title="Memory: what the assistant remembers across all your projects">
           <Icon name="memoria" size={14} />
         </button>
@@ -348,15 +369,13 @@ export default function Chat({
         </button>
       </div>
 
-      {menuModello && (
+      {menu === 'modello' && (
         <MenuModello available={available} setError={setError}
           onCambiato={onAvailable}
-          onImpostazioni={() => { setMenuModello(false); setSettings(true) }} />
+          onImpostazioni={() => { setMenu(null); setSettings(true) }} />
       )}
 
-      {memoriaAperta && <EditorMemoria setError={setError} onClose={() => setMemoriaAperta(false)} />}
-
-      {menuStili && (
+      {menu === 'stili' && (
         <div className="stilimenu">
           {impara ? (
             <ImparaStile setError={setError} onClose={() => setImpara(false)}
@@ -379,12 +398,12 @@ export default function Chat({
           ) : (<>
             <div className="hint">The style guides the assistant in every choice: pace, transitions, colour, text.</div>
             <button className={`stilevoce ${!stile ? 'on' : ''}`}
-              onClick={() => { setStile(''); setMenuStili(false) }}>
+              onClick={() => { setStile(''); setMenu(null) }}>
               <b>None</b><span>the assistant decides case by case</span>
             </button>
             {stili.filter((s) => !s.personale).map((s) => (
               <button key={s.id} className={`stilevoce ${stile === s.id ? 'on' : ''}`}
-                onClick={() => { setStile(s.id); setMenuStili(false) }}>
+                onClick={() => { setStile(s.id); setMenu(null) }}>
                 <b>{s.nome}</b><span>{s.breve}</span>
               </button>
             ))}
@@ -392,7 +411,7 @@ export default function Chat({
             {stili.filter((s) => s.personale).map((s) => (
               <div key={s.id} className="stilemio">
                 <button className={`stilevoce ${stile === s.id ? 'on' : ''}`}
-                  onClick={() => { setStile(s.id); setMenuStili(false) }}>
+                  onClick={() => { setStile(s.id); setMenu(null) }}>
                   <b>{s.nome}</b><span>{s.breve}</span>
                 </button>
                 <button className="icon sm" title="Edit the style" onClick={() => setEditStile(s)}>
@@ -410,6 +429,9 @@ export default function Chat({
           </>)}
         </div>
       )}
+      </div>
+
+      {memoriaAperta && <EditorMemoria setError={setError} onClose={() => setMemoriaAperta(false)} />}
 
       <div className="chatlog">
         {!turns.length && (
@@ -517,7 +539,7 @@ export default function Chat({
             title="Attach images, PDFs, text, video or audio (also by dropping them here or with Ctrl+V)"
             onClick={() => fileRef.current?.click()}>
             <Icon name={RIF_ICON.file} size={13} />{caricando ? 'uploading…' : 'file'}</button>
-          <input ref={fileRef} type="file" multiple hidden
+          <input ref={fileRef} type="file" multiple hidden aria-label="files to attach"
             onChange={(e) => { allega(e.target.files); e.target.value = '' }} />
           <button className={`chip ${linkAperto ? 'on' : ''}`} disabled={caricando > 0}
             title="A web page, an image, a video or an audio file from the internet"
@@ -1011,7 +1033,8 @@ function SkillMontaggio({ st, setSt, setError }) {
       </div>
       <div className="azioni">
         <button className="ghost" disabled={occupato} onClick={() => fileRef.current?.click()}>upload .md / .zip</button>
-        <input ref={fileRef} type="file" accept=".md,.zip,.markdown,.txt" hidden onChange={carica} />
+        <input ref={fileRef} type="file" accept=".md,.zip,.markdown,.txt" hidden onChange={carica}
+          aria-label="skill file (.md or .zip)" />
         <button className="ghost" disabled={occupato}
           onClick={() => setNuova(nuova ? null : { name: '', description: '', instructions: '' })}>
           <Icon name="piu" size={13} />write one
@@ -1141,7 +1164,8 @@ function ImparaStile({ setError, onClose, onImparato }) {
       {lavoro && <div className="hint">{lavoro} it can take a minute.</div>}
       <div className="editorstile-azioni">
         <button className="ghost" disabled={!!lavoro} onClick={() => fileRef.current?.click()}>upload a video</button>
-        <input ref={fileRef} type="file" accept="video/*" hidden onChange={carica} />
+        <input ref={fileRef} type="file" accept="video/*" hidden onChange={carica}
+          aria-label="reference video" />
         <span className="spacer" />
         <button className="ghost" disabled={!!lavoro} onClick={onClose}>cancel</button>
         <button className="primary" disabled={!!lavoro || !fonte.trim()} onClick={daFonte}>learn</button>
