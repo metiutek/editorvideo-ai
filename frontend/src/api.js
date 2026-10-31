@@ -270,6 +270,7 @@ export const api = {
   statoPubblica: (id) => req(`/api/social/pubblica/${id}`),
   // memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
   memoria: () => req('/api/memoria'),
+  copertina: () => req('/api/cover'),
   salvaMemoria: (testo) =>
     req('/api/memoria', {
       method: 'PUT',

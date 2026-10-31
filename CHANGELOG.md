@@ -2,6 +2,15 @@
 
 Le voci più recenti stanno in cima.
 
+## v0.4.2 — 2026-10-31 · Copertina
+
+### Aggiunto
+- **Copertina in anteprima**: scheda *cover* nel pannello destro per la miniatura fatta a parte.
+  La mostra intera nel formato del video e piccola accanto al titolo, come in un feed (16:9 o
+  verticale); avvisa se la proporzione non è quella del video, se è sotto i 640 px o sopra i
+  2 MB di YouTube. Si ricarica quando l'immagine viene rifatta fuori dall'editor. Sta nel
+  progetto (`cover`), si imposta da MCP con `set_cover` e il render non la usa.
+
 ## v0.4.1 — 2026-10-31 · Stile imparato da un video, skill di montaggio
 
 La v0.4.0 non è mai arrivata su PyPI: la verifica dell'interfaccia l'ha fermata (due campi file senza etichetta). Contenuto identico, più la correzione.

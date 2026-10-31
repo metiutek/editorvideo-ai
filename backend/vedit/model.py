@@ -322,6 +322,9 @@ class Project:
     tracks: list[Track] = field(default_factory=list)
     master: Master = field(default_factory=Master)
     markers: list[Marker] = field(default_factory=list)
+    # copertina fatta a parte (immagine): si guarda accanto al video, il render
+    # non la usa
+    cover: str = ""
 
     # ---- lookup -------------------------------------------------------
     def media_by_id(self, mid: str) -> Media | None:

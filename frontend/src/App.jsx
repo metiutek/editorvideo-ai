@@ -13,6 +13,7 @@ import Mixer from './Mixer.jsx'
 import { EditorParticelle, MenuParticelle } from './Particelle.jsx'
 import Preview from './Preview.jsx'
 import Scopes from './Scopes.jsx'
+import Copertina from './Copertina.jsx'
 import SourceMonitor from './SourceMonitor.jsx'
 import Timeline from './Timeline.jsx'
 import { caricaTrascinati, importaPercorsi } from './caricamento.js'
@@ -73,7 +74,7 @@ export default function App() {
   const [rightTab, setRightTabState] = useState(() => {
     try {
       const t = localStorage.getItem('vedit.destra')
-      return t === 'props' || t === 'scope' || t === 'mixer' ? t : 'chat'
+      return ['props', 'scope', 'mixer', 'cover'].includes(t) ? t : 'chat'
     } catch { return 'chat' }
   })
   const setRightTab = useCallback((t) => {
@@ -667,9 +668,14 @@ export default function App() {
                 onClick={() => setRightTab('scope')}><Icon name="color" />scope</button>
               <button className={rightTab === 'mixer' ? 'on' : ''} title="Faders, mute/solo, meters, stereo or 5.1"
                 onClick={() => setRightTab('mixer')}><Icon name="altoparlante" />mixer</button>
+              <button className={rightTab === 'cover' ? 'on' : ''} title="The video's thumbnail, made elsewhere: full size and as it looks in a feed"
+                onClick={() => setRightTab('cover')}><Icon name="immagine" />cover</button>
             </div>
             {rightTab === 'mixer' && (
               <Mixer project={project} playhead={playhead} revision={revision} run={run} setError={setError} />
+            )}
+            {rightTab === 'cover' && (
+              <Copertina project={project} revision={revision} run={run} setError={setError} />
             )}
             {rightTab === 'scope' && (
               <Scopes project={project} playhead={playhead} playing={playing} revision={revision} />

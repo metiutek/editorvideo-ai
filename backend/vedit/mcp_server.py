@@ -207,7 +207,7 @@ create_skill; install_skill (da cartella, zip o link) solo su sua richiesta.
 
 mcp = MCPServer(
     name="vedit",
-    version="0.4.1",
+    version="0.4.2",
     instructions=ISTRUZIONI,
 )
 
@@ -633,6 +633,18 @@ def project_settings(width: int | None = None, height: int | None = None, fps: f
     return {"width": st.width, "height": st.height, "format": rapporto(st.width, st.height),
             "fps": st.fps, "background": st.background,
             "audio_layout": st.audio_layout, "master_volume": s.project.master.volume}
+
+
+@_strumento()
+def set_cover(path: str = "", project: str | None = None) -> dict:
+    """Copertina del video: un'immagine fatta a parte (thumbnail di YouTube, cover di un reel).
+
+    L'editor la mostra nella scheda cover, intera e come miniatura accanto al
+    titolo, per giudicarla col video. Il render non la usa. path vuoto la
+    toglie. Restituisce misure e warnings (proporzione diversa dal video,
+    troppo piccola, oltre i 2 MB di YouTube).
+    """
+    return _store(project).set_cover(path or None)
 
 
 @_strumento()

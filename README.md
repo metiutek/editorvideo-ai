@@ -262,6 +262,11 @@ Formats: any aspect ratio — `16:9`, `9:16` (reels, shorts, TikTok), `1:1`, `4:
 from the format button in the top bar, or with `project_settings(format=...)` over MCP:
 the timeline stays, the frame changes, and `--fill` crops the clips instead of leaving bars.
 
+**Cover.** The thumbnail you make elsewhere (an image editor, an image generator, the
+assistant) goes in the *cover* tab: full size in the video's format and small next to the
+title, as it looks in a feed, with a warning when its ratio differs from the video's or it is
+too small or too heavy for YouTube. Over MCP: `set_cover(path)`. The render does not use it.
+
 ---
 
 ## Driving it from an agent (MCP)

@@ -101,6 +101,39 @@ def rapporto(w: int, h: int) -> str:
     return f"{w}x{h}"
 
 
+IMMAGINI_COPERTINA = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+def info_copertina(path: str, settings: Settings) -> dict:
+    """Misure della copertina e cosa non va rispetto al video e a YouTube.
+
+    YouTube vuole 1280x720 (almeno 640 di larghezza) e al massimo 2 MB; la
+    proporzione giusta e' quella del video, non per forza 16:9.
+    """
+    out: dict[str, Any] = {"cover": path, "bytes": os.path.getsize(path)}
+    avvisi = []
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            w, h = im.size
+    except Exception:  # noqa: BLE001 - immagine illeggibile: si mostra lo stesso
+        avvisi.append("the image could not be read: check that it opens")
+        out["warnings"] = avvisi
+        return out
+    out.update(width=w, height=h, format=rapporto(w, h))
+    vw, vh = settings.width, settings.height
+    if abs(w / h - vw / vh) > 0.02 * (vw / vh):
+        avvisi.append(f"the cover is {rapporto(w, h)} but the video is {rapporto(vw, vh)}: "
+                      "it will be cropped or get bars")
+    if min(w, h) < 360 or max(w, h) < 640:
+        avvisi.append(f"{w}x{h} is small: YouTube wants at least 640 px wide, 1280x720 is ideal")
+    if out["bytes"] > 2 * 1024 * 1024:
+        avvisi.append("over 2 MB: YouTube refuses thumbnails this heavy")
+    if avvisi:
+        out["warnings"] = avvisi
+    return out
+
+
 class EditError(ValueError):
     """Errore di editing con messaggio comprensibile all'utente."""
 
@@ -1758,6 +1791,27 @@ class Store:
         self._done()
         return volume
 
+    def set_cover(self, path: str | None = None) -> dict:
+        """Copertina del video: un'immagine fatta a parte, da guardare accanto al montaggio.
+
+        Vuoto o ``None`` la toglie. Restituisce misure e avvisi (formato diverso
+        dal video, troppo piccola o troppo pesante per YouTube).
+        """
+        if not path:
+            self._touch()
+            self.project.cover = ""
+            self._done()
+            return {"cover": ""}
+        p = Path(path).expanduser().resolve()
+        if not p.is_file():
+            raise EditError(f"cover image not found: {path}")
+        if p.suffix.lower() not in IMMAGINI_COPERTINA:
+            raise EditError(f"the cover must be an image ({', '.join(sorted(IMMAGINI_COPERTINA))})")
+        self._touch()
+        self.project.cover = str(p)
+        self._done()
+        return info_copertina(str(p), self.project.settings)
+
     def set_settings(self, **values: Any) -> Settings:
         allowed = set(vars(Settings()))
         bad = set(values) - allowed
@@ -1827,6 +1881,8 @@ class Store:
                 "volume": p.master.volume,
             },
         }
+        if p.cover:
+            out["cover"] = p.cover
         for t in p.tracks:
             tr: dict[str, Any] = {
                 "id": t.id, "kind": t.kind, "name": t.name,

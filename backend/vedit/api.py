@@ -44,7 +44,7 @@ from . import (captions, domande, ffmpeg, figli, htmlclip, hw, interscambio, llm
                render, review, social, stili, tts, web)
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
-from .store import FORMATI, PRESETS, EditError, Store
+from .store import FORMATI, PRESETS, EditError, Store, info_copertina
 
 def _frontend_dir() -> Path:
     """Dove sta l'interfaccia compilata.
@@ -72,7 +72,7 @@ OPS = {
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
-    "set_loudnorm", "set_settings", "set_format", "add_voiceover", "undo", "redo", "save",
+    "set_loudnorm", "set_settings", "set_format", "set_cover", "add_voiceover", "undo", "redo", "save",
 }
 
 
@@ -889,6 +889,18 @@ def _finisci_upload(cartella: Path, parte: Path, chiave: str, nome: str, size: i
         tmp.write_text(json.dumps(arrivati, ensure_ascii=False), encoding="utf-8")
         _riprova_se_bloccato(os.replace, tmp, reg)
         return str(target)
+
+
+@app.get("/api/cover")
+def copertina() -> dict:
+    """Misure e avvisi della copertina; ``mtime`` cambia se l'immagine e' rifatta fuori."""
+    store = S.need()
+    p = store.project.cover
+    if not p:
+        return {}
+    if not os.path.isfile(p):
+        return {"cover": p, "missing": True}
+    return {**info_copertina(p, store.project.settings), "mtime": os.path.getmtime(p)}
 
 
 @app.get("/api/file")

@@ -537,6 +537,11 @@ Formati: qualunque rapporto — `16:9`, `9:16` (reel, short, TikTok), `1:1`, `4:
 del formato nella barra in alto, o `project_settings(format=...)` da MCP. La timeline resta,
 cambia il fotogramma; `--fill` taglia le clip invece di lasciare le bande.
 
+**Copertina.** La miniatura fatta a parte (un editor di immagini, un generatore, l'assistente)
+va nella scheda *cover*: intera nel formato del video e piccola accanto al titolo, come si vede
+in un feed, con un avviso se la proporzione non è quella del video o se è troppo piccola o
+troppo pesante per YouTube. Da MCP: `set_cover(path)`. Il render non la usa.
+
 ---
 
 ## Uso da agente (MCP)
