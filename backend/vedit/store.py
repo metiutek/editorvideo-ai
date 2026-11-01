@@ -1791,10 +1791,20 @@ class Store:
         self._done()
         return volume
 
+    @staticmethod
+    def _immagine_copertina(path: str) -> str:
+        p = Path(path).expanduser().resolve()
+        if not p.is_file():
+            raise EditError(f"cover image not found: {path}")
+        if p.suffix.lower() not in IMMAGINI_COPERTINA:
+            raise EditError(f"the cover must be an image ({', '.join(sorted(IMMAGINI_COPERTINA))})")
+        return str(p)
+
     def set_cover(self, path: str | None = None) -> dict:
         """Copertina del video: un'immagine fatta a parte, da guardare accanto al montaggio.
 
-        Vuoto o ``None`` la toglie. Restituisce misure e avvisi (formato diverso
+        Diventa anche una delle opzioni (``covers``). Vuoto o ``None`` toglie la
+        scelta, le opzioni restano. Restituisce misure e avvisi (formato diverso
         dal video, troppo piccola o troppo pesante per YouTube).
         """
         if not path:
@@ -1802,15 +1812,62 @@ class Store:
             self.project.cover = ""
             self._done()
             return {"cover": ""}
-        p = Path(path).expanduser().resolve()
-        if not p.is_file():
-            raise EditError(f"cover image not found: {path}")
-        if p.suffix.lower() not in IMMAGINI_COPERTINA:
-            raise EditError(f"the cover must be an image ({', '.join(sorted(IMMAGINI_COPERTINA))})")
+        p = self._immagine_copertina(path)
         self._touch()
-        self.project.cover = str(p)
+        self.project.cover = p
+        if p not in self.project.covers:
+            self.project.covers.append(p)
         self._done()
-        return info_copertina(str(p), self.project.settings)
+        return info_copertina(p, self.project.settings)
+
+    def add_covers(self, paths: list[str] | str, choose: bool = False) -> list[str]:
+        """Aggiunge immagini fra le opzioni di copertina; ``choose`` sceglie la prima.
+
+        Tutte o nessuna: un percorso sbagliato non lascia mezzo elenco aggiunto.
+        """
+        nuove = [self._immagine_copertina(x) for x in ([paths] if isinstance(paths, str) else paths)]
+        if not nuove:
+            raise EditError("no images given")
+        self._touch()
+        for p in nuove:
+            if p not in self.project.covers:
+                self.project.covers.append(p)
+        if choose:
+            self.project.cover = nuove[0]
+        self._done()
+        return nuove
+
+    def remove_cover(self, path: str) -> list[str]:
+        """Toglie un'opzione di copertina (il file resta); se era la scelta, non c'e' piu' scelta."""
+        p = str(Path(path).expanduser().resolve())
+        if p not in self.project.covers and p != self.project.cover:
+            raise EditError(f"not a cover option: {path}")
+        self._touch()
+        self.project.covers = [x for x in self.project.covers if x != p]
+        if self.project.cover == p:
+            self.project.cover = ""
+        self._done()
+        return self.project.covers
+
+    def cartella_copertine(self) -> Path:
+        """Dove finiscono le copertine create: accanto al progetto, o in ~/.vedit."""
+        if self.path:
+            return Path(self.path).with_name(Path(self.path).stem + "_covers")
+        return Path.home() / ".vedit" / "covers"
+
+    def make_covers(self, count: int = 6, title: str = "", times: list[float] | None = None,
+                    choose: bool = False) -> list[dict]:
+        """Crea ``count`` copertine dai fotogrammi migliori del montaggio, col titolo sopra.
+
+        Le aggiunge alle opzioni; ``times`` sceglie gli istanti a mano.
+        """
+        from . import copertine
+        try:
+            fatte = copertine.fai(self.project, self.cartella_copertine(), count, title, times)
+        except ValueError as exc:
+            raise EditError(str(exc)) from exc
+        self.add_covers([f["path"] for f in fatte], choose=choose)
+        return fatte
 
     def set_settings(self, **values: Any) -> Settings:
         allowed = set(vars(Settings()))
@@ -1883,6 +1940,8 @@ class Store:
         }
         if p.cover:
             out["cover"] = p.cover
+        if p.covers:
+            out["covers"] = p.covers
         for t in p.tracks:
             tr: dict[str, Any] = {
                 "id": t.id, "kind": t.kind, "name": t.name,

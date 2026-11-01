@@ -275,6 +275,22 @@ def build_tools() -> list[dict]:
               "fotogramma alle clip tagliando i bordi, invece di lasciare le bande.",
               {"format": _STR, "size": {"type": "integer"}, "fill": {"type": "boolean"}},
               ["format"]),
+        _tool("make_covers",
+              "Crea opzioni di copertina (thumbnail) dal montaggio: count fotogrammi "
+              "migliori, uno per tratto, diversi fra loro; title li scrive sopra in "
+              "posizioni diverse; times sceglie gli istanti a mano. L'utente le vede "
+              "nella scheda cover, a schermo intero, sceglie e scarica.",
+              {"count": {"type": "integer"}, "title": _STR,
+               "times": {"type": "array", "items": _NUM}, "choose": {"type": "boolean"}}, []),
+        _tool("add_covers",
+              "Mette fra le opzioni di copertina immagini fatte altrove (generate, scaricate, "
+              "disegnate). choose=true sceglie la prima.",
+              {"paths": {"type": "array", "items": _STR}, "choose": {"type": "boolean"}},
+              ["paths"]),
+        _tool("set_cover",
+              "Sceglie la copertina definitiva fra le opzioni (o un'immagine qualsiasi). "
+              "path vuoto toglie la scelta.",
+              {"path": _STR}, []),
         _tool("generate_voice",
               "Voce fuori campo dal testo (TTS), messa in timeline sulla traccia audio VO. "
               "lines: [{text, start}] per tante battute in una chiamata (start assente = "

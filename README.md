@@ -265,7 +265,9 @@ the timeline stays, the frame changes, and `--fill` crops the clips instead of l
 **Cover.** The thumbnail you make elsewhere (an image editor, an image generator, the
 assistant) goes in the *cover* tab: full size in the video's format and small next to the
 title, as it looks in a feed, with a warning when its ratio differs from the video's or it is
-too small or too heavy for YouTube. Over MCP: `set_cover(path)`. The render does not use it.
+too small or too heavy for YouTube. *Make 6 from the video* builds cover options from the
+sharpest frames of the edit, with your title on them; click one to see it full screen, pick it,
+download it. Over MCP: `make_covers`, `add_covers`, `set_cover(path)`. The render does not use it.
 
 ---
 

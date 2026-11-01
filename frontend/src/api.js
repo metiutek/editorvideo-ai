@@ -271,6 +271,8 @@ export const api = {
   // memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
   memoria: () => req('/api/memoria'),
   copertina: () => req('/api/cover'),
+  // copertine dai fotogrammi migliori del montaggio (Store.make_covers)
+  faiCopertine: (body) => req('/api/cover/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   salvaMemoria: (testo) =>
     req('/api/memoria', {
       method: 'PUT',

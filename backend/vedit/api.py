@@ -72,7 +72,7 @@ OPS = {
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
-    "set_loudnorm", "set_settings", "set_format", "set_cover", "add_voiceover", "undo", "redo", "save",
+    "set_loudnorm", "set_settings", "set_format", "set_cover", "add_covers", "remove_cover", "add_voiceover", "undo", "redo", "save",
 }
 
 
@@ -903,12 +903,34 @@ def copertina() -> dict:
     return {**info_copertina(p, store.project.settings), "mtime": os.path.getmtime(p)}
 
 
+@app.post("/api/cover/make")
+def copertine_fai(body: dict | None = None) -> dict:
+    """Copertine dal montaggio (``Store.make_covers``), ma i fotogrammi si fanno
+    fuori dal lock: l'editor resta usabile mentre escono."""
+    from . import copertine
+
+    args = dict(body or {})
+    store = S.need()
+    with S.lock:
+        progetto = copy.deepcopy(store.project)
+        cartella = store.cartella_copertine()
+    try:
+        fatte = copertine.fai(progetto, cartella, int(args.get("count") or 6),
+                              str(args.get("title") or ""), args.get("times"))
+        with S.lock:
+            store.add_covers([f["path"] for f in fatte], choose=bool(args.get("choose")))
+    except (EditError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"result": fatte, **S.state_of_project()}
+
+
 @app.get("/api/file")
-def raw_file(path: str):
+def raw_file(path: str, download: bool = False):
     p = Path(path)
     if not p.is_file():
         raise HTTPException(404, "file does not exist")
-    return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "application/octet-stream")
+    return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "application/octet-stream",
+                        filename=p.name if download else None)
 
 
 # --------------------------------------------------------------------------

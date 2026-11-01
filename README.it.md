@@ -540,7 +540,9 @@ cambia il fotogramma; `--fill` taglia le clip invece di lasciare le bande.
 **Copertina.** La miniatura fatta a parte (un editor di immagini, un generatore, l'assistente)
 va nella scheda *cover*: intera nel formato del video e piccola accanto al titolo, come si vede
 in un feed, con un avviso se la proporzione non è quella del video o se è troppo piccola o
-troppo pesante per YouTube. Da MCP: `set_cover(path)`. Il render non la usa.
+troppo pesante per YouTube. *Make 6 from the video* crea opzioni di copertina dai fotogrammi
+più nitidi del montaggio, col tuo titolo sopra; clic per vederle a schermo intero, sceglierne
+una, scaricarla. Da MCP: `make_covers`, `add_covers`, `set_cover(path)`. Il render non la usa.
 
 ---
 

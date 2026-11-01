@@ -2,6 +2,18 @@
 
 Le voci più recenti stanno in cima.
 
+## v0.4.3 — 2026-11-01 · Opzioni di copertina
+
+### Aggiunto
+- **Più copertine fra cui scegliere**: il progetto tiene le opzioni (`covers`) oltre alla scelta
+  (`cover`). La scheda *cover* le mostra in griglia: clic per vederle a **schermo intero** (frecce
+  per scorrerle, Esc per uscire), *use* per sceglierne una, icona per **scaricarla**.
+- **Copertine dal montaggio**: *make 6 from the video* (o `make_covers` da MCP e dalla chat) divide
+  il montaggio in tanti tratti quante copertine, prende il fotogramma più nitido e colorato di
+  ognuno e ci scrive sopra il titolo, se c'è, in posizioni diverse. I file finiscono in
+  `<progetto>_covers/`. `add_covers` mette fra le opzioni immagini fatte altrove.
+- `/api/file?download=true` scarica il file invece di aprirlo.
+
 ## v0.4.2 — 2026-10-31 · Copertina
 
 ### Aggiunto

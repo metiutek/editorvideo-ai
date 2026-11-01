@@ -675,7 +675,7 @@ export default function App() {
               <Mixer project={project} playhead={playhead} revision={revision} run={run} setError={setError} />
             )}
             {rightTab === 'cover' && (
-              <Copertina project={project} revision={revision} run={run} setError={setError} />
+              <Copertina project={project} revision={revision} run={run} applyState={applyState} setError={setError} />
             )}
             {rightTab === 'scope' && (
               <Scopes project={project} playhead={playhead} playing={playing} revision={revision} />

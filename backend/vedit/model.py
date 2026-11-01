@@ -323,8 +323,9 @@ class Project:
     master: Master = field(default_factory=Master)
     markers: list[Marker] = field(default_factory=list)
     # copertina fatta a parte (immagine): si guarda accanto al video, il render
-    # non la usa
+    # non la usa. ``covers`` sono le opzioni fra cui sceglierla
     cover: str = ""
+    covers: list[str] = field(default_factory=list)
 
     # ---- lookup -------------------------------------------------------
     def media_by_id(self, mid: str) -> Media | None:

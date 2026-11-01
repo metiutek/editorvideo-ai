@@ -648,6 +648,39 @@ def set_cover(path: str = "", project: str | None = None) -> dict:
 
 
 @_strumento()
+async def make_covers(count: int = 6, title: str = "", times: list[float] | None = None,
+                      choose: bool = False, project: str | None = None) -> dict:
+    """Crea opzioni di copertina dal montaggio: i fotogrammi migliori, uno per tratto.
+
+    count opzioni (max 12), diverse fra loro; title le scrive sopra, in posizioni
+    diverse; times sceglie gli istanti a mano. Finiscono fra le opzioni della
+    scheda cover, dove l'utente le guarda a schermo intero, sceglie e scarica.
+    choose=True sceglie la prima. Per copertine fatte altrove: add_covers.
+    """
+    s = _store(project)
+    fatte = await _off(s.make_covers, count, title, times, choose)
+    return {"covers": [f["path"] for f in fatte], "cover": s.project.cover}
+
+
+@_strumento()
+def add_covers(paths: list[str], choose: bool = False, remove: bool = False,
+               project: str | None = None) -> dict:
+    """Mette immagini fatte altrove (generatore, html, grafica) fra le opzioni di copertina.
+
+    choose=True sceglie la prima; remove=True le toglie dalle opzioni invece
+    (i file restano). set_cover(path) sceglie quella definitiva.
+    """
+    s = _store(project)
+    if remove:
+        with s.batch():
+            for p in paths:
+                s.remove_cover(p)
+    else:
+        s.add_covers(paths, choose)
+    return {"covers": s.project.covers, "cover": s.project.cover}
+
+
+@_strumento()
 def undo(project: str | None = None) -> dict:
     """Annulla l'ultima modifica."""
     return {"undone": _store(project).undo()}
@@ -2665,7 +2698,8 @@ _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "pro
                 "preview_grid", "scope_image", "undo", "redo", "restore_snapshot",
                 "remember", "forget", "memory", "voice_engines", "publish_video",
                 "social_accounts", "web_search", "web_read", "web_download", "speech_times",
-                "list_skills", "use_skill", "create_skill", "install_skill", "delete_skill"}
+                "list_skills", "use_skill", "create_skill", "install_skill", "delete_skill",
+                "make_covers"}
 
 
 @_strumento()

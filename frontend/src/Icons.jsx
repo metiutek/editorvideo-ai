@@ -15,6 +15,11 @@ const paths = {
   apri: <path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />,
   salva: <><path d="M4 4h12l4 4v12H4z" /><path d="M8 4v6h8V4M8 20v-6h8v6" /></>,
   esporta: <><path d="M12 15V3" /><path d="m8 7 4-4 4 4" /><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" /></>,
+  scarica: <><path d="M12 3v12" /><path d="m8 11 4 4 4-4" /><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" /></>,
+  // schermo intero: quattro angoli verso l'esterno
+  sinistra: <path d="m15 6-6 6 6 6" />,
+  destra: <path d="m9 6 6 6-6 6" />,
+  espandi: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   // memoria fra i progetti: un segnalibro
   memoria: <path d="M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1z" />,
   // voce generata: microfono
