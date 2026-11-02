@@ -101,6 +101,7 @@ for (const m of ['play', 'pause', 'load']) {
   dom.window.HTMLMediaElement.prototype[m] = function () { return Promise.resolve() }
 }
 const chiamate = []
+FAKE['/api/gen'] = {"motore": "", "motori": [{"id": "openai", "nome": "OpenAI (or compatible)", "nota": "n", "tipi": ["image"], "chiave": true, "ha_chiave": false, "indirizzo": "https://api.openai.com/v1", "modelli": {"image": "gpt-image-1"}, "pronto": {"image": false}, "motivo": {"image": "paste an OpenAI key"}}, {"id": "fal", "nome": "fal.ai", "nota": "n", "tipi": ["image", "video"], "chiave": true, "ha_chiave": false, "indirizzo": "https://queue.fal.run", "modelli": {"image": "fal-ai/flux/dev", "video": "fal-ai/kling"}, "pronto": {"image": false, "video": false}, "motivo": {"image": "paste the fal.ai API key", "video": "paste the fal.ai API key"}}]}
 globalThis.fetch = async (url, opts) => {
   chiamate.push({ url: String(url), method: opts?.method || 'GET', body: opts?.body })
   const path = String(url).split('?')[0]
@@ -335,6 +336,18 @@ checks.push(
     && !('colore' in (corpoBlock.vars || {}))],
 )
 clicGr(modulo?.querySelector('button.ghost'))
+await attesaGr()
+
+// ---- generare immagini e video: il dialogo mostra i servizi e cosa manca ---------
+clicGr([...root.querySelectorAll('button.act')].find((b) => b.textContent.trim() === 'generate'))
+await attesaGr()
+const dlgGen = [...root.querySelectorAll('.modal, [role=dialog], .dialog')].find((d) => d.textContent.includes('Generate an image'))
+checks.push(
+  ['generare: il dialogo elenca i due servizi', !!dlgGen && dlgGen.querySelectorAll('.prov').length === 2],
+  ['generare: dice cosa manca', !!dlgGen && dlgGen.textContent.includes('paste an OpenAI key')],
+  ['generare: la chiave e un campo password', !!dlgGen?.querySelector('input[type=password]')],
+)
+clicGr([...(dlgGen?.querySelectorAll('button') || [])].find((b) => b.textContent.trim() === 'cancel'))
 await attesaGr()
 
 checks.push(

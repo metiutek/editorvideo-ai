@@ -323,3 +323,26 @@ async def test_un_errore_nel_lavoro_lungo_arriva_col_suo_messaggio(tmp_path):
     await call("project_create", path=str(tmp_path / "p.json"), name="t", preset="720p")
     with pytest.raises(Exception, match="cannot reach the service"):
         await call("generate_media", kind="image", prompt="x", confirmed=True)
+
+
+def test_api_genera_dalla_ui(servizio, tmp_path):
+    """Il bottone della UI: genera fuori dal progetto e restituisce il file (la UI lo importa)."""
+    from fastapi.testclient import TestClient
+
+    api_mod.S.store = None
+    try:
+        with TestClient(api_mod.app) as c:
+            c.post("/api/gen", json={"servizio": "openai", "chiave": "k",
+                                     "indirizzo": servizio["url"] + "/v1"})
+            c.post("/api/project/create", json={"path": str(tmp_path / "a.json"), "preset": "720p"})
+            r = c.post("/api/gen/genera", json={"kind": "image", "prompt": "un gatto", "aspect": "1:1"})
+            assert r.status_code == 200 and r.json()["servizio"] == "openai"
+            assert (tmp_path / "a_gen").is_dir() and r.json()["path"].endswith(".png")
+            assert servizio["visti"][0][2]["size"] == "1024x1024"
+            r = c.post("/api/gen/genera", json={"kind": "video", "prompt": "x", "servizio": "openai"})
+            assert r.status_code == 400 and "cannot make videos" in r.json()["detail"]
+            st = c.get("/api/gen").json()
+            fal = next(m for m in st["motori"] if m["id"] == "fal")
+            assert fal["motivo"]["video"] == "paste the fal.ai API key" and fal["pronto"]["video"] is False
+    finally:
+        api_mod.S.store = None

@@ -3,6 +3,7 @@ import { api, connectEvents } from './api.js'
 import Chat from './Chat.jsx'
 import { Confirm, CopiaErrore, FileBrowser, NewProject, ProjectFormat, RenderDialog } from './Dialogs.jsx'
 import Voce from './Voce.jsx'
+import Generazione from './Generazione.jsx'
 import Pubblica from './Pubblica.jsx'
 import Web from './Web.jsx'
 import Icon from './Icons.jsx'
@@ -63,7 +64,7 @@ export default function App() {
   // col puntatore sopra l'avviso non sparisce: si fa in tempo a leggerlo e copiarlo
   const [erroreFermo, setErroreFermo] = useState(false)
   const [busy, setBusy] = useState(null)
-  const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render' | 'particelle' | 'formato' | 'voce' | 'pubblica'
+  const [dialog, setDialog] = useState(null)     // 'new' | 'open' | 'import' | 'render' | 'particelle' | 'formato' | 'voce' | 'genera' | 'pubblica'
   const [job, setJob] = useState(null)
   const [nuovi, setNuovi] = useState(0)          // progetti creati in questa sessione
   const [source, setSource] = useState(null)     // media aperto nel monitor
@@ -508,6 +509,10 @@ export default function App() {
           title="Voiceover from text: AI or local text-to-speech, at the playhead"
           onClick={() => setDialog('voce')}>
           <Icon name="voce" />voice</button>
+        <button className="ghost act sky" disabled={!project}
+          title="Generate an image or a video from a prompt (uses your fal.ai or OpenAI key)"
+          onClick={() => setDialog('genera')}>
+          <Icon name="immagine" />generate</button>
         <MenuParticelle disabled={!project}
           onAggiungi={(kind) => run('add_particles', { kind, start: playhead, duration: 5 })
             .then((c) => setSelected(c.id)).catch((err) => setError(err.message))}
@@ -720,6 +725,9 @@ export default function App() {
       {dialog === 'pubblica' && project && (
         <Pubblica file={job?.state === 'done' ? job.output : ''} nome={project.name}
           setError={setError} flash={flash} onClose={() => setDialog(null)} />
+      )}
+      {dialog === 'genera' && project && (
+        <Generazione run={run} setError={setError} flash={flash} onClose={() => setDialog(null)} />
       )}
       {dialog === 'voce' && project && (
         <Voce playhead={playhead} run={run} setError={setError} flash={flash}

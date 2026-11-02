@@ -200,6 +200,7 @@ def stato() -> dict:
             "indirizzo": _indirizzo(m, cfg),
             "modelli": {t: _modello(m, cfg, t) for t in m["tipi"]},
             "pronto": {t: _pronto(m, cfg, t) is None for t in m["tipi"]},
+            "motivo": {t: _pronto(m, cfg, t) for t in m["tipi"]},
         } for m in MOTORI],
     }
 

@@ -590,7 +590,7 @@ inside its own duration. It is an ordinary clip afterwards: move it, trim it, op
 (optionally starting from an image, to keep the same subject across scenes) and imports it.
 Services: OpenAI or anything with the same `/images/generations` shape (also a local server),
 and fal.ai for images and video (Kling, Veo, Seedance, MiniMax... models are yours to set).
-Keys live in `~/.vedit/gen.json` (`vedit gen-setup fal --key …`), never in the project. It costs
+Keys live in `~/.vedit/gen.json` — set them in the app (the *generate* button, which also lets you generate by hand) or with `vedit gen-setup fal --key …` — never in the project. It costs
 credits, so it is never the agent's call: the editor asks you first, and the same request is
 never paid twice (the file is named after its fingerprint).
 

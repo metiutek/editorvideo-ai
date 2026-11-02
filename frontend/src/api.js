@@ -242,6 +242,20 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+  // immagini e video generati (generativo.py)
+  gen: () => req('/api/gen'),
+  setGen: (body) =>
+    req('/api/gen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  generaMedia: (body) =>
+    req('/api/gen/genera', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   // skill e server MCP dell'utente per l'assistente (estensioni.py)
   estensioni: () => req('/api/estensioni'),
   setEstensioni: (body) => req('/api/estensioni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),

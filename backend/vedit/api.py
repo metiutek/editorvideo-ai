@@ -1658,6 +1658,30 @@ def gen_stato() -> dict:
     return generativo.stato()
 
 
+class GeneraBody(BaseModel):
+    kind: str
+    prompt: str
+    aspect: str = "16:9"
+    duration: float | None = None
+    servizio: str | None = None
+    modello: str | None = None
+
+
+@app.post("/api/gen/genera")
+def gen_genera(body: GeneraBody) -> dict:
+    """Genera un'immagine o un video, senza toccare il progetto.
+
+    Lo chiede chi preme il bottone nella UI: la conferma c'e' gia'. Fuori dal lock,
+    perche' un video puo' volere minuti; la UI poi importa il file (``import_media``).
+    """
+    store = S.need()
+    try:
+        return generativo.genera(body.kind, body.prompt, generativo.cartella_progetto(store.path),
+                                 body.servizio, body.modello, body.aspect, body.duration)
+    except generativo.GenError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post("/api/gen")
 def gen_imposta(body: GenBody) -> dict:
     """Servizio, chiave, modelli: solo su questa macchina (~/.vedit/gen.json)."""

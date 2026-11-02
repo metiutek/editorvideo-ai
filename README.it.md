@@ -752,7 +752,7 @@ se ne apre l'HTML.
 (anche partendo da un'immagine, per tenere lo stesso soggetto fra più scene) e lo importa.
 Servizi: OpenAI o qualunque servizio con la stessa forma di `/images/generations` (anche un
 server locale), e fal.ai per immagini e video (Kling, Veo, Seedance, MiniMax... i modelli li
-scegli tu). Le chiavi stanno in `~/.vedit/gen.json` (`vedit gen-setup fal --key …`), mai nel
+scegli tu). Le chiavi stanno in `~/.vedit/gen.json` — si danno nell'app (il pulsante *generate*, che serve anche a generare a mano) o con `vedit gen-setup fal --key …` — mai nel
 progetto. Costa crediti, quindi non è mai una decisione dell'agente: l'editor chiede prima a te,
 e la stessa richiesta non si paga due volte (il file ha nome dalla sua impronta).
 
