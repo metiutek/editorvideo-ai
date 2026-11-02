@@ -2,7 +2,7 @@
 
 Le voci più recenti stanno in cima.
 
-## Non rilasciato
+## v0.5.2 — 2026-11-02 · Demo dei blocchi
 
 ### Aggiunto
 - **Demo dei blocchi** (`docs/blocchi/demo.gif` e `.mp4`, 22 s): dieci blocchi montati e

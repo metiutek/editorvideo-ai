@@ -1,3 +1,3 @@
 """vedit - editor video: timeline dichiarativa compilata in ffmpeg filter_complex."""
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"

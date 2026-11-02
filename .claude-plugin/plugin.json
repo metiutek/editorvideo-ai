@@ -1,6 +1,6 @@
 {
   "name": "vedit",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Non-linear video editor an AI agent can drive: timeline, effects, keyframes, motion graphics blocks, voice-over, style learned from a reference video, ffmpeg render. Same engine for the web UI, the chat and MCP.",
   "author": { "name": "metiu1" },
   "homepage": "https://github.com/metiutek/editorvideo-ai",
