@@ -120,21 +120,20 @@ def test_api_e_chat_conoscono_add_block():
     assert json.loads(chat.execute(s, "list_blocks", {"block": "x"}))[0]["errore"]
 
 
+# coprono il fotogramma, lo scuriscono o stanno sul bordo: l'angolo non e' trasparente,
+# ed e' voluto
+_COPRONO = {"highlight_box", "vignette", "letterbox", "end_card", "quote", "chapter_card",
+            "color_wipe", "flash_frame", "progress_bar"}
+
+
 @pytest.mark.slow
-@pytest.mark.parametrize("nome,t,vars", [
-    ("lower_third", 1.5, {"nome": "Anna Rossi", "ruolo": "Regista"}),
-    ("date_badge", 1.5, {"testo": "YEAR 20"}),
-    ("caption_pill", 1.5, {"testo": "Minimum starting crew: 98"}),
-    ("counter", 3.5, {"da": 0, "a": 98, "etichetta": "people"}),
-    ("bar_chart", 3.5, {"dati": "A:40,B:75,C:20"}),
-    ("kinetic_words", 3.0, {"testo": "Make it *move*"}),
-    ("highlight_box", 1.5, {"x": 20, "y": 20, "larghezza": 30, "altezza": 30}),
-])
-def test_i_blocchi_si_vedono_davvero(nome, t, vars):
-    """In Chromium: qualcosa e' disegnato a meta' clip, l'angolo resta trasparente, e
-    a fine clip (uscita compiuta) non resta niente."""
+@pytest.mark.parametrize("nome", list(blocchi.BLOCCHI))
+def test_i_blocchi_si_vedono_davvero(nome):
+    """In Chromium: qualcosa e' disegnato quando il blocco e' a regime, l'angolo resta
+    trasparente (salvo i blocchi che coprono), e a fine clip l'uscita ha spento tutto."""
     _browser_o_salta()
-    doc, durata = blocchi.documento(nome, vars)
+    doc, durata = blocchi.documento(nome, None)
+    t = blocchi.istante_vetrina(nome)
     try:
         mov, _ = htmlclip.rasterize(doc, base=None, duration=durata, width=640, height=360,
                                     fps=10, page_w=640, page_h=360)
@@ -155,9 +154,36 @@ def test_i_blocchi_si_vedono_davvero(nome, t, vars):
     meta = immagine(t)
     coperti = sum(1 for a in meta.getchannel("A").getdata() if a > 100)
     assert coperti > 300, f"{nome}: a {t}s non c'e' niente disegnato"
-    # highlight_box scurisce il resto: l'angolo non e' piu' trasparente, e va bene
-    if nome != "highlight_box":
+    if nome not in _COPRONO:
         assert meta.getpixel((2, 2))[3] == 0
-    fine = immagine(round(durata - 0.1, 2))   # l'ultimo fotogramma a 10 fps
-    assert sum(1 for a in fine.getchannel("A").getdata() if a > 100) < coperti * 0.1, \
-        f"{nome}: l'uscita non spegne la grafica"
+    if nome not in blocchi._SENZA_USCITA:
+        fine = immagine(round(durata - 0.1, 2))   # l'ultimo fotogramma a 10 fps
+        assert sum(1 for a in fine.getchannel("A").getdata() if a > 100) < coperti * 0.1, \
+            f"{nome}: l'uscita non spegne la grafica"
+
+
+def test_blocchi_con_liste_e_numeri():
+    doc, _ = blocchi.documento("steps", {"voci": "Uno, Due, Tre"})
+    assert doc.count('class="s"') == 3 and ">Due<" in doc
+    for male in ("Uno", ",".join(f"v{i}" for i in range(7))):
+        with pytest.raises(ValueError, match="between 2 and 6 items"):
+            blocchi.documento("steps", {"voci": male})
+    doc, _ = blocchi.documento("list_reveal", {"titolo": "Da fare", "voci": "a<b>, c"})
+    assert "a&lt;b&gt;" in doc and "<b>" not in doc.split("<ul>")[1]     # una voce non diventa HTML
+    doc, _ = blocchi.documento("typewriter", {"testo": "ciao"})
+    assert "steps(4)" in doc and "width:4ch" in doc
+    doc, _ = blocchi.documento("color_wipe", {"direzione": "vertical", "colore": "#123456"})
+    assert "translateY(-101%)" in doc and "#123456" in doc
+    with pytest.raises(ValueError, match="between 0 and 100"):
+        blocchi.documento("progress_ring", {"valore": 120})
+
+
+def test_vetrina_e_galleria():
+    assert blocchi.istante_vetrina("counter") == 3.0
+    assert 0.8 <= blocchi.istante_vetrina("lower_third") <= 1.5
+    with pytest.raises(ValueError, match="unknown block"):
+        blocchi.istante_vetrina("zzz")
+    # ogni blocco ha descrizione in inglese, una categoria nota e una durata
+    for b in blocchi.elenco():
+        assert b["categoria"] in {"titles", "text", "data", "emphasis", "transitions", "style"}
+        assert b["descrizione"][0].isupper() and b["durata"] > 0

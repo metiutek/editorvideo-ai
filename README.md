@@ -575,9 +575,14 @@ guide plus a recipe (look, movement, transitions, music curve, accents) that lan
 style menu and that `apply_style` actually executes.
 
 **Ready-made motion graphics** — `list_blocks` / `add_block` puts a tuned animation on a track
-in one call, no CSS to write: `lower_third`, `title`, `caption_pill`, `date_badge` ("YEAR 20"),
-`counter`, `chapter_card`, `quote`, `bar_chart`, `kinetic_words`, `highlight_box`,
-`progress_bar`. Every parameter has a default and is checked (a text is never read as HTML),
+in one call, no CSS to write. 29 blocks in six families — titles (`lower_third`, `title`,
+`chapter_card`, `end_card`), text (`caption_pill`, `date_badge`, `kinetic_words`, `typewriter`,
+`ticker`, `sticker_text`, `speech_bubble`, `handle_tag`, `section_label`, `quote`), data
+(`counter`, `bar_chart`, `progress_ring`, `stat_card`, `steps`, `comparison`, `list_reveal`),
+emphasis (`highlight_box`, `circle_highlight`, `arrow_pointer`, `progress_bar`), transitions
+(`color_wipe`, `flash_frame`) and style (`letterbox`, `vignette`). In the app: *library →
+graphics*, pick one, fill in its text and add it at the playhead. [See them all, rendered by
+vedit itself](docs/blocchi/README.md). Every parameter has a default and is checked (a text is never read as HTML),
 sizes are relative so the same block looks right in 16:9, 9:16 and 1:1, and each one fades out
 inside its own duration. It is an ordinary clip afterwards: move it, trim it, open its HTML.
 

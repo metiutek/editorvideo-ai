@@ -285,15 +285,19 @@ tempo e' quello della clip (`htmlclip.OROLOGIO`): animazioni CSS, GSAP, rAF e ti
 a passi di fotogramma, identici nell'anteprima dal vivo della UI e nel render. Controlla
 sempre con `preview_frame`: al render Chromium la fotografa davvero.
 
-**Blocchi pronti prima di scrivere HTML.** `blocchi.py` ha undici grafiche tarate
-(`lower_third`, `title`, `caption_pill`, `date_badge`, `counter`, `chapter_card`, `quote`,
-`bar_chart`, `kinetic_words`, `highlight_box`, `progress_bar`): `Store.add_block` le compone con
+**Blocchi pronti prima di scrivere HTML.** `blocchi.py` ha 29 grafiche tarate in sei famiglie
+(titoli, testi, dati, enfasi, transizioni, stile; `list_blocks` le elenca): `Store.add_block` le compone con
 `blocchi.documento` e le mette in traccia come clip html, quindi dopo sono clip normali. I
 parametri sono controllati (testo sempre `html.escape`, colori e numeri validati, errori con
 l'elenco di quelli ammessi), le misure sono in `vw`/`vh` e l'uscita in dissolvenza sta su un
 contenitore *esterno* (`.out`): la regola `animation` di un blocco sullo stesso elemento la
-cancellerebbe. Un blocco nuovo e' una funzione `(css, corpo)` piu' una voce in `BLOCCHI`;
-`tests/test_blocchi.py` lo compone con i default e, nei `slow`, lo fotografa in Chromium.
+cancellerebbe. Un blocco nuovo e' una funzione `(css, corpo)` piu' una voce in `BLOCCHI` (il CSS e' testo
+con segnaposto `§nome§`, riempito da `_t`: le graffe del CSS e le f-string non vanno
+d'accordo) e, se serve, un istante in `_VETRINA`; `tests/test_blocchi.py` lo compone con i
+default e, nei `slow`, lo fotografa in Chromium e controlla che l'uscita lo spenga.
+`python scripts/blocchi_galleria.py` rifa' `docs/blocchi/` (un'immagine per blocco, renderizzata
+davvero). La UI li legge da `/api/state` (`blocchi`): scheda *graphics* della libreria
+(`Library.jsx`), che manda `add_block` con solo i parametri cambiati.
 
 **Generare media.** `generativo.genera` (immagini: OpenAI e compatibili; immagini e video: coda
 di fal.ai) scrive in `<progetto>_gen/` con nome dall'impronta di servizio, modello, prompt e

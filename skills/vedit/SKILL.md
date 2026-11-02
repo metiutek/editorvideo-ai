@@ -42,9 +42,12 @@ project_create -> import_media -> preview_media (look at the footage first)
 
 ## Motion graphics: use blocks first
 
-`list_blocks` then `add_block` puts a ready, tuned animation on a track above the footage:
-`lower_third`, `title`, `caption_pill`, `date_badge`, `counter`, `chapter_card`, `quote`,
-`bar_chart`, `kinetic_words`, `highlight_box`, `progress_bar`. One call, no CSS. Only when no block fits
+`list_blocks` then `add_block` puts a ready, tuned animation on a track above the footage.
+29 blocks: titles (`lower_third`, `title`, `chapter_card`, `end_card`), text (`caption_pill`,
+`date_badge`, `kinetic_words`, `typewriter`, `ticker`, `quote`...), data (`counter`, `bar_chart`,
+`progress_ring`, `stat_card`, `steps`, `comparison`, `list_reveal`), emphasis (`highlight_box`,
+`circle_highlight`, `arrow_pointer`), transitions (`color_wipe`, `flash_frame`) and style
+(`letterbox`, `vignette`). One call, no CSS; `list_blocks(block=...)` gives the parameters. Only when no block fits
 write HTML with `add_html` (transparent background; the page clock is the clip clock, so preview and
 render match). Particles: `add_particles`. Highlighting a moving subject: `track_mask`, `highlight_subject`.
 

@@ -55,15 +55,15 @@ async def test_ogni_strumento_nominato_dalla_skill_esiste():
     _, corpo = _skill()
     esistenti = {t.name for t in await srv.mcp.list_tools()}
     nominati = set(re.findall(r"`([a-z]+(?:_[a-z]+)+)(?:\(|`)", corpo))
-    # parole in backtick che non sono strumenti (nomi di blocchi, parametri, comandi)
-    non_strumenti = {"lower_third", "caption_pill", "date_badge", "chapter_card", "bar_chart",
-                     "kinetic_words", "highlight_box", "progress_bar"}
+    # i nomi dei blocchi grafici sono in backtick ma non sono strumenti
+    from vedit import blocchi
+    non_strumenti = set(blocchi.BLOCCHI)
     termini = {"filter_complex"}                       # ffmpeg, non strumenti
     mancanti = sorted(n for n in nominati - non_strumenti - termini if n not in esistenti)
     assert not mancanti, f"strumenti nominati nella skill ma assenti dal server MCP: {mancanti}"
-    # e i blocchi nominati esistono davvero
-    from vedit import blocchi
-    assert non_strumenti <= set(blocchi.BLOCCHI)
+    # e i blocchi nominati sono veri: un nome sparito dalla libreria non resta nella skill
+    nominati_blocchi = {n for n in nominati if n in non_strumenti}
+    assert {"lower_third", "chapter_card", "color_wipe"} <= nominati_blocchi
     # quelli che la skill promette come passaggi obbligati ci sono
     for atteso in ("add_block", "list_blocks", "learn_style", "generate_media", "render_video"):
         assert atteso in esistenti and atteso in corpo

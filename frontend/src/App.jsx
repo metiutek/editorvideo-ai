@@ -552,9 +552,11 @@ export default function App() {
                 onImport={importFiles} ask={ask}
                 onOpenSource={(m) => { setSource(m); setTab('source') }} />
             ) : (
-              <Library library={sys?.library} clip={selectedClip} setError={setError}
+              <Library library={sys?.library} blocks={sys?.blocchi} clip={selectedClip} setError={setError}
                 onProva={setProvaFx}
                 onPreset={applyPreset}
+                onBlock={(block, vars) => run('add_block', { block, vars, start: playhead })
+                  .catch((e) => setError(e.message))}
                 onTransition={(type, dur) => applyTransition(type, dur)} />
             )}
             <a className="firma" href="https://metiu.xyz/" target="_blank" rel="noreferrer">

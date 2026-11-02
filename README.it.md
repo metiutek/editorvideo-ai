@@ -736,9 +736,14 @@ download vanno in `~/.vedit/riferimenti`. YouTube vuole una yt-dlp recente con i
 risolutore JavaScript: l'extra `web` installa `yt-dlp[default]`, e usa Node.js se manca Deno.
 
 **Grafiche animate pronte** — `list_blocks` / `add_block` mette in traccia un'animazione già
-tarata in una chiamata, senza CSS da scrivere: `lower_third`, `title`, `caption_pill`,
-`date_badge` ("YEAR 20"), `counter`, `chapter_card`, `quote`, `bar_chart`, `kinetic_words`,
-`highlight_box`, `progress_bar`. Ogni parametro ha un default ed è controllato (un testo non è
+tarata in una chiamata, senza CSS da scrivere. 29 blocchi in sei famiglie — titoli
+(`lower_third`, `title`, `chapter_card`, `end_card`), testi (`caption_pill`, `date_badge`,
+`kinetic_words`, `typewriter`, `ticker`, `sticker_text`, `speech_bubble`, `handle_tag`,
+`section_label`, `quote`), dati (`counter`, `bar_chart`, `progress_ring`, `stat_card`, `steps`,
+`comparison`, `list_reveal`), enfasi (`highlight_box`, `circle_highlight`, `arrow_pointer`,
+`progress_bar`), transizioni (`color_wipe`, `flash_frame`) e stile (`letterbox`, `vignette`).
+Nell'app: *library → graphics*, scegli, scrivi il testo e aggiungi alla testina.
+[Eccoli tutti, renderizzati da vedit](docs/blocchi/README.md). Ogni parametro ha un default ed è controllato (un testo non è
 mai letto come HTML), le misure sono relative — stesso aspetto in 16:9, 9:16 e 1:1 — e ognuno
 esce in dissolvenza dentro la sua durata. Dopo è una clip come le altre: si sposta, si accorcia,
 se ne apre l'HTML.

@@ -234,6 +234,245 @@ def _progress_bar(v: dict) -> tuple[str, str]:
     return css, '<div class="pb"><i></i></div>'
 
 
+
+# --------------------------------------------------------------------------
+# altri blocchi. Il CSS e' testo semplice con segnaposto §nome§ (le graffe del
+# CSS non si mescolano bene con le f-string): ``_t`` li riempie.
+# --------------------------------------------------------------------------
+
+
+def _t(txt: str, v: dict, **extra) -> str:
+    for k, val in {**v, **extra}.items():
+        txt = txt.replace(f"§{k}§", str(val))
+    return txt
+
+
+def _lista(val: Any, nome: str, lo: int, hi: int, massimo: int = 70) -> list[str]:
+    voci = [x.strip() for x in str(val).split(",") if x.strip()]
+    if not lo <= len(voci) <= hi:
+        raise ValueError(f"{nome} needs between {lo} and {hi} items separated by commas")
+    return [_testo(x, nome, massimo) for x in voci]
+
+
+def _end_card(v: dict) -> tuple[str, str]:
+    css = _t("""
+.ec{position:absolute;inset:0;display:grid;place-content:center;text-align:center;gap:2.4vh;
+ background:radial-gradient(ellipse at center,rgba(0,0,0,.55),rgba(0,0,0,.8));animation:entra .6s ease-out both}
+.ec h1{margin:0;font-size:max(6vw,6vh);font-weight:900;letter-spacing:-.02em;animation:pop .6s ease-out .15s both}
+.ec span{justify-self:center;padding:1.2vh 2.4vw;border-radius:99px;background:§colore§;color:#10101a;
+ font-size:max(2.4vw,2.4vh);font-weight:800;animation:pop .5s ease-out .5s both,batte 1.2s ease-in-out 1.1s infinite}
+@keyframes batte{50%{transform:scale(1.06)}}""", v)
+    pillola = f"<span>{v['handle']}</span>" if v["handle"] else ""
+    return css, f'<div class="ec"><div><h1>{v["titolo"]}</h1></div>{pillola}</div>'
+
+
+def _section_label(v: dict) -> tuple[str, str]:
+    css = _t("""
+.sl{position:absolute;left:4vw;top:5vh;display:flex;align-items:center;gap:.9vw;padding:.9vh 1.6vw;
+ border-radius:99px;background:rgba(16,16,26,.82);font-size:max(1.7vw,1.7vh);font-weight:800;
+ letter-spacing:.14em;text-transform:uppercase;animation:entra .45s ease-out both}
+.sl i{width:1.1vh;height:1.1vh;min-width:8px;min-height:8px;border-radius:50%;background:§colore§}""", v)
+    return css, f'<div class="sl"><i></i>{v["testo"]}</div>'
+
+
+def _typewriter(v: dict) -> tuple[str, str]:
+    n = max(1, len(_html.unescape(v["testo"])))
+    t = min(n * 0.06, 0.7 * v["durata"])
+    css = _t("""
+.tw{position:absolute;inset:0;display:grid;place-content:center;padding:0 6vw}
+.tw span{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-size:max(4vw,4vh);font-weight:700;
+ white-space:nowrap;overflow:hidden;width:§n§ch;border-right:.5vw solid §colore§;
+ text-shadow:0 3px 18px rgba(0,0,0,.6);animation:digita §t§s steps(§n§) both,cursore .7s step-end infinite}
+@keyframes digita{from{width:0}to{width:§n§ch}}
+@keyframes cursore{50%{border-color:transparent}}""", v, n=n, t=f"{t:.2f}")
+    return css, f'<div class="tw"><span>{v["testo"]}</span></div>'
+
+
+def _ticker(v: dict) -> tuple[str, str]:
+    css = _t("""
+.tk{position:absolute;left:0;right:0;bottom:6vh;height:7.4vh;display:flex;align-items:center;
+ background:§sfondo§;overflow:hidden;box-shadow:0 -4px 20px rgba(0,0,0,.35)}
+.tk b{flex:none;height:100%;display:grid;place-items:center;padding:0 2vw;background:§colore§;color:#10101a;
+ font-size:max(2vw,2vh);font-weight:900;letter-spacing:.12em;text-transform:uppercase;z-index:1}
+.tk div{flex:1;overflow:hidden}
+.tk span{display:inline-block;white-space:nowrap;font-size:max(2.4vw,2.4vh);font-weight:700;
+ animation:scorre §durata§s linear both}
+@keyframes scorre{from{transform:translateX(70vw)}to{transform:translateX(-100%)}}""", v)
+    return css, f'<div class="tk"><b>{v["etichetta"]}</b><div><span>{v["testo"]}</span></div></div>'
+
+
+def _sticker_text(v: dict) -> tuple[str, str]:
+    css = _t("""
+.st{position:absolute;inset:0;display:grid;place-content:center}
+.st span{padding:1.4vh 2.6vw;background:§colore§;color:#10101a;font-size:max(6vw,6vh);font-weight:900;
+ letter-spacing:-.02em;text-transform:uppercase;border-radius:1vw;transform:rotate(§angolo§deg);
+ box-shadow:0 8px 0 rgba(0,0,0,.35);animation:slam .4s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes slam{from{opacity:0;transform:rotate(§angolo§deg) scale(2.2)}to{opacity:1;transform:rotate(§angolo§deg) scale(1)}}""", v)
+    return css, f'<div class="st"><span>{v["testo"]}</span></div>'
+
+
+def _progress_ring(v: dict) -> tuple[str, str]:
+    css = _t("""
+.pr{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:1.4vh}
+.pr div{position:relative;width:max(26vw,26vh);height:max(26vw,26vh)}
+.pr svg{width:100%;height:100%;filter:drop-shadow(0 4px 18px rgba(0,0,0,.45))}
+.pr circle{fill:none;stroke-width:9;stroke-linecap:round}
+.pr .bg{stroke:rgba(255,255,255,.18)} .pr .fg{stroke:§colore§}
+.pr b{position:absolute;inset:0;display:grid;place-items:center;font-size:max(6vw,6vh);font-weight:900;
+ font-variant-numeric:tabular-nums;text-shadow:0 3px 14px rgba(0,0,0,.5)}
+.pr span{font-size:max(2.4vw,2.4vh);font-weight:700;text-shadow:0 2px 12px rgba(0,0,0,.6)}""", v)
+    corpo = ('<div class="pr"><div><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="45"/>'
+             '<circle class="fg" id="arc" cx="50" cy="50" r="45" pathLength="100" stroke-dasharray="0 100" '
+             'transform="rotate(-90 50 50)"/></svg><b id="n">0%</b></div>'
+             f'<span>{v["etichetta"]}</span></div>'
+             "<script>"
+             f"const V={v['valore']:g},T={v['durata'] * 0.7:.3f};"
+             "window.veditRender=t=>{const k=Math.min(1,Math.max(0,t/T)),e=1-Math.pow(1-k,3),x=V*e;"
+             "document.getElementById('arc').setAttribute('stroke-dasharray',x+' '+(100-x));"
+             "document.getElementById('n').textContent=Math.round(x)+'%'};window.veditRender(0);</script>")
+    return css, corpo
+
+
+def _stat_card(v: dict) -> tuple[str, str]:
+    css = _t("""
+.sc{position:absolute;left:8vw;bottom:12vh;padding:3vh 3vw;border-radius:1.4vw;background:rgba(14,14,20,.86);
+ border-left:1vh solid §colore§;box-shadow:0 10px 40px rgba(0,0,0,.45);animation:entra .55s cubic-bezier(.2,.8,.2,1) both}
+.sc b{display:block;font-size:max(8vw,8vh);font-weight:900;letter-spacing:-.03em;line-height:1}
+.sc span{display:block;margin-top:1vh;font-size:max(2.2vw,2.2vh);font-weight:700;opacity:.9}
+.sc em{display:inline-block;margin-top:1.4vh;padding:.5vh 1.2vw;border-radius:99px;background:§colore§;
+ color:#10101a;font-style:normal;font-size:max(1.9vw,1.9vh);font-weight:800;animation:pop .45s ease-out .5s both}""", v)
+    delta = f"<em>{v['delta']}</em>" if v["delta"] else ""
+    return css, f'<div class="sc"><b>{v["valore"]}</b><span>{v["etichetta"]}</span>{delta}</div>'
+
+
+def _steps(v: dict) -> tuple[str, str]:
+    voci = v["voci"]
+    css = _t("""
+.sp{position:absolute;left:6vw;right:6vw;top:50%;transform:translateY(-50%);display:flex;
+ padding:4vh 2vw;border-radius:1.4vw;background:rgba(14,14,20,.8)}
+.sp .s{flex:1;position:relative;display:grid;justify-items:center;gap:1.6vh;text-align:center;
+ animation:entra .5s ease-out both}
+.sp .s b{width:max(6vw,6vh);height:max(6vw,6vh);display:grid;place-items:center;border-radius:50%;
+ background:§colore§;color:#10101a;font-size:max(3vw,3vh);font-weight:900;animation:pop .45s ease-out both;z-index:1}
+.sp .s span{font-size:max(2.1vw,2.1vh);font-weight:700;padding:0 .6vw}
+.sp .s:not(:last-child):after{content:'';position:absolute;top:max(3vw,3vh);left:50%;width:100%;height:.6vh;
+ background:rgba(255,255,255,.35);transform-origin:left;transform:scaleX(0);animation:cresce .5s ease-out forwards}""", v)
+    pezzi = []
+    for i, voce in enumerate(voci):
+        ritardo = 0.5 * i
+        pezzi.append(f'<div class="s" style="animation-delay:{ritardo:.2f}s"><b style="animation-delay:'
+                     f'{ritardo:.2f}s">{i + 1}</b><span>{voce}</span>'
+                     f'<style>.sp .s:nth-child({i + 1}):after{{animation-delay:{ritardo + .3:.2f}s}}</style></div>')
+    return css, f'<div class="sp">{"".join(pezzi)}</div>'
+
+
+def _comparison(v: dict) -> tuple[str, str]:
+    css = _t("""
+.cm{position:absolute;left:7vw;right:7vw;top:50%;transform:translateY(-50%);display:grid;
+ grid-template-columns:1fr auto 1fr;align-items:stretch;gap:2vw}
+.cm .p{padding:4vh 2.4vw;border-radius:1.4vw;background:rgba(14,14,20,.84);text-align:center;
+ animation:entra .55s ease-out both}
+.cm .p:last-child{animation-delay:.2s}
+.cm h3{margin:0 0 1.6vh;font-size:max(3vw,3vh);font-weight:900;color:§colore§}
+.cm p{margin:0;font-size:max(2.2vw,2.2vh);font-weight:600;line-height:1.35}
+.cm .vs{align-self:center;width:max(6vw,6vh);height:max(6vw,6vh);display:grid;place-items:center;
+ border-radius:50%;background:§colore§;color:#10101a;font-size:max(2.4vw,2.4vh);font-weight:900;
+ animation:pop .45s ease-out .35s both}""", v)
+    corpo = (f'<div class="cm"><div class="p"><h3>{v["sinistra"]}</h3><p>{v["sinistra_testo"]}</p></div>'
+             f'<div class="vs">VS</div><div class="p"><h3>{v["destra"]}</h3><p>{v["destra_testo"]}</p></div></div>')
+    return css, corpo
+
+
+def _list_reveal(v: dict) -> tuple[str, str]:
+    css = _t("""
+.lr{position:absolute;left:7vw;top:50%;transform:translateY(-50%);max-width:52vw;padding:4vh 3vw;
+ border-radius:1.4vw;background:rgba(14,14,20,.84)}
+.lr h3{margin:0 0 2.4vh;font-size:max(3.4vw,3.4vh);font-weight:900;animation:entra .5s ease-out both}
+.lr ul{list-style:none;margin:0;padding:0;display:grid;gap:1.8vh}
+.lr li{display:flex;align-items:center;gap:1.2vw;font-size:max(2.4vw,2.4vh);font-weight:700;animation:entra .5s ease-out both}
+.lr li:before{content:'';flex:none;width:1.4vh;height:1.4vh;min-width:9px;min-height:9px;border-radius:50%;background:§colore§}""", v)
+    voci = "".join(f'<li style="animation-delay:{.35 * (i + 1):.2f}s">{x}</li>' for i, x in enumerate(v["voci"]))
+    titolo = f"<h3>{v['titolo']}</h3>" if v["titolo"] else ""
+    return css, f'<div class="lr">{titolo}<ul>{voci}</ul></div>'
+
+
+def _arrow_pointer(v: dict) -> tuple[str, str]:
+    css = _t("""
+.ap{position:absolute;left:§x§%;top:§y§%;transform:rotate(§angolo§deg);transform-origin:0 50%}
+.ap svg{position:absolute;right:0;top:-5vh;width:max(13vw,13vh);height:10vh;overflow:visible;
+ filter:drop-shadow(0 4px 12px rgba(0,0,0,.5));animation:pop .45s ease-out both,vai 1s ease-in-out .5s infinite}
+@keyframes vai{50%{transform:translateX(1.6vw)}}
+.ap em{position:absolute;right:max(13vw,13vh);top:-3.2vh;transform:rotate(calc(-1 * §angolo§deg));padding:.6vh 1.2vw;
+ border-radius:.7vw;background:§colore§;color:#10101a;font-style:normal;font-size:max(1.9vw,1.9vh);font-weight:800;white-space:nowrap}""", v)
+    freccia = (f'<svg viewBox="0 0 130 100"><path d="M5 50 H105 M78 18 L108 50 L78 82" fill="none" stroke="{v["colore"]}" '
+               'stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+    etichetta = f"<em>{v['etichetta']}</em>" if v["etichetta"] else ""
+    return css, f'<div class="ap">{freccia}{etichetta}</div>'
+
+
+def _circle_highlight(v: dict) -> tuple[str, str]:
+    css = _t("""
+@property --a{syntax:'<angle>';initial-value:0deg;inherits:false}
+.ch{position:absolute;left:§x§%;top:§y§%;width:§larghezza§%;height:§altezza§%;box-sizing:border-box;
+ border:max(.55vw,5px) solid §colore§;border-radius:50%;filter:drop-shadow(0 0 10px rgba(0,0,0,.5));
+ -webkit-mask:conic-gradient(#000 var(--a),transparent 0);mask:conic-gradient(#000 var(--a),transparent 0);
+ animation:giro .8s ease-out .15s both}
+@keyframes giro{from{--a:0deg}to{--a:360deg}}""", v)
+    return css, '<div class="ch"></div>'
+
+
+def _color_wipe(v: dict) -> tuple[str, str]:
+    asse = "X" if v["direzione"] == "horizontal" else "Y"
+    css = _t("""
+.cw{position:absolute;inset:0;background:§colore§;animation:cw §durata§s cubic-bezier(.7,0,.3,1) both}
+@keyframes cw{0%{transform:translate§asse§(-101%)}45%{transform:none}55%{transform:none}100%{transform:translate§asse§(101%)}}""",
+             v, asse=asse)
+    return css, '<div class="cw"></div>'
+
+
+def _flash_frame(v: dict) -> tuple[str, str]:
+    css = _t("""
+.fl{position:absolute;inset:0;background:§colore§;animation:fl §durata§s ease-out both}
+@keyframes fl{0%{opacity:0}12%{opacity:1}100%{opacity:0}}""", v)
+    return css, '<div class="fl"></div>'
+
+
+def _letterbox(v: dict) -> tuple[str, str]:
+    css = _t("""
+.lb i{position:absolute;left:0;right:0;height:§altezza§vh;background:#000;animation:barra .7s cubic-bezier(.2,.8,.2,1) both}
+.lb i:first-child{top:0;transform-origin:top}.lb i:last-child{bottom:0;transform-origin:bottom}
+@keyframes barra{from{transform:scaleY(0)}to{transform:scaleY(1)}}""", v)
+    return css, '<div class="lb"><i></i><i></i></div>'
+
+
+def _vignette(v: dict) -> tuple[str, str]:
+    css = _t("""
+.vg{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,§forza§) 100%);
+ animation:aparsi 1s ease-out both}
+@keyframes aparsi{from{opacity:0}to{opacity:1}}""", v)
+    return css, '<div class="vg"></div>'
+
+
+def _speech_bubble(v: dict) -> tuple[str, str]:
+    css = _t("""
+.sb{position:absolute;left:§x§%;top:§y§%;max-width:38vw;padding:2vh 2vw;border-radius:1.6vw;background:#fff;
+ color:#1b1b22;font-size:max(2.4vw,2.4vh);font-weight:800;line-height:1.25;box-shadow:0 8px 30px rgba(0,0,0,.4);
+ animation:pop .5s ease-out both}
+.sb:after{content:'';position:absolute;left:2.4vw;bottom:-2.6vh;border:1.6vh solid transparent;border-top-color:#fff;
+ border-bottom:0;border-left-width:1.4vh}
+.sb i{position:absolute;right:-1vw;top:-1vh;width:2.2vh;height:2.2vh;border-radius:50%;background:§colore§}""", v)
+    return css, f'<div class="sb"><i></i>{v["testo"]}</div>'
+
+
+def _handle_tag(v: dict) -> tuple[str, str]:
+    css = _t("""
+.ht{position:absolute;right:3vw;bottom:4vh;display:flex;align-items:center;gap:.8vw;padding:.8vh 1.4vw;
+ border-radius:99px;background:rgba(16,16,26,.72);font-size:max(1.8vw,1.8vh);font-weight:700;
+ animation:entra .5s ease-out both}
+.ht i{width:1.6vh;height:1.6vh;min-width:10px;min-height:10px;border-radius:50%;background:§colore§}""", v)
+    return css, f'<div class="ht"><i></i>{v["handle"]}</div>'
+
+
 # nome -> (descrizione, durata, categoria, parametri, funzione)
 # parametri: nome -> (tipo, default, descrizione, vincolo)
 _C = "#ffd23b"
@@ -314,16 +553,151 @@ BLOCCHI: dict[str, dict] = {
                       "colore": ("colore", _C, "the bar")}},
 }
 
+
+_ALTRI: dict[str, dict] = {
+    "end_card": {
+        "descrizione": "Closing screen: darkened frame, big title and a pulsing @handle pill.",
+        "categoria": "titles", "durata": 5.0, "fn": _end_card,
+        "parametri": {"titolo": ("testo", "Thanks for watching", "the title"),
+                      "handle": ("testo", "@yourchannel", "channel or call to action (optional)"),
+                      "colore": ("colore", _C, "the pill")}},
+    "section_label": {
+        "descrizione": "Small tag in the top-left corner naming the part: 'Chapter 1 - The hook'.",
+        "categoria": "text", "durata": 3.0, "fn": _section_label,
+        "parametri": {"testo": ("testo", "Chapter 1", "the label"),
+                      "colore": ("colore", _C, "the dot")}},
+    "typewriter": {
+        "descrizione": "One line typed out letter by letter, with a blinking cursor (monospace).",
+        "categoria": "text", "durata": 4.0, "fn": _typewriter,
+        "parametri": {"testo": ("testo", "It starts with one line.", "the line", 60),
+                      "colore": ("colore", _C, "the cursor")}},
+    "ticker": {
+        "descrizione": "News-style bar at the bottom with a label and text scrolling across it.",
+        "categoria": "text", "durata": 8.0, "fn": _ticker,
+        "parametri": {"testo": ("testo", "Breaking: something worth reading is scrolling by", "the text", 300),
+                      "etichetta": ("testo", "News", "the label box"),
+                      "sfondo": ("colore", "rgba(16,16,26,.9)", "bar background"),
+                      "colore": ("colore", "#e5383b", "label box")}},
+    "sticker_text": {
+        "descrizione": "Loud rotated label that slams in the middle of the frame ('WAIT FOR IT').",
+        "categoria": "text", "durata": 2.0, "fn": _sticker_text,
+        "parametri": {"testo": ("testo", "Wait for it", "the label", 40),
+                      "angolo": ("numero", -6, "rotation in degrees", (-30, 30)),
+                      "colore": ("colore", _C, "label background")}},
+    "speech_bubble": {
+        "descrizione": "White speech bubble placed at x, y (% of the frame), popping in.",
+        "categoria": "text", "durata": 3.0, "fn": _speech_bubble,
+        "parametri": {"testo": ("testo", "Say something", "the words", 120),
+                      "x": ("numero", 55, "left edge, % of the width", (0, 90)),
+                      "y": ("numero", 25, "top edge, % of the height", (0, 90)),
+                      "colore": ("colore", _C, "the dot on the corner")}},
+    "handle_tag": {
+        "descrizione": "Small @handle watermark in the bottom-right corner.",
+        "categoria": "text", "durata": 6.0, "fn": _handle_tag,
+        "parametri": {"handle": ("testo", "@yourchannel", "the handle"),
+                      "colore": ("colore", _C, "the dot")}},
+    "progress_ring": {
+        "descrizione": "Ring that fills to a percentage while the number counts up.",
+        "categoria": "data", "durata": 4.0, "fn": _progress_ring,
+        "parametri": {"valore": ("numero", 75, "percentage, 0-100", (0, 100)),
+                      "etichetta": ("testo", "", "what it measures"),
+                      "colore": ("colore", _C, "the ring")}},
+    "stat_card": {
+        "descrizione": "Big figure on a card with a label and an optional delta chip ('+12%').",
+        "categoria": "data", "durata": 4.0, "fn": _stat_card,
+        "parametri": {"valore": ("testo", "1.2M", "the figure", 14),
+                      "etichetta": ("testo", "views this month", "what it is"),
+                      "delta": ("testo", "", "change chip (optional)", 14),
+                      "colore": ("colore", _C, "accent")}},
+    "steps": {
+        "descrizione": "Numbered steps joined by a line, revealed one after the other (2-6).",
+        "categoria": "data", "durata": 5.0, "fn": _steps,
+        "parametri": {"voci": ("lista", "Plan, Shoot, Edit, Publish", "steps separated by commas", (2, 6)),
+                      "colore": ("colore", _C, "numbers")}},
+    "comparison": {
+        "descrizione": "Two panels side by side joined by a VS badge.",
+        "categoria": "data", "durata": 5.0, "fn": _comparison,
+        "parametri": {"sinistra": ("testo", "Before", "left heading", 30),
+                      "sinistra_testo": ("testo", "How it was", "left text", 90),
+                      "destra": ("testo", "After", "right heading", 30),
+                      "destra_testo": ("testo", "How it is now", "right text", 90),
+                      "colore": ("colore", _C, "headings and badge")}},
+    "list_reveal": {
+        "descrizione": "Panel with a title and bullet points appearing one by one (1-7).",
+        "categoria": "data", "durata": 5.0, "fn": _list_reveal,
+        "parametri": {"titolo": ("testo", "", "title (optional)"),
+                      "voci": ("lista", "First point, Second point, Third point", "bullets separated by commas",
+                               (1, 7)),
+                      "colore": ("colore", _C, "bullets")}},
+    "arrow_pointer": {
+        "descrizione": "Bobbing arrow whose tip is at x, y (% of the frame); angle = where it points.",
+        "categoria": "emphasis", "durata": 3.0, "fn": _arrow_pointer,
+        "parametri": {"x": ("numero", 60, "tip, % of the width", (0, 100)),
+                      "y": ("numero", 50, "tip, % of the height", (0, 100)),
+                      "angolo": ("numero", 0, "0 points right, 90 down, 180 left, 270 up", (-360, 360)),
+                      "etichetta": ("testo", "", "label next to the arrow (optional)", 40),
+                      "colore": ("colore", _C, "the arrow")}},
+    "circle_highlight": {
+        "descrizione": "Ellipse drawn around an area, like circling it with a pen (x, y, size in %).",
+        "categoria": "emphasis", "durata": 3.0, "fn": _circle_highlight,
+        "parametri": {"x": ("numero", 35, "left edge, % of the width", (0, 100)),
+                      "y": ("numero", 30, "top edge, % of the height", (0, 100)),
+                      "larghezza": ("numero", 30, "width, %", (1, 100)),
+                      "altezza": ("numero", 35, "height, %", (1, 100)),
+                      "colore": ("colore", "#e5383b", "the line")}},
+    "color_wipe": {
+        "descrizione": "Transition: a flat color sweeps across the frame and out again. The cut between scenes goes at the middle of the clip.",
+        "categoria": "transitions", "durata": 1.2, "fn": _color_wipe,
+        "parametri": {"colore": ("colore", "#ffc06d", "the sweep"),
+                      "direzione": ("scelta", "horizontal", "horizontal or vertical",
+                                    ("horizontal", "vertical"))}},
+    "flash_frame": {
+        "descrizione": "Transition: a short flash of color, for impact or a hard beat.",
+        "categoria": "transitions", "durata": 0.4, "fn": _flash_frame,
+        "parametri": {"colore": ("colore", "#ffffff", "the flash")}},
+    "letterbox": {
+        "descrizione": "Cinema bars sliding in at the top and bottom.",
+        "categoria": "style", "durata": 6.0, "fn": _letterbox,
+        "parametri": {"altezza": ("numero", 11, "height of each bar, % of the frame", (2, 25))}},
+    "vignette": {
+        "descrizione": "Soft dark edges that fade in, to pull the eye to the center.",
+        "categoria": "style", "durata": 6.0, "fn": _vignette,
+        "parametri": {"forza": ("numero", 0.55, "how dark the edges get, 0-1", (0, 1))}},
+}
+BLOCCHI.update(_ALTRI)
+
 # parametri comuni a tutti: carattere e colore del testo
 _COMUNI = {"font": ("font", _FONT, "font stack"),
            "testo_colore": ("colore", "#ffffff", "text color")}
+
+
+# da quanto la grafica e' a regime (secondi dall'inizio della clip): e' li' che si
+# fotografa per la galleria e per i test. Gli altri: poco dopo l'entrata.
+_VETRINA = {"counter": 3.0, "progress_ring": 3.0, "bar_chart": 3.5, "ticker": 3.0, "steps": 3.5,
+            "list_reveal": 3.5, "typewriter": 2.6, "kinetic_words": 3.0, "comparison": 1.6,
+            "color_wipe": 0.55, "flash_frame": 0.1, "letterbox": 1.2, "vignette": 1.5,
+            "chapter_card": 1.2, "quote": 2.5, "end_card": 2.0, "sticker_text": 1.0}
+
+
+def istante_vetrina(nome: str) -> float:
+    """Il secondo della clip in cui il blocco si vede meglio."""
+    if nome not in BLOCCHI:
+        raise ValueError(f"unknown block {nome!r}; allowed: {', '.join(BLOCCHI)}")
+    return _VETRINA.get(nome, max(0.8, min(1.5, BLOCCHI[nome]["durata"] * 0.45)))
 
 
 def elenco() -> list[dict]:
     """I blocchi, compatti: id, a cosa servono, durata e parametri con i default."""
     out = []
     for nome, b in BLOCCHI.items():
-        par = {k: {"default": p[1], "descrizione": p[2]} for k, p in b["parametri"].items()}
+        par = {}
+        for k, p in b["parametri"].items():
+            voce = {"default": p[1], "descrizione": p[2], "tipo": p[0]}
+            if p[0] == "scelta":
+                voce["scelte"] = list(p[3])
+            if p[0] == "numero":
+                voce["min"], voce["max"] = p[3]
+            par[k] = voce
         out.append({"id": nome, "categoria": b["categoria"], "descrizione": b["descrizione"],
                     "durata": b["durata"], "parametri": par})
     return out
@@ -356,6 +730,10 @@ def _parole(s: str) -> list[tuple[str, bool]]:
     if not out:
         raise ValueError("testo is empty")
     return out
+
+
+# hanno la loro entrata e uscita (coprono il fotogramma o durano quanto la clip)
+_SENZA_USCITA = ("chapter_card", "progress_bar", "color_wipe", "flash_frame")
 
 
 def documento(nome: str, vars: dict | None, durata: float | None = None) -> tuple[str, float]:
@@ -393,6 +771,8 @@ def documento(nome: str, vars: dict | None, durata: float | None = None) -> tupl
             if re.search(r"[;{}<>]", s):
                 raise ValueError("font cannot contain ; { } < >")
             v[k] = s
+        elif tipo == "lista":
+            v[k] = _lista(val, k, *p[3])
         elif tipo == "elenco":
             pass
     # forme che servono ai singoli blocchi
@@ -404,7 +784,7 @@ def documento(nome: str, vars: dict | None, durata: float | None = None) -> tupl
         for k in ("prefisso", "suffisso"):   # dentro uno script: senza apici ne' barre
             v[k + "_js"] = re.sub(r"[^\w%$€£ .,:+\-]", "", str(vars.get(k, parametri[k][1])))
     css, corpo = b["fn"](v)
-    if nome not in ("chapter_card", "progress_bar"):
+    if nome not in _SENZA_USCITA:
         # l'uscita sta su un contenitore a parte: la regola ``animation`` del
         # blocco, sullo stesso elemento, la cancellerebbe
         corpo = f'<div class="out" style="position:absolute;inset:0">{corpo}</div>'

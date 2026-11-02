@@ -1344,3 +1344,9 @@ button.copertina-grande { display: block; width: 100%; padding: 0; border: 0; cu
   .middle > .colonna.bin { order: 2; height: 360px; }
   .passi { grid-template-columns: 1fr; }
 }
+
+/* scheda "graphics" della libreria: il modulo dei parametri di un blocco */
+.blockform { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; display: grid; gap: 8px; align-content: start; }
+.blockform .campo { display: grid; gap: 3px; font-size: 11px; color: var(--dim); }
+.blockform .campo span { text-transform: capitalize; }
+.blockform input[type=color] { width: 100%; height: 28px; padding: 0; }

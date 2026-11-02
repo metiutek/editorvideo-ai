@@ -2,6 +2,20 @@
 
 Le voci più recenti stanno in cima.
 
+## Non rilasciato
+
+### Aggiunto
+- **Altri diciotto blocchi grafici (29 in tutto)**: `end_card`, `section_label`, `typewriter`,
+  `ticker`, `sticker_text`, `speech_bubble`, `handle_tag`, `progress_ring`, `stat_card`, `steps`,
+  `comparison`, `list_reveal`, `arrow_pointer`, `circle_highlight`, `color_wipe`, `flash_frame`,
+  `letterbox`, `vignette`, in sei famiglie (titoli, testi, dati, enfasi, transizioni, stile).
+  Ogni blocco passa anche un test in Chromium: disegna qualcosa a regime, l'angolo resta libero e
+  l'uscita lo spegne.
+- **Galleria**: `docs/blocchi/` con un'immagine per blocco renderizzata da vedit stesso
+  (`python scripts/blocchi_galleria.py`).
+- **Scheda *graphics* nella libreria**: si sceglie il blocco, si compilano i parametri (testo,
+  numero, colore, scelta) e si aggiunge alla testina; al server vanno solo i parametri cambiati.
+
 ## v0.5.0 — 2026-11-02 · Blocchi, generazione, plugin, learn_style
 
 ### Aggiunto

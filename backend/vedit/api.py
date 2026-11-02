@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import (captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
+from . import (blocchi, captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
                render, review, social, stili, tts, web)
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
@@ -367,6 +367,7 @@ def state() -> dict:
         "effects": fx.describe(),
         "transitions": list(TRANSITIONS),
         "library": presets.describe(),
+        "blocchi": blocchi.elenco(),
         "presets": list(PRESETS),
         "formats": list(FORMATI),
         "chat": chat_available(),
