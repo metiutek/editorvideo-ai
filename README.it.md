@@ -735,6 +735,8 @@ analizzano i primi dieci minuti, e da una pagina video si scarica solo quel trat
 download vanno in `~/.vedit/riferimenti`. YouTube vuole una yt-dlp recente con il suo
 risolutore JavaScript: l'extra `web` installa `yt-dlp[default]`, e usa Node.js se manca Deno.
 
+<p align="center"><img src="https://raw.githubusercontent.com/metiutek/editorvideo-ai/main/docs/blocchi/demo.gif" alt="Dieci dei blocchi pronti, montati e renderizzati da vedit stesso" width="560"/></p>
+
 **Grafiche animate pronte** — `list_blocks` / `add_block` mette in traccia un'animazione già
 tarata in una chiamata, senza CSS da scrivere. 29 blocchi in sei famiglie — titoli
 (`lower_third`, `title`, `chapter_card`, `end_card`), testi (`caption_pill`, `date_badge`,

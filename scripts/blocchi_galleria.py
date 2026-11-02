@@ -64,6 +64,8 @@ def main() -> int:
     righe_md = ["# Motion graphics blocks", "",
                 "Rendered by vedit itself (`python scripts/blocchi_galleria.py`), default parameters. "
                 "Use them with `list_blocks` / `add_block`.", "",
+                "![ten blocks edited into a short video](demo.gif)", "",
+                "*Ten blocks cut into a short video by vedit itself (`python scripts/blocchi_demo.py`).*", "",
                 "![all blocks](galleria.png)", ""]
     per_categoria: dict[str, list[dict]] = {}
     for b in blocchi.elenco():

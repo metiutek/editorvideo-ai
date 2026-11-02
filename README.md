@@ -574,6 +574,8 @@ tool fixes it. The agent can also **create styles** on its own with `create_styl
 guide plus a recipe (look, movement, transitions, music curve, accents) that lands in your
 style menu and that `apply_style` actually executes.
 
+<p align="center"><img src="https://raw.githubusercontent.com/metiutek/editorvideo-ai/main/docs/blocchi/demo.gif" alt="Ten of the ready-made blocks, edited and rendered by vedit itself" width="560"/></p>
+
 **Ready-made motion graphics** — `list_blocks` / `add_block` puts a tuned animation on a track
 in one call, no CSS to write. 29 blocks in six families — titles (`lower_third`, `title`,
 `chapter_card`, `end_card`), text (`caption_pill`, `date_badge`, `kinetic_words`, `typewriter`,

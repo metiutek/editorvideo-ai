@@ -2,6 +2,12 @@
 
 Le voci più recenti stanno in cima.
 
+## Non rilasciato
+
+### Aggiunto
+- **Demo dei blocchi** (`docs/blocchi/demo.gif` e `.mp4`, 22 s): dieci blocchi montati e
+  renderizzati da vedit stesso con `python scripts/blocchi_demo.py`; è nei README e nella galleria.
+
 ## v0.5.1 — 2026-11-02 · Più blocchi, galleria, generazione dall'app
 
 ### Aggiunto
