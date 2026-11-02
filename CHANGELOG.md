@@ -2,7 +2,7 @@
 
 Le voci più recenti stanno in cima.
 
-## Non rilasciato
+## v0.5.3 — 2026-11-02 · 52 blocchi, movimenti di camera, piano, skill incluse
 
 ### Aggiunto
 - **Blocchi grafici: da 29 a 52** (`blocchi_piu.py`): titoli (`mask_reveal_title`, `glitch_title`,
