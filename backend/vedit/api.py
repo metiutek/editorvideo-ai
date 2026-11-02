@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import (captions, domande, ffmpeg, figli, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
+from . import (captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
                render, review, social, stili, tts, web)
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
@@ -66,7 +66,7 @@ FRONTEND = _frontend_dir()
 OPS = {
     "import_media", "set_media", "remove_media", "rename_folder",
     "add_track", "set_track", "set_sidechain", "remove_track", "move_track",
-    "add_clip", "add_text", "add_color", "add_html", "add_particles", "set_particles", "set_html", "remove_clip", "unlink_clip", "move_clip",
+    "add_clip", "add_text", "add_color", "add_html", "add_block", "add_particles", "set_particles", "set_html", "remove_clip", "unlink_clip", "move_clip",
     "ripple_trim", "roll_edit", "slip_clip", "slide_clip", "import_subtitles",
     "set_master_volume", "move_layer", "trim_clip",
     "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
@@ -1643,6 +1643,31 @@ def tts_stato() -> dict:
     return {**tts.stato(), "voci_sistema": tts.voci_sistema()}
 
 
+class GenBody(BaseModel):
+    servizio: str
+    chiave: str | None = None
+    modello_immagini: str | None = None
+    modello_video: str | None = None
+    indirizzo: str | None = None
+
+
+@app.get("/api/gen")
+def gen_stato() -> dict:
+    """Servizi di generazione di immagini e video e quale e' pronto."""
+    return generativo.stato()
+
+
+@app.post("/api/gen")
+def gen_imposta(body: GenBody) -> dict:
+    """Servizio, chiave, modelli: solo su questa macchina (~/.vedit/gen.json)."""
+    try:
+        generativo.imposta(body.servizio, body.chiave, body.modello_immagini,
+                           body.modello_video, body.indirizzo)
+    except generativo.GenError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return generativo.stato()
+
+
 @app.post("/api/tts")
 def tts_imposta(body: TtsBody) -> dict:
     """Motore, chiave, voce: solo su questa macchina (~/.vedit/tts.json)."""
@@ -1849,7 +1874,8 @@ def _impara(fonte: str, nome: str | None) -> dict:
     """Uno stile imparato da un video (apprendi.py): misure, guida e stile salvato."""
     from . import apprendi
     try:
-        res = apprendi.impara(fonte, nome)
+        # dalla UI nessun agente guarda i fogli: ci pensa il modello scelto
+        res = apprendi.impara(fonte, nome, descrivi=True)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 - rete, yt-dlp, ffmpeg: il messaggio serve all'utente
@@ -2208,6 +2234,23 @@ def chat(body: ChatBody) -> StreamingResponse:
         if name == "ask_user":
             # fuori dal lock: si aspetta l'utente, non si tocca il progetto
             return json.dumps(chiedi(args.get("domande", args)), ensure_ascii=False)
+        if name == "generate_media":
+            # costa e il prompt parte verso un servizio di terzi: serve il si' dell'utente,
+            # poi la rete lavora fuori dal lock
+            try:
+                m = generativo.scelto(args.get("service"), args["kind"])
+            except generativo.GenError as exc:
+                return json.dumps({"generato": False, "motivo": str(exc)}, ensure_ascii=False)
+            modello = args.get("model") or generativo._modello(
+                m, generativo.carica(), args["kind"], da_immagine=bool(args.get("image")))
+            esito = chiedi(domande.conferma_genera(args["kind"], args["prompt"], m["nome"], modello))
+            if not domande.approvato(esito):
+                return json.dumps({"generato": False, "motivo": esito.get("motivo") or
+                                   "l'utente ha scelto di non generare adesso"}, ensure_ascii=False)
+            try:
+                args = {**args, "_generato": chat_mod.prepara_media(store, args)}
+            except generativo.GenError as exc:
+                return json.dumps({"generato": False, "motivo": str(exc)}, ensure_ascii=False)
         if name == "generate_voice":
             # la sintesi puo' durare: fuori dal lock, la UI resta libera
             args = {**args, "_voci": chat_mod.prepara_voce(store, args)}

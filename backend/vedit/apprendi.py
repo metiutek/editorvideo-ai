@@ -122,6 +122,221 @@ def _scala(a, b) -> float:
     return s_best if base > 0.01 and migliore < base * 0.7 else 1.0
 
 
+def _sposta(img, s: float, dx: int, dy: int):
+    """``img`` ingrandita di ``s`` attorno al centro e poi spostata di (dx, dy)
+    pixel, stessa misura: il contenuto che la camera si porta dietro."""
+    import numpy as np
+
+    h, w = img.shape
+    ys = np.clip(((np.arange(h) - h / 2 + 0.5) / s + h / 2 - 0.5 - dy).round().astype(int), 0, h - 1)
+    xs = np.clip(((np.arange(w) - w / 2 + 0.5) / s + w / 2 - 0.5 - dx).round().astype(int), 0, w - 1)
+    return img[np.ix_(ys, xs)]
+
+
+def _errore(d) -> float:
+    """Errore di una sovrapposizione: la media del 70% dei pixel che differiscono
+    meno. Personaggi e oggetti che si muovono da soli restano fuori dal conto,
+    cosi' si misura la camera e non l'animazione."""
+    import numpy as np
+
+    v = d.ravel()
+    k = max(1, int(len(v) * 0.7))
+    return float(np.partition(v, k - 1)[:k].mean())
+
+
+_SCALE_MOTO = (0.89, 0.93, 0.96, 0.98, 1.0, 1.02, 1.04, 1.07, 1.12)
+_PAN_MIN = 1.2     # px/s a LARGHEZZA px di larghezza: sotto, a pixel interi, non si distingue dallo zoom
+_SCARTO_MOTO = 4   # px (a LARGHEZZA px di larghezza) cercati in ogni direzione
+
+
+def _moto(a, b, m: int = 6):
+    """Come si e' mossa la camera da ``a`` a ``b``: (scala, dx, dy), ``(1, 0, 0)``
+    se cambia qualcosa ma non e' la camera (animazione dentro la scena), None se
+    l'immagine e' ferma."""
+    import numpy as np
+
+    interno = (slice(m, -m), slice(m, -m))
+    base = _errore(np.abs(a - b)[interno])
+    if base < 0.004:
+        return None
+    migliore, scelta = base, (1.0, 0, 0)
+    for s in _SCALE_MOTO:
+        for dy in range(-_SCARTO_MOTO, _SCARTO_MOTO + 1):
+            for dx in range(-_SCARTO_MOTO, _SCARTO_MOTO + 1):
+                if s == 1.0 and dx == 0 and dy == 0:
+                    continue
+                e = _errore(np.abs(_sposta(a, s, dx, dy) - b)[interno])
+                # a parita' di errore vince la spiegazione piu' semplice: uno zoom
+                # puro, per l'arrotondamento a pixel interi, ha anche spostamenti
+                # quasi altrettanto buoni che non sono una panoramica
+                pesato = e * (1 + 0.03 * (abs(dx) + abs(dy)))
+                if pesato < migliore:
+                    migliore, scelta = pesato, (s, dx, dy)
+    return scelta if migliore < base * 0.7 else (1.0, 0, 0)
+
+
+def _moto_inquadratura(luma, a: float, b: float, sep: float = 1.5, max_coppie: int = 3) -> dict | None:
+    """Zoom, panoramica e animazione di un'inquadratura da ``a`` a ``b`` secondi,
+    su coppie di fotogrammi lontane ``sep`` secondi (uno zoom lento fra due
+    fotogrammi vicini non si vede, e agli estremi la scena puo' essere cambiata)."""
+    import numpy as np
+
+    n = len(luma)
+    passo = max(1, int(round(sep * FPS)))
+    i0 = int(np.ceil(a * FPS)) + 3          # fuori dalla coda della transizione
+    i1 = min(n - 1, int(b * FPS) - 3)
+    if i1 - i0 < passo:
+        return None
+    ultimi = i1 - passo
+    inizi = sorted({int(round(x)) for x in np.linspace(i0, ultimi, min(max_coppie, ultimi - i0 + 1))})
+    risultati = [r for r in (_moto(luma[i], luma[i + passo]) for i in inizi) if r is not None]
+    if not risultati:
+        return {"tipo": "fermo", "zoom": 0.0, "pan": 0.0}
+    movimenti = [r for r in risultati if r != (1.0, 0, 0)]
+    if len(movimenti) * 2 < len(risultati):
+        return {"tipo": "animazione", "zoom": 0.0, "pan": 0.0}
+    zoom = _mediana([abs(s - 1.0) for s, _, _ in movimenti])
+    pan = _mediana([float(np.hypot(dx, dy)) for _, dx, dy in movimenti])
+    orizz = _mediana([abs(dx) for _, dx, _ in movimenti]) >= _mediana([abs(dy) for _, _, dy in movimenti])
+    return {"tipo": "moto", "zoom": zoom / sep, "pan": pan / sep, "asse": "x" if orizz else "y",
+            "dentro": _mediana([s for s, _, _ in movimenti], 1.0) > 1.0}
+
+
+def _esadecimale(rgb) -> str:
+    r, g, b = (int(round(min(1.0, max(0.0, float(x))) * 255)) for x in rgb)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _palette(campioni, quanti: int = 6) -> list[dict]:
+    """I colori che dominano il video, come esadecimali: servono a chi disegna
+    grafica nello stesso stile. Raggruppati a 8 livelli per canale e fusi se vicini."""
+    import numpy as np
+
+    px = campioni[:, ::2, ::2].reshape(-1, 3)
+    q = np.minimum((px * 8).astype(int), 7)
+    chiave = q[:, 0] * 64 + q[:, 1] * 8 + q[:, 2]
+    conta = np.bincount(chiave, minlength=512)
+    medie = np.stack([np.bincount(chiave, weights=px[:, c], minlength=512) for c in range(3)], axis=1)
+    out: list[tuple[np.ndarray, float]] = []
+    for k in np.argsort(conta)[::-1]:
+        if conta[k] == 0:
+            break
+        colore = medie[k] / conta[k]
+        for i, (c, quota) in enumerate(out):
+            if float(np.abs(c - colore).max()) < 0.16:
+                out[i] = (c, quota + conta[k] / len(px))
+                break
+        else:
+            out.append((colore, conta[k] / len(px)))
+        if len(out) >= quanti * 2:
+            break
+    out.sort(key=lambda x: -x[1])
+    return [{"colore": _esadecimale(c), "quota": round(float(q_), 2)} for c, q_ in out[:quanti]
+            if q_ >= 0.02]
+
+
+def _piatti(rgb, lum, durata: float) -> list[dict]:
+    """Tratti in cui lo schermo e' di un colore solo (non nero): cartelli di
+    capitolo, passaggi sul colore, schermate di chiusura."""
+    import numpy as np
+
+    n = len(rgb)
+    sd = rgb.reshape(n, -1, 3).std(axis=1).mean(axis=1)
+    piatto = (sd < 0.025) & (lum > 0.06)
+    out, i = [], 0
+    while i < n:
+        if not piatto[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and piatto[j]:
+            j += 1
+        if (j - i) / FPS >= 0.3:
+            out.append({"t": round(i / FPS, 1), "durata": round((j - i) / FPS, 1),
+                        "colore": _esadecimale(rgb[i:j].reshape(-1, 3).mean(axis=0))})
+        i = j
+    return out[:20]
+
+
+def _voce(path: str, ha_audio: bool, cambi: list[float], durata: float) -> dict | None:
+    """C'e' una voce che racconta? Quanto parla, quanto durano frasi e pause, e
+    quanti cambi d'inquadratura cadono su una pausa.
+
+    Senza modelli: l'energia della banda del parlato (300-3400 Hz) a blocchi di
+    50 ms. Una voce sopra una musica di fondo da due livelli ben separati (parla
+    / non parla), con pause vere; una musica sola resta su un livello solo.
+    Per questo e' una stima (``metodo: energia``): dice "probabile", non certo.
+    """
+    if not ha_audio:
+        return None
+    import numpy as np
+
+    sr = 16000
+    proc = subprocess.run([
+        ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error",
+        "-t", f"{durata:.3f}", "-i", str(path), "-vn", "-ac", "1", "-ar", str(sr),
+        "-f", "s16le", "-",
+    ], capture_output=True, timeout=3600)
+    raw = proc.stdout or b""
+    hop = sr // 20
+    n = len(raw) // 2 // hop
+    if n < 40:
+        return {"presente": False, "metodo": "energia"}
+    x = np.frombuffer(raw[: n * hop * 2], dtype=np.int16).astype(np.float32) / 32768.0
+    spettro = np.abs(np.fft.rfft(x.reshape(n, hop) * np.hanning(hop), axis=1)) ** 2
+    freq = np.fft.rfftfreq(hop, 1 / sr)
+    banda = spettro[:, (freq >= 300) & (freq <= 3400)].sum(axis=1)
+    db = 10 * np.log10(banda + 1e-9)
+    db = np.convolve(db, np.ones(3) / 3, mode="same")
+    p10, p90 = float(np.quantile(db, 0.10)), float(np.quantile(db, 0.90))
+    soglia = p10 + 0.45 * (p90 - p10)
+    parla = db > soglia
+    # una parola non e' una pausa: i vuoti sotto 0.2 s fra due parlati si chiudono
+    def corse(v):
+        out, i = [], 0
+        while i < len(v):
+            j = i
+            while j < len(v) and v[j] == v[i]:
+                j += 1
+            out.append((bool(v[i]), i, j))
+            i = j
+        return out
+    for val, i, j in corse(parla):
+        if not val and 0 < i and j < n and (j - i) <= 4:
+            parla[i:j] = True
+    corse_ = corse(parla)
+    pause = [(i * 0.05, j * 0.05) for val, i, j in corse_ if not val and i > 0 and j < n
+             and (j - i) >= 6]
+    quota = float(parla.mean())
+    minuti = n * 0.05 / 60
+    # voce solo se i due livelli sono distinti e le pause ci sono davvero
+    presente = (p90 - p10) >= 8.0 and 0.2 <= quota <= 0.97 and len(pause) / max(minuti, 1e-3) >= 3
+    out: dict = {"presente": bool(presente), "metodo": "energia"}
+    if not presente:
+        return out
+    frasi, ultimo = [], 0.0
+    for a, b in pause:
+        if a - ultimo >= 0.4:
+            frasi.append(a - ultimo)
+        ultimo = b
+    if n * 0.05 - ultimo >= 0.4:
+        frasi.append(n * 0.05 - ultimo)
+    dilatate = [(a - 0.2, b + 0.2) for a, b in pause]
+    coperto = 0.0
+    for a, b in sorted(dilatate):
+        coperto += max(0.0, b - max(a, 0.0))
+    sulle = [t for t in cambi if any(a <= t <= b for a, b in dilatate)]
+    out.update({
+        "quota_parlato": round(quota, 2),
+        "frase_mediana": round(_mediana(frasi), 1) if frasi else None,
+        "pausa_mediana": round(_mediana([b - a for a, b in pause]), 2),
+        "pause_al_minuto": round(len(pause) / max(minuti, 1e-3), 1),
+        "tagli_su_pause": round(len(sulle) / len(cambi), 2) if cambi else 0.0,
+        "a_caso": round(min(1.0, coperto / max(durata, 1.0)), 2),
+    })
+    return out
+
+
 def _mediana(v, default=0.0) -> float:
     v = sorted(v)
     if not v:
@@ -264,12 +479,16 @@ def misura(path: str, limite: float = LIMITE) -> dict:
     def fotogramma(t: float):
         return luma[min(n - 1, max(0, int(round(t * FPS))))]
 
-    zoom_inq, mosso, scosse = [], [], 0
+    mosso, scosse, misurate = [], 0, 0
+    moti: list[tuple[float, dict]] = []      # (durata, moto) delle inquadrature abbastanza lunghe
     for a, b in zip(bordi, bordi[1:]):
         if b - a < 0.8:
             continue
-        s = _scala(fotogramma(a + 0.2), fotogramma(b - 0.2))
-        zoom_inq.append(s)
+        misurate += 1
+        if b - a >= 2.2:
+            mo = _moto_inquadratura(luma, a, b)
+            if mo is not None:
+                moti.append((b - a, mo))
         # il primo fotogramma intero dopo il taglio: d1 li' misura gia' la ripresa
         i0, i1 = int(np.ceil(a * FPS)) + 1, int(b * FPS) - 1
         if i1 > i0 + 5:
@@ -284,7 +503,11 @@ def misura(path: str, limite: float = LIMITE) -> dict:
     for c in tagli:
         if _scala(fotogramma(c - 0.15), fotogramma(c + 0.15)) not in (1.0,):
             punch += 1
-    con_zoom = [abs(s - 1) for s in zoom_inq if s != 1.0]
+    # zoom e panoramiche lente dentro l'inquadratura; quanto si zooma in tutto
+    # (velocita' per la durata, al massimo 6 s) e' quello che la ricetta chiama zoom
+    con_zoom = [min(d, 6.0) * mo["zoom"] for d, mo in moti if mo["tipo"] == "moto" and mo["zoom"] >= 0.012]
+    con_pan = [mo for _, mo in moti if mo["tipo"] == "moto" and mo["pan"] >= _PAN_MIN]
+    animate = [mo for _, mo in moti if mo["tipo"] == "animazione"]
 
     # colore: campioni ogni mezzo secondo
     campioni = rgb[quadro][:: max(1, int(FPS / 2))]
@@ -354,18 +577,26 @@ def misura(path: str, limite: float = LIMITE) -> dict:
                         # gli istanti, per andarli a guardare nel riferimento
                         "dove": [round(x, 1) for x in sorted(dissolvenze + sul_nero + flash)][:20]},
         "movimento": {
-            "inquadrature_con_zoom": round(len(con_zoom) / len(zoom_inq), 2) if zoom_inq else 0.0,
+            "inquadrature_con_zoom": round(len(con_zoom) / len(moti), 2) if moti else 0.0,
             "zoom_medio": round(_mediana(con_zoom), 3),
+            "panoramiche": round(len(con_pan) / len(moti), 2) if moti else 0.0,
+            "pan_asse": ("orizzontali" if sum(1 for m_ in con_pan if m_["asse"] == "x") * 2 >= len(con_pan)
+                         else "verticali") if con_pan else None,
+            "animazione": round(len(animate) / len(moti), 2) if moti else 0.0,
             "punch_in": round(punch / len(tagli), 2) if tagli else 0.0,
             "mosso": round(_mediana(mosso), 4),
-            "scosse": round(scosse / len(zoom_inq), 2) if zoom_inq else 0.0,
+            "scosse": round(scosse / misurate, 2) if misurate else 0.0,
         },
         "colore": colore,
+        "palette": _palette(campioni),
+        "passaggi_colore": _piatti(rgb, lum, durata),
+        "voce": _voce(path, m.has_audio, cambi, durata),
         "apertura": dissolvenza_bordo(l_q.mean(axis=(1, 2))),
         "chiusura": dissolvenza_bordo(l_q.mean(axis=(1, 2))[::-1]),
         "musica": _musica(path, m.has_audio, tagli, durata),
     }
     misure["_tempi_foglio"] = [round((a + b) / 2, 2) for a, b in zip(bordi, bordi[1:])]
+    misure["_bordi"] = [round(b, 2) for b in bordi]
     return misure
 
 
@@ -386,7 +617,11 @@ def _musica(path: str, ha_audio: bool, tagli: list[float], durata: float) -> dic
         b = analyze.beats(path)
     except analyze.AnalysisError:
         return {"bpm": None}
-    battito, offset = b["beat"], b["offset"]
+    battito, offset, bpm = b["beat"], b["offset"], b["bpm"]
+    # l'autocorrelazione confonde battito e doppio battito: oltre 160 BPM e' quasi
+    # sempre il tempo dimezzato (e una griglia piu' stretta non e' un pregio)
+    if bpm > 160:
+        bpm, battito = bpm / 2, battito * 2
     tolleranza = min(0.08, battito * 0.15)
     sul = [t for t in tagli
            if abs(((t - offset) / battito - round((t - offset) / battito)) * battito) <= tolleranza]
@@ -399,7 +634,7 @@ def _musica(path: str, ha_audio: bool, tagli: list[float], durata: float) -> dic
         forma = "arco"
     else:
         forma = "piatta"
-    return {"bpm": b["bpm"], "battito": round(battito, 3),
+    return {"bpm": round(bpm, 1), "battito": round(battito, 3),
             "tagli_sul_battito": round(len(sul) / len(tagli), 2) if tagli else 0.0,
             "a_caso": round(min(1.0, 2 * tolleranza / battito), 2), "forma": forma}
 
@@ -442,8 +677,10 @@ def ricetta(mis: dict) -> tuple[str, dict]:
     r: dict = {"look": None, "colore": mis["colore"].get("statistiche")}
     if mv["punch_in"] >= 0.15:
         r["movimento"], r["zoom"] = "punch", round(min(0.3, max(0.06, mv["zoom_medio"] or 0.12)), 3)
-    elif mv["inquadrature_con_zoom"] >= 0.3:
-        r["movimento"], r["zoom"] = "spinta", round(min(0.3, max(0.02, mv["zoom_medio"])), 3)
+    elif min(1.0, mv["inquadrature_con_zoom"] + mv.get("panoramiche", 0.0)) >= 0.3:
+        # anche una panoramica lenta e' una camera che si muove: la spinta e' la
+        # cosa piu' vicina che la ricetta sa fare, la guida dice il resto
+        r["movimento"], r["zoom"] = "spinta", round(min(0.3, max(0.03, mv["zoom_medio"])), 3)
     else:
         r["movimento"], r["zoom"] = None, 0.0
     if quota_morbide >= 0.08:
@@ -496,6 +733,17 @@ def _da_fare(mis: dict) -> list[str]:
         out.append("il ritmo rallenta verso la fine: chiudi con inquadrature tenute")
     if tr["flash"]:
         out.append(f"flash bianchi brevi sui colpi ({tr['flash']} nel riferimento)")
+    voce = mis.get("voce") or {}
+    if voce.get("presente"):
+        out.append("c'e' una voce che racconta: scrivi il copione, genera la voce prima "
+                   "(generate_voice) e monta sui suoi tempi (speech_times); abbassa la musica "
+                   "sotto la voce (duck_music)")
+        if voce.get("tagli_su_pause", 0) >= voce.get("a_caso", 0) + 0.15:
+            out.append(f"cambia scena a fine frase: {round(voce['tagli_su_pause'] * 100)}% "
+                       "dei cambi del riferimento cade su una pausa della voce")
+    if mis.get("passaggi_colore"):
+        out.append(f"passaggi su colore piatto fra i capitoli ({len(mis['passaggi_colore'])} nel "
+                   "riferimento): add_color a tinta unita con dissolvenze ai lati")
     if mis["formato"] != "16:9":
         out.append(f"formato {mis['formato']}")
     if mis.get("bande_nere"):
@@ -505,6 +753,10 @@ def _da_fare(mis: dict) -> list[str]:
         out.append(f"cartelli di testo su nero fra le scene ({len(mis['cartelli_su_nero'])} "
                    "nel riferimento): add_text o add_html su fondo nero")
     return out
+
+
+_RIMANDO = ("Testi, grafica, sottotitoli e scelta delle inquadrature non si misurano: "
+            "guardali nel foglio dei fotogrammi del riferimento e imitali.")
 
 
 def guida(mis: dict, nome_fonte: str, look: str | None) -> str:
@@ -528,7 +780,20 @@ def guida(mis: dict, nome_fonte: str, look: str | None) -> str:
     elif t["accelera"] > 1.4:
         ritmo += " Rallenta verso la fine."
     righe.append(ritmo)
-    if mu and mu.get("bpm"):
+    voce = mis.get("voce") or {}
+    if voce.get("presente"):
+        riga = (f"Voce narrante (stima dall'audio): parla per il {round(voce['quota_parlato'] * 100)}% "
+                f"del tempo, frasi di circa {voce['frase_mediana']} s, pause di circa "
+                f"{voce['pausa_mediana']} s.")
+        if voce.get("tagli_su_pause", 0) >= voce.get("a_caso", 0) + 0.15:
+            riga += (f" {round(voce['tagli_su_pause'] * 100)}% dei cambi d'inquadratura cade su una "
+                     "pausa (a caso sarebbe " f"{round(voce['a_caso'] * 100)}%): cambia scena a fine frase.")
+        else:
+            riga += " I cambi non seguono le pause: seguono il contenuto di ogni frase."
+        righe.append(riga + " La musica sta sotto la voce.")
+    if mu and mu.get("bpm") and voce.get("presente"):
+        righe.append(f"Musica di sottofondo, circa {mu['bpm']:.0f} BPM: non guida i tagli.")
+    elif mu and mu.get("bpm"):
         sul = mu["tagli_sul_battito"]
         if sul >= max(0.5, mu["a_caso"] + 0.2):
             righe.append(f"Musica a {mu['bpm']:.0f} BPM e {round(sul * 100)}% dei tagli sul "
@@ -552,9 +817,15 @@ def guida(mis: dict, nome_fonte: str, look: str | None) -> str:
     mov = []
     if mv["punch_in"] >= 0.15:
         mov.append(f"punch-in fra inquadrature ({round(mv['punch_in'] * 100)}% dei tagli)")
-    if mv["inquadrature_con_zoom"] >= 0.3:
+    if mv["inquadrature_con_zoom"] >= 0.15:
         mov.append(f"zoom lenti dentro l'inquadratura ({round(mv['inquadrature_con_zoom'] * 100)}% "
                    f"delle inquadrature, circa {round(mv['zoom_medio'] * 100)}%)")
+    if mv.get("panoramiche", 0) >= 0.15:
+        mov.append(f"panoramiche lente {mv.get('pan_asse') or ''} ({round(mv['panoramiche'] * 100)}% "
+                   "delle inquadrature)".replace("  ", " "))
+    if mv.get("animazione", 0) >= 0.3:
+        mov.append(f"animazione dentro la scena ({round(mv['animazione'] * 100)}% delle "
+                   "inquadrature: personaggi e oggetti si muovono, la camera sta ferma)")
     if mv["scosse"] >= 0.15:
         mov.append("scosse sull'attacco delle inquadrature")
     if mv["mosso"] > 0.03:
@@ -566,6 +837,13 @@ def guida(mis: dict, nome_fonte: str, look: str | None) -> str:
     righe.append(f"Colore: tono {tono}, {sat}, contrasto "
                  f"{'alto' if c['contrasto'] > 0.24 else 'basso' if c['contrasto'] < 0.15 else 'medio'}"
                  + (f" (look piu' vicino: {look})." if look else "."))
+    if mis.get("palette"):
+        righe.append("Palette dominante: " + ", ".join(
+            f"{p['colore']} ({round(p['quota'] * 100)}%)" for p in mis["palette"][:6]) + ".")
+    if mis.get("passaggi_colore"):
+        righe.append(f"{len(mis['passaggi_colore'])} passaggi su colore piatto (cartelli di capitolo): "
+                     + ", ".join(f"{x['colore']} a {x['t']:.0f} s per {x['durata']} s"
+                                 for x in mis["passaggi_colore"][:6]) + ".")
     if mis.get("bande_nere"):
         righe.append(f"Bande nere da cinema: immagine {mis['bande_nere']}:1 dentro il "
                      f"{mis['formato']}.")
@@ -580,8 +858,7 @@ def guida(mis: dict, nome_fonte: str, look: str | None) -> str:
         bordi.append(f"chiude al nero in {mis['chiusura']} s")
     if bordi:
         righe.append(", ".join(bordi).capitalize() + ".")
-    righe.append("Testi, grafica, sottotitoli e scelta delle inquadrature non si misurano: "
-                 "guardali nel foglio dei fotogrammi del riferimento e imitali.")
+    righe.append(_RIMANDO)
     return "\n".join(righe)
 
 
@@ -607,17 +884,97 @@ def foglio(path: str, tempi: list[float], output: str) -> str | None:
     return review.griglia(frames, output, cols=4)["file"]
 
 
+def foglio_movimento(path: str, bordi: list[float], output: str) -> str | None:
+    """Come si muovono le inquadrature piu' lunghe: per ognuna (al massimo quattro)
+    quattro fotogrammi in fila. Un foglio con un fotogramma per scena non fa
+    vedere una panoramica o uno zoom lenti: questo si'."""
+    lunghe = sorted(((b - a, a, b) for a, b in zip(bordi, bordi[1:]) if b - a >= 2.5),
+                    reverse=True)[:4]
+    if not lunghe:
+        return None
+    tmp = Path(tempfile.mkdtemp(prefix="vedit_moto_"))
+    frames = []
+    for k, (_, a, b) in enumerate(sorted(lunghe, key=lambda x: x[1])):
+        for j, q in enumerate((0.08, 0.35, 0.65, 0.92)):
+            t = a + (b - a) * q
+            f = tmp / f"{k}{j}.jpg"
+            subprocess.run([
+                ffmpeg.binary("ffmpeg"), "-hide_banner", "-nostdin", "-loglevel", "error",
+                "-y", "-ss", f"{t:.3f}", "-i", str(path), "-frames:v", "1",
+                "-vf", "scale=320:-2", "-q:v", "4", str(f),
+            ], capture_output=True, timeout=120)
+            if f.exists() and f.stat().st_size > 0:
+                frames.append((review._timecode(t), str(f)))
+    if len(frames) < 4:
+        return None
+    return review.griglia(frames, output, cols=4)["file"]
+
+
+def unisci_fogli(fogli: list[str | None], output: str) -> str | None:
+    """I fogli uno sopra l'altro in un'immagine sola (la chat ne passa una per risultato)."""
+    from PIL import Image
+
+    img = [Image.open(f).convert("RGB") for f in fogli if f and Path(f).is_file()]
+    if not img:
+        return None
+    larghezza = max(i.width for i in img)
+    img = [i if i.width == larghezza else i.resize((larghezza, round(i.height * larghezza / i.width)))
+           for i in img]
+    tela = Image.new("RGB", (larghezza, sum(i.height for i in img)), (12, 12, 14))
+    y = 0
+    for i in img:
+        tela.paste(i, (0, y))
+        y += i.height
+    tela.save(output, quality=88)
+    return output
+
+
+_DOMANDA_VISIVA = (
+    "The first image has one frame per shot of a reference video; the second shows how the "
+    "longest shots move (four frames in a row for each).\n"
+    "Describe the VISUAL STYLE so that another editor can recreate it with different content. "
+    "Not the story or the subject: how it looks and moves.\n"
+    "Answer in Italian, as a short list (at most 12 lines), covering only what you can "
+    "actually see:\n"
+    "1. medium (2D or 3D animation, live footage, screen recording, mixed) and rendering style;\n"
+    "2. characters and their design, if any;\n"
+    "3. backgrounds and color palette;\n"
+    "4. camera movement and animation inside the scenes;\n"
+    "5. text on screen: where, in what shape (caption pill, badge, subtitle), typeface, "
+    "when it appears;\n"
+    "6. recurring graphic elements (date or counter badges, chapter cards, icons);\n"
+    "7. how scenes change (cut, fade, wipe, color card)."
+)
+
+
+def descrivi_visivo(fogli: list[str | None]) -> str | None:
+    """Il linguaggio visivo del riferimento, scritto da un modello che guarda i
+    fogli. None se non c'e' un modello (o non risponde): lo stile esce lo stesso."""
+    from . import llm
+    try:
+        testo = llm.chiedi_con_immagini(_DOMANDA_VISIVA, [f for f in fogli if f])
+    except RuntimeError:
+        return None
+    return testo or None
+
+
 def impara(fonte: str, nome: str | None = None, salva: bool = True,
-           stile_id: str | None = None, limite: float = LIMITE) -> dict:
+           stile_id: str | None = None, limite: float = LIMITE,
+           descrivi: bool = False) -> dict:
     """Misura il video ``fonte`` e ne fa uno stile personale (se ``salva``).
 
     ``limite``: secondi analizzati dall'inizio (un film intero non serve, e da
-    un link si scarica solo quel tratto).
+    un link si scarica solo quel tratto). ``descrivi``: un modello con la vista
+    (quello scelto nelle impostazioni) guarda i fogli e scrive il linguaggio
+    visivo — personaggi, testi sullo schermo, grafica — che le misure non
+    arrivano a vedere; entra nella guida salvata. Chi lavora con un agente che
+    guarda gia' i fogli (MCP, chat) lo lascia spento.
     """
     limite = max(10.0, min(float(limite), 3600.0))
     path = procura(fonte, limite)
     mis = misura(path, limite)
     tempi = mis.pop("_tempi_foglio")
+    bordi = mis.pop("_bordi", [])
     piano, r = ricetta(mis)
     nome_fonte = Path(path).stem
     testo = guida(mis, nome_fonte, _look(mis["colore"]))
@@ -626,6 +983,20 @@ def impara(fonte: str, nome: str | None = None, salva: bool = True,
         mis["foglio"] = foglio(path, tempi, out)
     except Exception:  # noqa: BLE001 - senza Pillow o fotogrammi, lo stile esce lo stesso
         mis["foglio"] = None
+    try:
+        mis["foglio_movimento"] = foglio_movimento(
+            path, bordi, str(cartella() / f"{Path(path).stem}_moto.jpg"))
+    except Exception:  # noqa: BLE001
+        mis["foglio_movimento"] = None
+    if descrivi and mis["foglio"]:
+        visivo = descrivi_visivo([mis["foglio"], mis.get("foglio_movimento")])
+        if visivo:
+            testo = (testo.replace(_RIMANDO, "").rstrip() + "\n\nLinguaggio visivo (descritto da un "
+                     "modello che ha guardato i fotogrammi del riferimento):\n" + visivo)
+            mis["visivo"] = visivo
+        else:
+            mis["avviso"] = ("no model could look at the frames: pick one in the assistant "
+                             "settings to get the visual description")
     t = mis["tagli"]
     breve = (f"Learned: {t['al_minuto']:.0f} cuts/min, {t['inquadratura_mediana']} s shots"
              + (", on the beat" if any("battito" in x for x in r["da_fare"]) else ""))

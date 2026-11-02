@@ -2,6 +2,38 @@
 
 Le voci più recenti stanno in cima.
 
+## v0.5.0 — 2026-11-02 · Blocchi, generazione, plugin, learn_style
+
+### Aggiunto
+- **`add_block` / `list_blocks`: grafiche animate pronte.** Undici blocchi tarati — sottopancia,
+  titolo, cartellino, badge ("YEAR 20"), contatore, cartello di capitolo, citazione, grafico a
+  barre, parole a scatti, riquadro, barra di avanzamento — in una chiamata, senza CSS. Parametri
+  controllati (un testo non diventa mai HTML), misure relative (16:9, 9:16 e 1:1), uscita in
+  dissolvenza dentro la durata. Sono clip html normali. Anche da chat, UI (`/api/op/add_block`)
+  e nelle istruzioni dell'agente.
+- **`generate_media` / `generation_services`: immagini e video generati.** OpenAI e compatibili
+  (immagini), fal.ai (immagini e video, testo-in-video e immagine-in-video, con la coda). Chiavi in
+  `~/.vedit/gen.json` (`vedit gen-setup`, `/api/gen`), file nominati dall'impronta (la stessa
+  richiesta non si ripaga). Costa crediti: serve il si' dell'utente (`domande.conferma_genera`;
+  `confirmed=True` da MCP senza editor; dalla chat l'editor chiede prima).
+- **Plugin e skill per altri agenti**: `.claude-plugin/` (plugin + marketplace) e
+  `skills/vedit/SKILL.md`. `claude plugin marketplace add metiutek/editorvideo-ai`, oppure
+  `npx skills add metiutek/editorvideo-ai`.
+
+### Cambiato
+- **`learn_style` capisce i video raccontati.** Misura la voce (quanto parla, frasi, pause, cambi
+  di scena sulle pause), zoom e panoramiche lente (prima "inquadrature ferme" per ogni scena
+  animata), l'animazione dentro la scena, la palette in esadecimale e i passaggi su colore piatto;
+  il BPM raddoppiato (184 per 92) si corregge e con una voce non guida i tagli. Un secondo foglio
+  mostra le inquadrature lunghe in sequenza. Dalla UI e dalla CLI un modello con la vista
+  (quello scelto nelle impostazioni) guarda i fogli e scrive il linguaggio visivo — personaggi,
+  testi, grafica — nello stile salvato; prima restava una riga "guardali tu" che nessuno leggeva.
+
+### Corretto
+- **Errori dei lavori lunghi illeggibili da MCP.** Con il canale di progresso attivo un errore
+  previsto (una chiave sbagliata, un servizio spento) usciva come "unhandled errors in a
+  TaskGroup" e nessun `except` dei chiamanti lo vedeva: `_off` ora lo rilancia com'e'.
+
 ## v0.4.4 — 2026-11-02 · Chat e finestre strette
 
 ### Corretto

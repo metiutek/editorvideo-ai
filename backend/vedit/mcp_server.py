@@ -33,7 +33,7 @@ from . import analyze, captions, cleanup, colormatch, ops
 from .allinea import METODO as METODO_VOCE
 from . import domande as domande_mod
 from . import effects as fx
-from . import apprendi, estensioni, ffmpeg, hw, memoria, particelle, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
+from . import apprendi, blocchi, estensioni, ffmpeg, generativo, hw, memoria, particelle, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
 from .store import EditError, Store, rapporto
 
@@ -96,7 +96,10 @@ quale versione tenere, se esportare) usa ask_user con 2-4 opzioni chiare, la
 consigliata per prima, invece di decidere a caso o di fare domande nel testo.
 
 Grafica animata (sottopancia, titoli, contatori, infografiche, schermate
-intere): add_html con un documento HTML/CSS/JS su una traccia sopra la ripresa.
+intere): prima guarda i blocchi pronti (list_blocks, poi add_block: sottopancia,
+titolo, cartellino, badge, contatore, cartello di capitolo, citazione, grafico a
+barre...), che costano una chiamata e non righe di CSS. Se nessuno va bene,
+add_html con un documento HTML/CSS/JS su una traccia sopra la ripresa.
 Lo sfondo e' trasparente, il tempo della pagina e' quello della clip, e
 nell'interfaccia (open_ui) si vede animata dal vivo prima di renderizzare.
 
@@ -443,12 +446,20 @@ async def _off(fn, *args, **kwargs):
             except Exception:
                 return   # niente canale di progresso: il lavoro va avanti lo stesso
 
+    errore: list[Exception] = []
     async with anyio.create_task_group() as tg:
         tg.start_soon(battito)
         try:
             esito.append(await anyio.to_thread.run_sync(lambda: fn(*args, **kwargs)))
+        except Exception as exc:  # noqa: BLE001 - si rilancia fuori dal gruppo, vedi sotto
+            errore.append(exc)
         finally:
             tg.cancel_scope.cancel()
+    # un errore uscito dal gruppo arriverebbe come ExceptionGroup: nessun
+    # ``except GenError`` / ``except TtsError`` dei chiamanti lo riconoscerebbe e
+    # l'agente leggerebbe "unhandled errors in a TaskGroup" al posto del motivo
+    if errore:
+        raise errore[0]
     return esito[0]
 
 
@@ -917,6 +928,47 @@ def add_html(html: str | None = None, path: str | None = None, start: float = 0.
     c = _store(project).add_html(html=html, path=path, track_id=track, start=start,
                                  duration=duration, base=base, vars=vars)
     return {**_clip_view(c), "html": f"{len(c.html or '')} caratteri", "base": c.html_base}
+
+
+@_strumento()
+def list_blocks(block: str | None = None) -> list[dict]:
+    """I blocchi grafici pronti di add_block: a cosa servono, durata, parametri.
+
+    Senza ``block`` l'elenco compatto (id, descrizione, durata, nomi dei
+    parametri); con ``block='lower_third'`` la scheda di uno solo, coi default.
+    """
+    voci = blocchi.elenco()
+    if block:
+        scelti = [b for b in voci if b["id"] == block]
+        if not scelti:
+            raise EditError(f"unknown block {block!r}; allowed: {', '.join(b['id'] for b in voci)}")
+        return scelti
+    return [{"id": b["id"], "descrizione": b["descrizione"], "durata": b["durata"],
+             "parametri": list(b["parametri"])} for b in voci]
+
+
+@_strumento()
+def add_block(block: str, vars: dict | None = None, start: float = 0.0,
+              duration: float | None = None, track: str | None = None,
+              project: str | None = None) -> dict:
+    """Una grafica animata PRONTA al posto di scrivere HTML: sottopancia, titolo,
+    cartellino, badge, contatore, cartello di capitolo, citazione, grafico a barre...
+
+    ``block``: lower_third, title, caption_pill, date_badge, counter, chapter_card,
+    quote, bar_chart, kinetic_words, highlight_box, progress_bar (list_blocks dice a
+    cosa serve ognuno e i parametri). ``vars``: i parametri del blocco, per esempio
+    {"nome": "Anna Rossi", "ruolo": "Regista"}; tutti hanno un default, quindi
+    cambia solo cio' che serve. In tutti: ``font`` e ``testo_colore``. I testi sono
+    sempre testo (mai HTML), i colori #rrggbb o nomi, le misure in vw/vh: stesso
+    aspetto in 16:9, 9:16 e 1:1.
+
+    E' una clip html come le altre, su una traccia sopra la ripresa (add_track):
+    entrata e uscita sono dentro la durata. ``duration`` assente = quella
+    consigliata del blocco. chapter_card copre tutto il fotogramma: va fra due scene.
+    Controlla con preview_frame; serve Playwright (extra ``html``).
+    """
+    c = _store(project).add_block(block, vars, track, start, duration)
+    return {**_clip_view(c), "block": block}
 
 
 @_strumento()
@@ -2242,10 +2294,15 @@ async def learn_style(source: str | None = None, media: str | None = None,
     ``max_seconds``: quanto analizzare dall'inizio (10-3600; da un link si
     scarica solo quel tratto).
 
-    Restituisce anche il foglio dei fotogrammi (uno per inquadratura): GUARDALO.
-    Testi, grafica, sottotitoli e inquadrature non si misurano: aggiungili alla
-    guida con create_style(style=<id>, guide=...) — la guida va riscritta per
-    intero, partendo da quella restituita.
+    Misura anche voce narrante (quanto parla, pause, cambi sulle pause), zoom e
+    panoramiche lente, animazione dentro la scena, palette e passaggi su colore
+    piatto.
+
+    Restituisce due fogli: un fotogramma per inquadratura, e le inquadrature piu'
+    lunghe in sequenza (si vede come si muovono): GUARDALI. Testi, grafica,
+    sottotitoli, personaggi e design non si misurano: aggiungili alla guida con
+    create_style(style=<id>, guide=...) — la guida va riscritta per intero,
+    partendo da quella restituita.
     """
     if media:
         fonte = _store(project).media_or_die(media).path
@@ -2256,6 +2313,7 @@ async def learn_style(source: str | None = None, media: str | None = None,
     _avanza(0.05, "reading the reference video")
     res = await _off(apprendi.impara, fonte, name, save, style, max_seconds)
     foglio = res["misure"].pop("foglio", None)
+    moto = res["misure"].pop("foglio_movimento", None)
     out: dict = {"misure": res["misure"], "piano": res["piano"], "ricetta": res["ricetta"],
                  "guida": res["guida"]}
     if "stile" in res:
@@ -2263,7 +2321,8 @@ async def learn_style(source: str | None = None, media: str | None = None,
         out["prossimo_passo"] = (f"guarda il foglio, completa la guida con create_style("
                                  f"style='{res['stile']['id']}', ...), poi apply_style("
                                  f"style='{res['stile']['id']}') dopo aver messo le clip")
-    return [out, Image(path=foglio)] if foglio else [out]
+    immagini = [Image(path=f) for f in (foglio, moto) if f]
+    return [out, *immagini]
 
 
 @_strumento()
@@ -2591,6 +2650,76 @@ async def generate_voice(text: str | None = None, lines: list[dict] | None = Non
     clips = s.add_voiceover(voci, track)
     return {"clips": [{"id": c.id, "start": round(c.start, 3), "duration": round(c.duration, 3)}
                       for c in clips], "track": s.project.find_clip(clips[0].id)[0].id}
+
+
+@_strumento()
+async def generate_media(kind: str, prompt: str, aspect: str = "16:9", duration: float | None = None,
+                         image: str | None = None, service: str | None = None,
+                         model: str | None = None, seed: int | None = None,
+                         options: dict | None = None, confirmed: bool = False,
+                         project: str | None = None) -> dict:
+    """Genera un'immagine o un video da un prompt e lo importa nel progetto.
+
+    kind: image | video. aspect: 16:9, 9:16, 1:1 (anche 4:3, 3:4 con fal). Per un
+    video, duration in secondi (i servizi ne accettano pochi: 5 o 10) e image =
+    id di un media immagine (o un file) da cui partire: il primo fotogramma, per
+    avere lo stesso soggetto in piu' scene. service: openai (immagini, anche
+    servizi compatibili) o fal (immagini e video); senza, quello scelto
+    dall'utente. model: cambia il modello predefinito. options: campi del
+    servizio (negative_prompt, quality...). seed: stessa richiesta, stesso file
+    (e la stessa richiesta non si paga due volte).
+
+    Costa crediti dell'utente: non e' una tua decisione. Con l'editor aperto gli
+    si chiede conferma; senza, serve confirmed=True dopo il suo si'. Se non c'e'
+    nessun servizio pronto la risposta dice cosa impostare (generation_services).
+    Ritorna il media importato (cartella 'generated'): poi add_clip.
+    """
+    s = _store(project)
+    origine = None
+    if image:
+        try:
+            mi = s.media_or_die(image)
+            if mi.kind != "image":
+                raise EditError("the starting frame must be an image (a media of kind image)")
+            origine = mi.path
+        except EditError as exc:
+            if "starting frame" in str(exc) or not Path(image).is_file():
+                raise
+            origine = image
+    try:
+        m = generativo.scelto(service, kind)
+    except generativo.GenError as exc:
+        raise EditError(str(exc)) from exc
+    modello = model or generativo._modello(m, generativo.carica(), kind, da_immagine=bool(origine))
+    api = sys.modules.get("vedit.api")
+    if api is not None and (api.MCP_ATTIVO or api.background_info()) \
+            and (api.S.store is not None):
+        esito = await _off(api.chiedi, domande_mod.conferma_genera(kind, prompt, m["nome"], modello))
+        if not domande_mod.approvato(esito):
+            return {"generato": False,
+                    "motivo": esito.get("motivo") or "l'utente ha scelto di non generare adesso"}
+    elif not confirmed:
+        return {"generato": False,
+                "motivo": "serve la conferma dell'utente: chiediglielo nella conversazione e "
+                          "richiama con confirmed=True solo se dice di generare"}
+    try:
+        res = await _off(generativo.genera, kind, prompt, generativo.cartella_progetto(s.path),
+                         service, model, aspect, duration, origine, seed, options,
+                         lambda f, nota: _avanza(f, nota))
+    except generativo.GenError as exc:
+        raise EditError(str(exc)) from exc
+    media = await _off(s.import_media, [res["path"]], "generated")
+    mi = media[0]
+    return {"generato": True, "id": mi.id, "kind": mi.kind, "duration": mi.duration,
+            "resolution": f"{mi.width}x{mi.height}" if mi.width else None,
+            "servizio": res["servizio"], "modello": res["modello"], "cache": res["cache"]}
+
+
+@_strumento()
+async def generation_services() -> dict:
+    """Servizi di generazione di immagini e video: quale e' pronto, quali modelli,
+    cosa manca. Le chiavi si danno nelle impostazioni dell'editor (mai qui)."""
+    return generativo.stato()
 
 
 @_strumento()

@@ -574,7 +574,7 @@ Il progetto aperto e' quello che vedi con gli strumenti mcp__vedit__ (project_in
 stato): non passare il parametro project, lavori gia' su quello giusto. Ogni modifica
 compare subito nella timeline dell'utente e si annulla con Ctrl+Z.
 
-Usa gli strumenti di vedit per tutto: add_html per la grafica animata, preview_frame
+Usa gli strumenti di vedit per tutto: add_block (grafiche pronte: sottopancia, titoli, contatori, grafici) o add_html per la grafica animata, preview_frame
 per guardare il risultato prima di dire che e' fatto, preview_media per guardare un
 media importato senza metterlo in timeline.
 
@@ -765,6 +765,83 @@ def run_claude_code(p: dict, cfg: dict, stato_chat: dict, contenuto: list[dict],
     finally:
         if proc.poll() is None:
             proc.kill()
+
+
+# --------------------------------------------------------------------------
+# una domanda sola, con delle immagini
+# --------------------------------------------------------------------------
+
+
+def chiedi_con_immagini(prompt: str, percorsi: list[str], timeout: float = 240.0,
+                        max_token: int = 2000) -> str:
+    """Una domanda con delle immagini al modello scelto nelle impostazioni, senza
+    strumenti e senza cronologia: serve a chi ha bisogno che qualcuno *guardi*
+    (``apprendi`` descrive cosi' lo stile visivo di un riferimento).
+
+    Solleva ``RuntimeError`` con il motivo in parole se non c'e' un modello, se
+    non vede le immagini o se il servizio risponde con un errore.
+    """
+    p, cfg = attivo()
+    immagini = [immagine(f) for f in percorsi if Path(f).is_file()]
+    if not immagini:
+        raise RuntimeError("there are no images to look at")
+    tipo = p["tipo"]
+    try:
+        if tipo == "anthropic":
+            import anthropic
+
+            kw: dict[str, Any] = {}
+            if cfg["chiavi"].get("anthropic"):
+                kw["api_key"] = cfg["chiavi"]["anthropic"]
+            blocchi: list[dict] = [{"type": "image", "source": {
+                "type": "base64", "media_type": i["mime"], "data": i["b64"]}} for i in immagini]
+            blocchi.append({"type": "text", "text": prompt})
+            r = anthropic.Anthropic(**kw).messages.create(
+                model=_modello(p, cfg) or "claude-opus-5-5", max_tokens=max_token,
+                messages=[{"role": "user", "content": blocchi}], timeout=timeout)
+            return "".join(b.text for b in r.content if getattr(b, "type", "") == "text").strip()
+        if tipo == "openai":
+            parti: list[dict] = [{"type": "image_url", "image_url": {
+                "url": f"data:{i['mime']};base64," + i["b64"]}} for i in immagini]
+            parti.append({"type": "text", "text": prompt})
+            body = {"model": _modello(p, cfg), "max_tokens": max_token,
+                    "messages": [{"role": "user", "content": parti}]}
+            headers = {"Content-Type": "application/json"}
+            if _chiave(p, cfg):
+                headers["Authorization"] = f"Bearer {_chiave(p, cfg)}"
+            req = urllib.request.Request(_indirizzo(p, cfg) + "/chat/completions",
+                                         data=json.dumps(body).encode("utf-8"), headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as res:
+                d = json.loads(res.read().decode("utf-8", "replace"))
+            return str(((d.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+        if tipo == "claude_code":
+            exe = claude_exe()
+            if not exe:
+                raise RuntimeError(_pronto(p, cfg) or "Claude Code is not installed")
+            elenco = "\n".join(f"- {i['path']}" for i in immagini)
+            args = _comando_claude(exe) + ["-p", "--allowedTools", "Read", "--output-format", "text"]
+            if _modello(p, cfg):
+                args += ["--model", _modello(p, cfg)]
+            env = {**os.environ}
+            env.pop("CLAUDECODE", None)
+            r = subprocess.run(
+                args, input=(f"Open these image files with the Read tool and look at each "
+                             f"of them:\n{elenco}\n\n{prompt}").encode("utf-8"),
+                capture_output=True, timeout=timeout, env=env,
+                cwd=str(Path(immagini[0]["path"]).parent),
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if r.returncode != 0:
+                raise RuntimeError("Claude Code: " + r.stderr.decode("utf-8", "replace").strip()[-300:])
+            return r.stdout.decode("utf-8", "replace").strip()
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(_errore_http(exc)) from exc
+    except (urllib.error.URLError, OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"cannot reach the model: {exc}") from exc
+    except RuntimeError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - l'SDK solleva tipi suoi: il messaggio basta
+        raise RuntimeError(f"the model did not answer: {exc}") from exc
+    raise RuntimeError(f"this model type cannot look at images: {tipo}")
 
 
 # --------------------------------------------------------------------------

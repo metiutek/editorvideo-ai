@@ -112,6 +112,8 @@ backend/vedit/
   proxy.py       proxy, forme d'onda, miniature
   chat.py        assistente: i suoi strumenti sono i metodi di Store
   tts.py         voce dal testo (OpenAI e compatibili, ElevenLabs, Piper, sistema)
+  blocchi.py     grafiche animate pronte per add_html (add_block / list_blocks)
+  generativo.py  immagini e video generati (OpenAI e compatibili, fal.ai), chiavi in ~/.vedit/gen.json
   social.py      pubblicare su YouTube e TikTok
   memoria.py     memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
   allinea.py     tempi della voce in timeline (speech_times) e metodo dei video a voce
@@ -283,6 +285,23 @@ tempo e' quello della clip (`htmlclip.OROLOGIO`): animazioni CSS, GSAP, rAF e ti
 a passi di fotogramma, identici nell'anteprima dal vivo della UI e nel render. Controlla
 sempre con `preview_frame`: al render Chromium la fotografa davvero.
 
+**Blocchi pronti prima di scrivere HTML.** `blocchi.py` ha undici grafiche tarate
+(`lower_third`, `title`, `caption_pill`, `date_badge`, `counter`, `chapter_card`, `quote`,
+`bar_chart`, `kinetic_words`, `highlight_box`, `progress_bar`): `Store.add_block` le compone con
+`blocchi.documento` e le mette in traccia come clip html, quindi dopo sono clip normali. I
+parametri sono controllati (testo sempre `html.escape`, colori e numeri validati, errori con
+l'elenco di quelli ammessi), le misure sono in `vw`/`vh` e l'uscita in dissolvenza sta su un
+contenitore *esterno* (`.out`): la regola `animation` di un blocco sullo stesso elemento la
+cancellerebbe. Un blocco nuovo e' una funzione `(css, corpo)` piu' una voce in `BLOCCHI`;
+`tests/test_blocchi.py` lo compone con i default e, nei `slow`, lo fotografa in Chromium.
+
+**Generare media.** `generativo.genera` (immagini: OpenAI e compatibili; immagini e video: coda
+di fal.ai) scrive in `<progetto>_gen/` con nome dall'impronta di servizio, modello, prompt e
+parametri: la stessa richiesta non si ripaga. Costa e il prompt parte verso un terzo, quindi
+non e' una decisione dell'agente: `domande.conferma_genera` con l'editor aperto, `confirmed=True`
+senza (MCP), e dalla chat `api.esegui_op` chiede *prima* e genera fuori dal lock. Le chiavi
+stanno in `~/.vedit/gen.json`, mai nel progetto e mai in `generativo.stato()`.
+
 L'ordine degli effetti conta e si cambia con `move_effect`: denoise prima di sharpen pulisce e
 poi incide, l'ordine opposto incide anche il rumore.
 
@@ -394,11 +413,31 @@ la ricetta porta `colore` (media e deviazione per canale, senza bande nere) e
 `stili.applica` mette `colormatch` su ogni ripresa a `FORZA_COLORE`. Il foglio dei
 fotogrammi arriva anche ai modelli via API: `chat.execute` restituisce `llm.ConImmagine`
 (una stringa con un'immagine attaccata), che `run_anthropic` mette nel `tool_result` e
-`run_openai` in un messaggio utente subito dopo. Da un link si scarica solo il tratto
+`run_openai` in un messaggio utente subito dopo. Le misure non si fermano al taglio: la
+camera si stima per coppie di fotogrammi a 1,5 s (`_moto`: scala e spostamento che
+spiegano meglio la differenza, con l'errore calcolato sul 70% dei pixel che differiscono
+meno, cosi' i personaggi che si muovono da soli non coprono la camera) e distingue zoom,
+panoramica e animazione dentro la scena; la voce si stima dall'energia della banda del
+parlato a blocchi di 50 ms (`_voce`: due livelli distinti e pause vere, "probabile" e non
+certo) e dice quanti cambi cadono su una pausa; i passaggi su colore piatto e la palette
+sono esadecimali pronti per chi disegna grafica nello stesso stile; il BPM oltre 160 si
+dimezza (l'autocorrelazione confonde battito e doppio battito). Cio' che le misure non vedono
+(personaggi, testi, grafica) lo scrive un modello che guarda i fogli: da chat e MCP e' l'agente,
+dalla UI e dalla CLI `impara(descrivi=True)` chiama `llm.chiedi_con_immagini` con il modello
+scelto nelle impostazioni, e senza modello lo stile esce lo stesso con un avviso. Da un link si scarica solo il tratto
 analizzato (`web.scarica(secondi=)`, `--download-sections`), e se il sito rifiuta il
 taglio si ripiega sul video intero. I numeri si tarano su video veri: un
 riferimento sintetico fatto con vedit stesso (`tests/test_apprendi.py`, anche `slow`) deve
 restituire esattamente tagli, dissolvenze e punch-in che ci sono stati messi.
+
+### Plugin e skill per altri agenti
+
+La repo e' anche un marketplace di plugin per Claude Code: `.claude-plugin/plugin.json`
+(porta il server MCP, `uvx vedit-mcp`), `.claude-plugin/marketplace.json` e `skills/vedit/SKILL.md`
+(il flusso, le regole di montaggio e cio' che va confermato con l'utente; installabile anche con
+`npx skills add`). `tests/test_skill_plugin.py` tiene la versione del plugin uguale a quella del
+pacchetto — **a ogni release va cambiata anche in `plugin.json`** — e pretende che ogni
+strumento nominato nella skill esista nel server MCP.
 
 ### Skill di montaggio
 

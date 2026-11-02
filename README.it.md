@@ -722,13 +722,39 @@ BPM della musica, dissolvenze e passaggi al nero, flash bianchi, zoom lenti e pu
 sui tagli, colore e look più vicino, formato e bande nere, cartelli su nero, aperture e
 chiusure. Ne fa uno stile personale: una guida con i numeri veri più una ricetta che
 `apply_style` applica — compreso il colore vero del riferimento, portato su ogni ripresa con
-`colormatch` — e lo apre perché tu lo legga e lo corregga. Testi, grafica e sottotitoli non si
-misurano: l'assistente (chat o MCP) riceve un foglio con un fotogramma per inquadratura e li
-aggiunge alla guida. Anche dalla chat ("montalo come questo video"), da MCP (`learn_style`) e
+`colormatch` — e lo apre perché tu lo legga e lo corregga. Misura anche ciò che fa un video raccontato:
+se c'è una voce (quanto parla, durata di frasi e pause, quanti cambi di scena cadono su una
+pausa), zoom lenti *e* panoramiche lente, quanto succede dentro una scena mentre la camera sta
+ferma (animazione), la palette dominante in esadecimale e i cartelli di capitolo a colore
+piatto. Testi, personaggi e grafica non si misurano: dall'app, il modello scelto nelle
+impostazioni dell'assistente guarda due fogli (un fotogramma per inquadratura, e le
+inquadrature più lunghe fotogramma per fotogramma) e scrive il *linguaggio visivo* nello stile
+salvato; da chat o MCP l'agente riceve gli stessi fogli e lo aggiunge alla guida. Anche dalla chat ("montalo come questo video"), da MCP (`learn_style`) e
 da terminale (`vedit style learn <link|file> --name … --max-seconds 600`). Di norma si
 analizzano i primi dieci minuti, e da una pagina video si scarica solo quel tratto; i
 download vanno in `~/.vedit/riferimenti`. YouTube vuole una yt-dlp recente con il suo
 risolutore JavaScript: l'extra `web` installa `yt-dlp[default]`, e usa Node.js se manca Deno.
+
+**Grafiche animate pronte** — `list_blocks` / `add_block` mette in traccia un'animazione già
+tarata in una chiamata, senza CSS da scrivere: `lower_third`, `title`, `caption_pill`,
+`date_badge` ("YEAR 20"), `counter`, `chapter_card`, `quote`, `bar_chart`, `kinetic_words`,
+`highlight_box`, `progress_bar`. Ogni parametro ha un default ed è controllato (un testo non è
+mai letto come HTML), le misure sono relative — stesso aspetto in 16:9, 9:16 e 1:1 — e ognuno
+esce in dissolvenza dentro la sua durata. Dopo è una clip come le altre: si sposta, si accorcia,
+se ne apre l'HTML.
+
+**Generare immagini e video** — `generate_media` crea un'immagine o un video da un prompt
+(anche partendo da un'immagine, per tenere lo stesso soggetto fra più scene) e lo importa.
+Servizi: OpenAI o qualunque servizio con la stessa forma di `/images/generations` (anche un
+server locale), e fal.ai per immagini e video (Kling, Veo, Seedance, MiniMax... i modelli li
+scegli tu). Le chiavi stanno in `~/.vedit/gen.json` (`vedit gen-setup fal --key …`), mai nel
+progetto. Costa crediti, quindi non è mai una decisione dell'agente: l'editor chiede prima a te,
+e la stessa richiesta non si paga due volte (il file ha nome dalla sua impronta).
+
+**Come plugin o skill** — la repo è anche un marketplace di plugin per Claude Code:
+`claude plugin marketplace add metiutek/editorvideo-ai` e `claude plugin install vedit@vedit`
+installano insieme il server MCP e la skill di montaggio; `npx skills add metiutek/editorvideo-ai`
+installa solo la skill (`skills/vedit/SKILL.md`) per Codex, Cursor e altri agenti.
 
 **Skill di montaggio** — i tuoi modi di montare (un formato podcast, i reel di viaggio, il look
 di un canale) salvati come skill: una cartella con un `SKILL.md`, lo stesso formato delle

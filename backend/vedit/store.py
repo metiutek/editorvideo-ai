@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import effects as fx
-from . import captions, htmlclip
+from . import blocchi, captions, htmlclip
 from . import particelle
 from . import keyframes as kf
 from . import probe as probe_mod
@@ -737,6 +737,22 @@ class Store:
         track.clips.sort(key=lambda x: x.start)
         self._done()
         return c
+
+    def add_block(self, block: str, vars: dict | None = None, track_id: str | None = None,
+                  start: float = 0.0, duration: float | None = None,
+                  name: str | None = None) -> Clip:
+        """Una grafica animata pronta (blocchi.py): sottopancia, titolo, contatore...
+
+        E' una clip html come le altre: dopo averla messa si puo' spostare,
+        accorciare, dissolvere, o aprirne il documento con ``set_html``.
+        ``duration`` assente = la durata consigliata del blocco.
+        """
+        try:
+            doc, durata = blocchi.documento(block, vars, duration)
+        except ValueError as exc:
+            raise EditError(str(exc)) from exc
+        return self.add_html(html=doc, track_id=track_id, start=start, duration=durata,
+                             name=name or f"block {block}")
 
     def add_particles(self, kind: str = "snow", track_id: str | None = None, start: float = 0.0,
                       duration: float = 5.0, color: str | None = None, density: float = 1.0,

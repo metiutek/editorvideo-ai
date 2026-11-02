@@ -295,6 +295,11 @@ server on first launch (approve it once). Anywhere else:
 claude mcp add vedit -- uvx vedit-mcp
 ```
 
+**As a plugin or skill** — the repo is also a Claude Code plugin marketplace:
+`claude plugin marketplace add metiutek/editorvideo-ai` then `claude plugin install vedit@vedit`
+installs the MCP server and the editing skill together; `npx skills add metiutek/editorvideo-ai`
+installs just the skill (`skills/vedit/SKILL.md`) for Codex, Cursor and other agents.
+
 Typical tool flow:
 
 ```
@@ -569,6 +574,21 @@ tool fixes it. The agent can also **create styles** on its own with `create_styl
 guide plus a recipe (look, movement, transitions, music curve, accents) that lands in your
 style menu and that `apply_style` actually executes.
 
+**Ready-made motion graphics** — `list_blocks` / `add_block` puts a tuned animation on a track
+in one call, no CSS to write: `lower_third`, `title`, `caption_pill`, `date_badge` ("YEAR 20"),
+`counter`, `chapter_card`, `quote`, `bar_chart`, `kinetic_words`, `highlight_box`,
+`progress_bar`. Every parameter has a default and is checked (a text is never read as HTML),
+sizes are relative so the same block looks right in 16:9, 9:16 and 1:1, and each one fades out
+inside its own duration. It is an ordinary clip afterwards: move it, trim it, open its HTML.
+
+**Generate images and video** — `generate_media` makes an image or a video from a prompt
+(optionally starting from an image, to keep the same subject across scenes) and imports it.
+Services: OpenAI or anything with the same `/images/generations` shape (also a local server),
+and fal.ai for images and video (Kling, Veo, Seedance, MiniMax... models are yours to set).
+Keys live in `~/.vedit/gen.json` (`vedit gen-setup fal --key …`), never in the project. It costs
+credits, so it is never the agent's call: the editor asks you first, and the same request is
+never paid twice (the file is named after its fingerprint).
+
 **HTML motion graphics** — `add_html` puts an HTML/CSS/JS document on a track as a clip:
 lower thirds, animated titles, counters, infographics, whole screens. The background is
 transparent, so the footage shows through. The page's clock is the clip's clock: CSS
@@ -657,9 +677,14 @@ black, white flashes, slow zooms and punch-ins, shake on the cuts, colour and th
 look, format and letterbox bars, title cards on black, fade in and out. It turns them into a
 personal style: a guide with the real numbers plus a recipe that `apply_style` applies —
 including the reference's actual colour, carried onto every shot with `colormatch` — then
-opens it so you can read and adjust it. Text, graphics and subtitles aren't measured: the
-assistant (chat or MCP) gets a contact sheet with one frame per shot and adds them to the
-guide. Also from the chat ("edit it like this video"), MCP (`learn_style`) and the terminal
+opens it so you can read and adjust it. It also measures what makes narrated videos what
+they are: whether a voice carries the video (how much it speaks, phrase and pause length, and
+how many scene changes land on a pause), slow zooms *and* slow pans, how much happens
+inside a scene while the camera stays still (animation), the dominant palette as hex colours
+and flat-colour chapter cards. Text, characters and graphics can't be measured: from the app,
+the model you picked in the assistant settings looks at two contact sheets (one frame per
+shot, and the longest shots frame by frame) and writes the *visual language* into the saved
+style; from chat or MCP the agent gets the same sheets and adds it to the guide. Also from the chat ("edit it like this video"), MCP (`learn_style`) and the terminal
 (`vedit style learn <link|file> --name … --max-seconds 600`). The first ten minutes are
 analysed by default, and from a video page only that stretch is downloaded; downloads go to
 `~/.vedit/riferimenti`. YouTube needs a recent yt-dlp with its JavaScript solver: the `web`

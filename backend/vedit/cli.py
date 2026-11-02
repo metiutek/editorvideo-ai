@@ -245,12 +245,35 @@ def cmd_style_learn(a) -> int:
     """Uno stile di montaggio imparato da un video (file o link)."""
     from . import apprendi
 
-    res = apprendi.impara(a.sorgente, a.name, salva=not a.dry_run, limite=a.max_seconds)
+    res = apprendi.impara(a.sorgente, a.name, salva=not a.dry_run, limite=a.max_seconds,
+                          descrivi=True)
     print(res["guida"])
-    if res["misure"].get("foglio"):
-        print(f"\nfotogrammi: {res['misure']['foglio']}")
+    for k in ("foglio", "foglio_movimento"):
+        if res["misure"].get(k):
+            print(f"\nfotogrammi: {res['misure'][k]}")
+    if res["misure"].get("avviso"):
+        print(f"\n{res['misure']['avviso']}")
     if "stile" in res:
         print(f"\nstile salvato: {res['stile']['id']} ({res['stile']['nome']})")
+    return 0
+
+
+def cmd_gen_setup(a) -> int:
+    """Servizio per generare immagini e video: chiave e modelli (~/.vedit/gen.json)."""
+    from . import generativo
+
+    if a.servizio:
+        try:
+            generativo.imposta(a.servizio, a.key, a.image_model, a.video_model, a.address)
+        except generativo.GenError as exc:
+            print(f"errore: {exc}", file=sys.stderr)
+            return 1
+    st = generativo.stato()
+    for m in st["motori"]:
+        pronto = ", ".join(f"{t}: {'pronto' if ok else 'manca la chiave'}"
+                           for t, ok in m["pronto"].items())
+        print(f"{m['id']}{' (predefinito)' if m['id'] == st['motore'] else ''}: {m['nome']} - {pronto}")
+        print("   modelli: " + ", ".join(f"{t}={x}" for t, x in m["modelli"].items()))
     return 0
 
 
@@ -396,6 +419,14 @@ def build_parser() -> argparse.ArgumentParser:
     skr = sks.add_parser("rm", help="toglie una skill aggiunta a vedit")
     skr.add_argument("nome")
     sk.set_defaults(func=cmd_skill)
+
+    g = sub.add_parser("gen-setup", help="servizio per generare immagini e video (senza argomenti: lo stato)")
+    g.add_argument("servizio", nargs="?", help="openai | fal")
+    g.add_argument("--key", help="chiave del servizio (resta in ~/.vedit/gen.json)")
+    g.add_argument("--image-model")
+    g.add_argument("--video-model")
+    g.add_argument("--address", help="indirizzo del servizio (es. un server locale compatibile)")
+    g.set_defaults(func=cmd_gen_setup)
 
     m = sub.add_parser("mcp", help="avvia il server MCP su stdio")
     m.set_defaults(func=cmd_mcp)

@@ -120,6 +120,25 @@ def conferma_pubblica(piattaforma: str, file: str, titolo: str, privacy: str) ->
     }]
 
 
+def conferma_genera(tipo: str, prompt: str, servizio: str, modello: str) -> list[dict]:
+    """La domanda che precede ogni generazione chiesta dall'assistente: costa, e il
+    servizio e' di terzi (il prompt parte da questo computer)."""
+    testo = " ".join(prompt.split())
+    if len(testo) > 160:
+        testo = testo[:157] + "..."
+    cosa = {"image": "an image", "video": "a video"}.get(tipo, tipo)
+    return [{
+        "domanda": f"The assistant wants to generate {cosa} with {servizio}. Go ahead?",
+        "titolo": "Generate",
+        "opzioni": [
+            {"etichetta": "Yes, generate", "descrizione": f"{modello}: \"{testo}\". It may cost "
+                                                          "credits on your account."},
+            {"etichetta": "No", "descrizione": "nothing is sent, nothing is spent"},
+        ],
+        "multipla": False,
+    }]
+
+
 def conferma_skill(sorgente: str) -> list[dict]:
     """La domanda che precede l'installazione di una skill chiesta dall'assistente:
     una skill sono istruzioni che il modello seguira'."""

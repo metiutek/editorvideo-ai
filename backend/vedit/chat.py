@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from . import allinea, domande, estensioni, llm, memoria, presets, stili, tts, web
+from . import allinea, domande, estensioni, generativo, llm, memoria, presets, stili, tts, web
 
 SYSTEM = """Sei l'assistente di montaggio dentro vedit, un editor video non lineare.
 
@@ -116,6 +116,32 @@ def build_tools() -> list[dict]:
               "e setTimeout seguono il tempo della clip. Mettila su una traccia sopra la ripresa.",
               {"html": {**_STR, "description": "documento HTML completo"},
                "track_id": _STR, "start": _NUM, "duration": _NUM}, ["html"]),
+        _tool("add_block",
+              "Grafica animata PRONTA, come clip html: lower_third (nome e ruolo), title, "
+              "caption_pill, date_badge ('YEAR 20'), counter (numero che conta), "
+              "chapter_card (cartello di capitolo a tinta unita), quote, bar_chart "
+              "(dati 'A:40, B:75'), kinetic_words (parole a scatti, *evidenziata*), "
+              "highlight_box (x, y, larghezza, altezza in %), progress_bar. Preferiscila a "
+              "scrivere HTML da zero: list_blocks mostra i parametri di ognuno. vars: i "
+              "parametri del blocco (es. {\"nome\": \"Anna Rossi\", \"ruolo\": \"Regista\"}), "
+              "piu' font e testo_colore. Mettila su una traccia sopra la ripresa.",
+              {"block": _STR, "vars": {"type": "object"}, "track_id": _STR, "start": _NUM,
+               "duration": {**_NUM, "description": "assente = la durata consigliata del blocco"}},
+              ["block"]),
+        _tool("generate_media",
+              "Genera un'immagine o un video da un prompt e lo importa (cartella generated). "
+              "kind image|video, aspect 16:9|9:16|1:1, per il video duration (5 o 10 s) e "
+              "image = id di un media immagine da cui partire. Costa crediti: l'utente deve "
+              "approvare, e se nessun servizio e' pronto lo dice (generation_services).",
+              {"kind": _STR, "prompt": _STR, "aspect": _STR, "duration": _NUM, "image": _STR,
+               "service": _STR, "model": _STR, "seed": {"type": "integer"},
+               "options": {"type": "object"}}, ["kind", "prompt"]),
+        _tool("generation_services",
+              "Servizi di generazione immagini/video: quale e' pronto e cosa manca.", {}, []),
+        _tool("list_blocks",
+              "I blocchi grafici di add_block: a cosa servono, durata e parametri coi default. "
+              "Con block, la scheda di uno solo.",
+              {"block": _STR}, []),
         _tool("set_html",
               "Sostituisce il documento HTML di una clip html.",
               {"clip_id": _STR, "html": _STR}, ["clip_id", "html"]),
@@ -353,7 +379,7 @@ def build_tools() -> list[dict]:
 
 # strumenti che non sono metodi di Store
 _SPECIAL = {"speech_times", "project_info", "apply_preset", "apply_style", "review_edit", "create_style",
-            "create_skill", "learn_style",
+            "create_skill", "learn_style", "list_blocks", "generate_media", "generation_services",
             "remember", "forget", "generate_voice", "web_search", "web_read", "web_download"}
 
 
@@ -371,12 +397,54 @@ def prepara_voce(store: Any, args: dict) -> list[dict]:
                        args.get("style") or "")
 
 
+def _origine_immagine(store: Any, immagine: str | None) -> str | None:
+    if not immagine:
+        return None
+    try:
+        m = store.media_or_die(immagine)
+    except Exception:  # noqa: BLE001 - non e' un id: sara' un file o un indirizzo
+        return immagine
+    if m.kind != "image":
+        raise ValueError("the starting frame must be an image (a media of kind image)")
+    return m.path
+
+
+def prepara_media(store: Any, args: dict) -> dict:
+    """Genera il file: la parte lenta (rete), da fare fuori dal lock del progetto
+    e solo dopo il si' dell'utente."""
+    return generativo.genera(
+        args["kind"], args["prompt"], generativo.cartella_progetto(store.path),
+        args.get("service"), args.get("model"), args.get("aspect") or "16:9",
+        args.get("duration"), _origine_immagine(store, args.get("image")), args.get("seed"),
+        args.get("options"))
+
+
 def execute(store: Any, name: str, args: dict) -> str:
     """Esegue uno strumento sul progetto e descrive il risultato a parole."""
     from .model import to_dict
 
+    if name == "generation_services":
+        return json.dumps(generativo.stato(), ensure_ascii=False)
+
+    if name == "generate_media":
+        res = args.get("_generato") or prepara_media(store, args)
+        m = store.import_media([res["path"]], "generated")[0]
+        return json.dumps({"generato": True, "id": m.id, "kind": m.kind, "duration": m.duration,
+                           "servizio": res["servizio"], "modello": res["modello"],
+                           "cache": res["cache"]}, ensure_ascii=False)
+
     if name == "project_info":
         return json.dumps(store.summary("full"), ensure_ascii=False)
+
+    if name == "list_blocks":
+        from . import blocchi
+        voci = blocchi.elenco()
+        if args.get("block"):
+            voci = [b for b in voci if b["id"] == args["block"]] or                    [{"errore": f"unknown block {args['block']!r}", "ammessi": [b["id"] for b in voci]}]
+        else:
+            voci = [{"id": b["id"], "descrizione": b["descrizione"], "durata": b["durata"],
+                     "parametri": list(b["parametri"])} for b in voci]
+        return json.dumps(voci, ensure_ascii=False)
 
     if name == "apply_preset":
         p = presets.find(args["preset_id"])
@@ -433,10 +501,17 @@ def execute(store: Any, name: str, args: dict) -> str:
         res = apprendi.impara(fonte, args.get("name"),
                               limite=float(args.get("max_seconds") or apprendi.LIMITE))
         foglio = res["misure"].pop("foglio", None)
+        moto = res["misure"].pop("foglio_movimento", None)
+        if foglio and moto:
+            try:
+                foglio = apprendi.unisci_fogli([foglio, moto], foglio.replace("_foglio.jpg", "_fogli.jpg")) or foglio
+            except Exception:  # noqa: BLE001 - senza il secondo foglio si lavora col primo
+                pass
         testo = json.dumps({"stile": res.get("stile"), "guida": res["guida"],
                             "ricetta": res["ricetta"], "misure": res["misure"],
-                            "nota": "nell'immagine un fotogramma per inquadratura del "
-                                    "riferimento: testi, grafica e sottotitoli che vedi vanno "
+                            "nota": "nell'immagine, sopra un fotogramma per inquadratura del "
+                                    "riferimento e sotto le inquadrature piu' lunghe in sequenza: "
+                                    "testi, grafica, personaggi e sottotitoli che vedi vanno "
                                     "aggiunti alla guida con create_style(style=id, ...)"},
                            ensure_ascii=False, default=str)
         # il foglio arriva al modello come immagine (llm.ConImmagine)

@@ -1,0 +1,13 @@
+{
+  "name": "vedit",
+  "version": "0.5.0",
+  "description": "Non-linear video editor an AI agent can drive: timeline, effects, keyframes, motion graphics blocks, voice-over, style learned from a reference video, ffmpeg render. Same engine for the web UI, the chat and MCP.",
+  "author": { "name": "metiu1" },
+  "homepage": "https://github.com/metiutek/editorvideo-ai",
+  "repository": "https://github.com/metiutek/editorvideo-ai",
+  "license": "MIT",
+  "keywords": ["video", "video-editing", "ffmpeg", "mcp", "timeline", "motion-graphics", "agent-skill"],
+  "mcpServers": {
+    "vedit": { "command": "uvx", "args": ["vedit-mcp"] }
+  }
+}

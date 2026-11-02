@@ -1,0 +1,11 @@
+{
+  "name": "vedit",
+  "owner": { "name": "metiu1" },
+  "plugins": [
+    {
+      "name": "vedit",
+      "source": "./",
+      "description": "Video editor your agent can drive: timeline, effects, ready-made motion graphics, voice-over, styles learned from a reference video. Installs the vedit MCP server (uvx vedit-mcp) and the editing skill."
+    }
+  ]
+}
