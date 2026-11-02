@@ -56,8 +56,8 @@ async def test_ogni_strumento_nominato_dalla_skill_esiste():
     esistenti = {t.name for t in await srv.mcp.list_tools()}
     nominati = set(re.findall(r"`([a-z]+(?:_[a-z]+)+)(?:\(|`)", corpo))
     # i nomi dei blocchi grafici sono in backtick ma non sono strumenti
-    from vedit import blocchi
-    non_strumenti = set(blocchi.BLOCCHI)
+    from vedit import blocchi, moves
+    non_strumenti = set(blocchi.BLOCCHI) | set(moves.MOSSE)
     termini = {"filter_complex"}                       # ffmpeg, non strumenti
     mancanti = sorted(n for n in nominati - non_strumenti - termini if n not in esistenti)
     assert not mancanti, f"strumenti nominati nella skill ma assenti dal server MCP: {mancanti}"

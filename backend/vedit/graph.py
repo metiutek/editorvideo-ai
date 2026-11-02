@@ -228,6 +228,8 @@ class _Builder:
         self._n = 0
         self._text_files = 0
         self._durata_audio = 0.0
+        # clip il cui spostamento x/y sta gia' dentro zoompan (vedi _scale_transform)
+        self._posizione_dentro: set[str] = set()
 
     # -- infrastruttura -------------------------------------------------
     def label(self, prefix: str) -> str:
@@ -483,8 +485,21 @@ class _Builder:
             bw += bw % 2
             bh += bh % 2
             out.append(f"pad={bw}:{bh}:(ow-iw)/2:(oh-ih)/2:color=black@0")
+        # Con la scala animata zoompan ritaglia la tela *prima* dell'overlay: spostare
+        # dopo (x/y a keyframe, un tracking) scopre una barra nera dal lato opposto.
+        # Lo spostamento entra quindi nella finestra di zoompan, che resta dentro
+        # l'immagine da sola (x e y sono limitati al bordo): niente barre, mai.
+        tx, ty = clip.transform.x, clip.transform.y
+        xz, yz = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+        if kf.animated(tx, ty) or abs(kf.sample(tx, 0, 0.0)) > 1e-9 or abs(kf.sample(ty, 0, 0.0)) > 1e-9:
+            tz = f"(on/{n(self.fps)}+{n(clip_offset(clip))})"
+            sc = f"(zoom/{n(k)})"                        # pixel d'uscita per pixel d'ingresso
+            kr = n(self.scale)                           # pixel del progetto -> pixel di render
+            xz += f"-({kf.expr(tx, tz, 0.0)})*{kr}/{sc}"
+            yz += f"-({kf.expr(ty, tz, 0.0)})*{kr}/{sc}"
+            self._posizione_dentro.add(clip.id)
         out.append(
-            f"zoompan=z={fx.quoted(z)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f"zoompan=z={fx.quoted(z)}:x={fx.quoted(xz)}:y={fx.quoted(yz)}"
             f":d=1:s={self.w}x{self.h}:fps={n(self.fps)}"
         )
         # zoompan riscrive i timestamp partendo da zero e butta via l'offset
@@ -660,8 +675,11 @@ class _Builder:
                 # tempo locale della clip visto dal canvas, offset del segmento incluso
                 origin = clip.start - clip_offset(clip)
                 tvar = f"(t-{n(origin)})" if abs(origin) > 1e-9 else "t"
-                x = kf.expr(clip.transform.x, tvar, 0.0)
-                y = kf.expr(clip.transform.y, tvar, 0.0)
+                if clip.id in self._posizione_dentro:
+                    x = y = "0"
+                else:
+                    x = kf.expr(clip.transform.x, tvar, 0.0)
+                    y = kf.expr(clip.transform.y, tvar, 0.0)
                 k = n(self.scale)  # offset in pixel del progetto -> pixel di render
                 sx, sy = self._slide_offset(clip)
                 pos = (f"x={fx.quoted(f'(W-w)/2+({x})*{k}+({sx})')}"

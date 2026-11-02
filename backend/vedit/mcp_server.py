@@ -33,7 +33,7 @@ from . import analyze, captions, cleanup, colormatch, ops
 from .allinea import METODO as METODO_VOCE
 from . import domande as domande_mod
 from . import effects as fx
-from . import apprendi, blocchi, estensioni, ffmpeg, generativo, hw, memoria, particelle, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
+from . import apprendi, blocchi, estensioni, ffmpeg, generativo, hw, memoria, moves, particelle, piano, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
 from .store import EditError, Store, rapporto
 
@@ -96,10 +96,20 @@ quale versione tenere, se esportare) usa ask_user con 2-4 opzioni chiare, la
 consigliata per prima, invece di decidere a caso o di fare domande nel testo.
 
 Grafica animata (sottopancia, titoli, contatori, infografiche, schermate
-intere): prima guarda i blocchi pronti (list_blocks, poi add_block: sottopancia,
-titolo, cartellino, badge, contatore, cartello di capitolo, citazione, grafico a
-barre...), che costano una chiamata e non righe di CSS. Se nessuno va bene,
+intere): prima guarda i blocchi pronti (list_blocks, poi add_block: 52 grafiche in sei
+famiglie, dai titoli e sottopancia ai grafici a barre, a ciambella e a linee, dalle
+chat e notifiche alle transizioni e alla grana di pellicola), che costano una
+chiamata e non righe di CSS. Se nessuno va bene,
 add_html con un documento HTML/CSS/JS su una traccia sopra la ripresa.
+
+Movimento dell'inquadratura: camera_move (list_moves) mette sulla clip un movimento
+vero (spinta, panoramica, Ken Burns, colpo d'ingrandimento, camera a mano, scossa,
+battito sul BPM...) con i bordi sempre coperti; non scrivere i keyframe a mano. Un
+movimento ha un motivo, come una transizione: non uno diverso su ogni clip.
+
+Piano: per un video di piu' di una manciata di clip, o che genera immagini e video
+(costa), propose_plan prima di montare: l'utente vede tempi e totali e approva o chiede
+modifiche. Non montare finche' non approva.
 Lo sfondo e' trasparente, il tempo della pagina e' quello della clip, e
 nell'interfaccia (open_ui) si vede animata dal vivo prima di renderizzare.
 
@@ -963,9 +973,8 @@ def add_block(block: str, vars: dict | None = None, start: float = 0.0,
     """Una grafica animata PRONTA al posto di scrivere HTML: sottopancia, titolo,
     cartellino, badge, contatore, cartello di capitolo, citazione, grafico a barre...
 
-    ``block``: lower_third, title, caption_pill, date_badge, counter, chapter_card,
-    quote, bar_chart, kinetic_words, highlight_box, progress_bar (list_blocks dice a
-    cosa serve ognuno e i parametri). ``vars``: i parametri del blocco, per esempio
+    ``block``: uno dei 52 di list_blocks, che dice a cosa serve ognuno e i parametri
+    (titles, text, data, emphasis, transitions, style). ``vars``: i parametri del blocco, per esempio
     {"nome": "Anna Rossi", "ruolo": "Regista"}; tutti hanno un default, quindi
     cambia solo cio' che serve. In tutti: ``font`` e ``testo_colore``. I testi sono
     sempre testo (mai HTML), i colori #rrggbb o nomi, le misure in vw/vh: stesso
@@ -1111,6 +1120,29 @@ def set_transform(clip: str, x: Any = None, y: Any = None, scale: Any = None,
     c = _store(project).set_transform(clip, x=x, y=y, scale=scale, rotation=rotation,
                                       opacity=opacity)
     return {"id": c.id, "transform": _valori(c.transform)}
+
+
+@_strumento()
+def list_moves() -> list[dict]:
+    """I movimenti di camera di camera_move: id, gruppo e a cosa servono."""
+    return moves.elenco()
+
+
+@_strumento()
+def camera_move(clip: str, move: str, intensity: float = 1.0, bpm: float | None = None,
+                seed: int = 1, project: str | None = None) -> dict:
+    """Un movimento di camera preciso sulla clip, al posto di inventare i keyframe.
+
+    ``move`` (list_moves): push_in, pull_out, slow_push, pan_left, pan_right, tilt_up,
+    tilt_down, drift (Ken Burns), punch_in, zoom_burst, whip_pan, impact_shake,
+    beat_pulse (vuole ``bpm`` da music_beats), handheld, sway, dutch_tilt. ``intensity``
+    0.1-3 (1 = normale). Le panoramiche e le inclinazioni partono gia' ingrandite quanto
+    serve a non scoprire i bordi. Sostituisce x, y, scala e rotazione della clip, in un
+    solo undo; handheld e impact_shake sono ripetibili (``seed``). Ogni movimento deve
+    avere un motivo: un movimento diverso su ogni clip e' rumore come un taglio senza motivo.
+    """
+    c = _store(project).camera_move(clip, move, intensity, bpm, seed)
+    return {"id": c.id, "move": move}
 
 
 @_strumento()
@@ -2546,6 +2578,42 @@ async def ask_user(domande: list[dict]) -> dict:
 
 
 @_strumento()
+async def propose_plan(title: str = "", scenes: list[dict] | None = None, notes: str = "",
+                       confirmed: bool = False, project: str | None = None) -> dict:
+    """Il piano del video, davanti all'utente PRIMA di montare o di generare.
+
+    Per un video di piu' di una manciata di clip, o che genera immagini e video (costa),
+    scrivi il piano e fallo approvare: ``scenes`` = [{"what": cosa si vede e si sente,
+    "duration": secondi, "source": footage|graphic|text|stock|generated_image|
+    generated_video|voiceover|music, "cost": stima per scena (opzionale, la scrivi tu
+    dal listino del servizio: vedit non la calcola), "note": ...}]. Con l'editor aperto
+    compare nell'editor con i tempi e i totali e aspetta il si'; senza editor torna
+    ``plan_text`` (mostralo nella conversazione) e richiami con confirmed=True solo se
+    l'utente dice di si'. Approvato, il piano si salva in <progetto>.piano.json. Se
+    non approva torna ``feedback``: correggi il piano e riproponilo, non montare.
+    Senza ``scenes`` restituisce il piano gia' approvato, se c'e'.
+    """
+    s = _store(project)
+    if scenes is None:
+        return {"plan": piano.carica(s.path)}
+    try:
+        sc = piano.valida(scenes)
+    except ValueError as exc:
+        raise EditError(str(exc)) from exc
+    api = sys.modules.get("vedit.api")
+    if api is not None and (api.MCP_ATTIVO or api.background_info()) and api.S.store is not None:
+        esito = await _off(api.chiedi, piano.domanda(title, sc, notes))
+        if not domande_mod.approvato(esito):
+            return {"approved": False, "feedback": piano.feedback(esito),
+                    "motivo": esito.get("motivo") or "the user wants changes"}
+    elif not confirmed:
+        return {"approved": False, "plan_text": piano.testo(title, sc, notes),
+                "motivo": "needs the user's approval: show plan_text in the conversation and call "
+                          "again with confirmed=True only if they say yes"}
+    return {"approved": True, "totals": piano.totali(sc), "saved": piano.salva(s.path, title, sc, notes)}
+
+
+@_strumento()
 async def open_ui(port: int = 8760, open_browser: bool = True,
                   project: str | None = None) -> dict:
     """Apre l'interfaccia web sul progetto corrente e restituisce l'indirizzo.
@@ -2837,7 +2905,7 @@ _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "pro
                 "remember", "forget", "memory", "voice_engines", "publish_video",
                 "social_accounts", "web_search", "web_read", "web_download", "speech_times",
                 "list_skills", "use_skill", "create_skill", "install_skill", "delete_skill",
-                "make_covers"}
+                "make_covers", "propose_plan"}
 
 
 @_strumento()

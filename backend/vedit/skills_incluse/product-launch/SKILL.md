@@ -38,11 +38,11 @@ Scale the proportions for 15 s (tighter) or 60 s (a longer montage, never a long
 music_beats -> add_clips on the grid -> apply_style -> blocks and punch-ins -> preview_grid -> review_edit
 ```
 
-- Hook: `kinetic_words` or `title` at `start=0`, a punch-in with `set_transform` (`ease_out_cubic`).
+- Hook: `kinetic_words`, `glitch_title` or `countdown` at `start=0`, a `camera_move` `punch_in` on the first beat.
 - Tease: `highlight_box` or `circle_highlight` on one detail; short clips on the beat.
 - Reveal: `flash_frame` or `color_wipe` exactly on the drop, then the product shot and `title`.
-- Montage: one benefit per shot, `stat_card`, `counter`, `steps`, `comparison`; each shot gets motion (`spinta` or `punch` in `apply_style`).
-- End card: `end_card` (logo text, `handle` as the CTA), music out with a keyframed gain.
+- Montage: one benefit per shot, `stat_card`, `counter`, `steps`, `comparison`, `price_tag`, `rating_stars`, `checklist`; `beat_pulse` on the hero shot; each shot gets motion (`spinta` or `punch` in `apply_style`).
+- End card: `logo_shine` or `end_card` (logo text, `handle` as the CTA), music out with a keyframed gain.
 - The music must move too: automate its gain (rise into the drop, duck for the voice).
 - Do not export unless asked.
 

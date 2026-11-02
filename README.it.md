@@ -558,7 +558,7 @@ claude mcp add vedit -- vedit-mcp
 Per gli altri client (Cursor, Codex, VS Code) la configurazione equivalente e il flusso
 consigliato degli strumenti stanno in [`AGENTS.md`](AGENTS.md).
 
-114 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
+130 strumenti: creazione progetto, import, taglio/split/trim, tracce (aggiungere,
 riordinare, solo, blocco), velocità e reverse, transform con keyframe, effetti video e audio,
 dissolvenze incrociate, normalizzazione EBU R128, render, e `preview_frame` che **restituisce
 l'immagine vera** del fotogramma — così l'agente vede quello che ha montato invece di
@@ -738,17 +738,33 @@ risolutore JavaScript: l'extra `web` installa `yt-dlp[default]`, e usa Node.js s
 <p align="center"><img src="https://raw.githubusercontent.com/metiutek/editorvideo-ai/main/docs/blocchi/demo.gif" alt="Dieci dei blocchi pronti, montati e renderizzati da vedit stesso" width="560"/></p>
 
 **Grafiche animate pronte** — `list_blocks` / `add_block` mette in traccia un'animazione già
-tarata in una chiamata, senza CSS da scrivere. 29 blocchi in sei famiglie — titoli
-(`lower_third`, `title`, `chapter_card`, `end_card`), testi (`caption_pill`, `date_badge`,
-`kinetic_words`, `typewriter`, `ticker`, `sticker_text`, `speech_bubble`, `handle_tag`,
-`section_label`, `quote`), dati (`counter`, `bar_chart`, `progress_ring`, `stat_card`, `steps`,
-`comparison`, `list_reveal`), enfasi (`highlight_box`, `circle_highlight`, `arrow_pointer`,
-`progress_bar`), transizioni (`color_wipe`, `flash_frame`) e stile (`letterbox`, `vignette`).
-Nell'app: *library → graphics*, scegli, scrivi il testo e aggiungi alla testina.
+tarata in una chiamata, senza CSS da scrivere. 52 blocchi in sei famiglie — titoli
+(`lower_third`, `title`, `mask_reveal_title`, `glitch_title`, `word_cycle`, `countdown`,
+`logo_shine`, `chapter_card`, `end_card`), testi (`caption_pill`, `kinetic_words`, `typewriter`,
+`chat_messages`, `notification_toast`, `location_pin`, `ticker`, `sticker_text`, `speech_bubble`,
+`quote`...), dati (`counter`, `bar_chart`, `donut_chart`, `line_chart`, `timeline`, `rating_stars`,
+`price_tag`, `checklist`, `stat_card`, `steps`, `comparison`...), enfasi (`highlight_box`,
+`circle_highlight`, `arrow_pointer`, `marker_highlight`, `subscribe_button`, `alert_banner`),
+transizioni (`color_wipe`, `flash_frame`, `iris_wipe`, `blinds_wipe`) e stile (`letterbox`,
+`vignette`, `film_grain`, `light_leak`, `scanlines`, `viewfinder`). Nell'app: *library → graphics*,
+scegli, scrivi il testo e aggiungi alla testina.
 [Eccoli tutti, renderizzati da vedit](docs/blocchi/README.md). Ogni parametro ha un default ed è controllato (un testo non è
 mai letto come HTML), le misure sono relative — stesso aspetto in 16:9, 9:16 e 1:1 — e ognuno
 esce in dissolvenza dentro la sua durata. Dopo è una clip come le altre: si sposta, si accorcia,
 se ne apre l'HTML.
+
+**Movimenti di camera** — `camera_move` mette sulla clip un movimento vero invece dei keyframe
+scritti a mano: 16 ricette (`list_moves`) — spinta e allontanamento, panoramiche e inclinazioni, deriva
+alla Ken Burns, colpo d'ingrandimento sul battito, zoom burst, whip pan, scossa d'impatto, un
+battito di scala su ogni colpo della musica (col BPM di `music_beats`), camera a mano, dondolio,
+orizzonte inclinato. Panoramiche e inclinazioni partono ingrandite quanto basta a non scoprire mai
+i bordi, la scossa è un hash e non `random()` (stessa clip, stesso render) e un undo toglie tutto il
+movimento.
+
+**Un piano prima del lavoro** — per un montaggio lungo, o se genera immagini e video (costa),
+`propose_plan` mette davanti a te l'elenco delle scene: cosa, quanti secondi, quale fonte, una
+stima del costo per scena. Vedi i tempi e i totali e approvi o chiedi modifiche; prima di allora
+non si monta e non si genera niente. Il piano approvato si salva accanto al progetto.
 
 **Generare immagini e video** — `generate_media` crea un'immagine o un video da un prompt
 (anche partendo da un'immagine, per tenere lo stesso soggetto fra più scene) e lo importa.

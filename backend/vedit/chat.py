@@ -117,12 +117,11 @@ def build_tools() -> list[dict]:
               {"html": {**_STR, "description": "documento HTML completo"},
                "track_id": _STR, "start": _NUM, "duration": _NUM}, ["html"]),
         _tool("add_block",
-              "Grafica animata PRONTA, come clip html: lower_third (nome e ruolo), title, "
-              "caption_pill, date_badge ('YEAR 20'), counter (numero che conta), "
-              "chapter_card (cartello di capitolo a tinta unita), quote, bar_chart "
-              "(dati 'A:40, B:75'), kinetic_words (parole a scatti, *evidenziata*), "
-              "highlight_box (x, y, larghezza, altezza in %), progress_bar. Preferiscila a "
-              "scrivere HTML da zero: list_blocks mostra i parametri di ognuno. vars: i "
+              "Grafica animata PRONTA, come clip html: 52 blocchi in sei famiglie (titles, "
+              "text, data, emphasis, transitions, style): lower_third, title, counter, "
+              "bar_chart/donut_chart/line_chart (dati 'A:40, B:75'), kinetic_words, "
+              "chat_messages, countdown, color_wipe, film_grain... Preferiscila a "
+              "scrivere HTML da zero: list_blocks li elenca e mostra i parametri di ognuno. vars: i "
               "parametri del blocco (es. {\"nome\": \"Anna Rossi\", \"ruolo\": \"Regista\"}), "
               "piu' font e testo_colore. Mettila su una traccia sopra la ripresa.",
               {"block": _STR, "vars": {"type": "object"}, "track_id": _STR, "start": _NUM,
@@ -261,6 +260,23 @@ def build_tools() -> list[dict]:
               "{\"kf\":[{\"t\":0,\"v\":1},{\"t\":3,\"v\":1.2}]} con t relativo all'inizio clip.",
               {"clip_id": _STR, "x": {}, "y": {}, "scale": {}, "rotation": {}, "opacity": {}},
               ["clip_id"]),
+        _tool("camera_move",
+              "Movimento di camera preciso sulla clip (keyframe di posizione, scala, rotazione, "
+              "bordi sempre coperti): push_in, pull_out, slow_push, pan_left, pan_right, tilt_up, "
+              "tilt_down, drift (Ken Burns), punch_in, zoom_burst, whip_pan, impact_shake, "
+              "beat_pulse (vuole bpm), handheld, sway, dutch_tilt. intensity 0.1-3. Sostituisce "
+              "x, y, scala e rotazione della clip. list_moves li descrive.",
+              {"clip_id": _STR, "move": _STR, "intensity": _NUM, "bpm": _NUM,
+               "seed": {"type": "integer"}}, ["clip_id", "move"]),
+        _tool("list_moves", "I movimenti di camera di camera_move: id, gruppo, a cosa servono.", {}, []),
+        _tool("propose_plan",
+              "Il piano del video davanti all'utente PRIMA di montare o generare (per piu' di una "
+              "manciata di clip, o se generi immagini/video: costa). scenes = [{what, duration, "
+              "source: footage|graphic|text|stock|generated_image|generated_video|voiceover|music, "
+              "cost (tua stima dal listino, opzionale), note}]. Compare con tempi e totali e aspetta "
+              "il si'. Se non approva torna feedback: correggi e riproponi, non montare. Senza scenes "
+              "torna il piano gia' approvato.",
+              {"title": _STR, "notes": _STR, "scenes": {"type": "array", "items": {"type": "object"}}}, []),
         _tool("set_audio",
               "Volume in dB, muto, pan e dissolvenze audio di una clip.",
               {"clip_id": _STR, "gain_db": {}, "mute": {"type": "boolean"},
@@ -379,7 +395,7 @@ def build_tools() -> list[dict]:
 
 # strumenti che non sono metodi di Store
 _SPECIAL = {"speech_times", "project_info", "apply_preset", "apply_style", "review_edit", "create_style",
-            "create_skill", "learn_style", "list_blocks", "generate_media", "generation_services",
+            "create_skill", "learn_style", "list_blocks", "list_moves", "propose_plan", "generate_media", "generation_services",
             "remember", "forget", "generate_voice", "web_search", "web_read", "web_download"}
 
 
@@ -435,6 +451,23 @@ def execute(store: Any, name: str, args: dict) -> str:
 
     if name == "project_info":
         return json.dumps(store.summary("full"), ensure_ascii=False)
+
+    if name == "list_moves":
+        from . import moves
+        return json.dumps(moves.elenco(), ensure_ascii=False)
+
+    if name == "propose_plan":
+        from . import piano
+        if args.get("scenes") is None:
+            return json.dumps({"plan": piano.carica(store.path)}, ensure_ascii=False)
+        try:
+            sc = piano.valida(args["scenes"])
+        except ValueError as exc:
+            return json.dumps({"errore": str(exc)}, ensure_ascii=False)
+        # l'approvazione l'ha gia' chiesta api.esegui_op: qui si salva e si riassume
+        return json.dumps({"approved": True, "totals": piano.totali(sc),
+                           "saved": piano.salva(store.path, str(args.get("title") or ""), sc,
+                                                str(args.get("notes") or ""))}, ensure_ascii=False)
 
     if name == "list_blocks":
         from . import blocchi

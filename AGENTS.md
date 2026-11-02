@@ -113,6 +113,9 @@ backend/vedit/
   chat.py        assistente: i suoi strumenti sono i metodi di Store
   tts.py         voce dal testo (OpenAI e compatibili, ElevenLabs, Piper, sistema)
   blocchi.py     grafiche animate pronte per add_html (add_block / list_blocks)
+  blocchi_piu.py altri 23 blocchi, registrati da blocchi.py (non importarlo da solo)
+  moves.py       movimenti di camera a keyframe (camera_move / list_moves)
+  piano.py       piano del video da approvare prima di montare (propose_plan)
   generativo.py  immagini e video generati (OpenAI e compatibili, fal.ai), chiavi in ~/.vedit/gen.json
   social.py      pubblicare su YouTube e TikTok
   memoria.py     memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
@@ -285,7 +288,7 @@ tempo e' quello della clip (`htmlclip.OROLOGIO`): animazioni CSS, GSAP, rAF e ti
 a passi di fotogramma, identici nell'anteprima dal vivo della UI e nel render. Controlla
 sempre con `preview_frame`: al render Chromium la fotografa davvero.
 
-**Blocchi pronti prima di scrivere HTML.** `blocchi.py` ha 29 grafiche tarate in sei famiglie
+**Blocchi pronti prima di scrivere HTML.** `blocchi.py` (con `blocchi_piu.py`) ha 52 grafiche tarate in sei famiglie
 (titoli, testi, dati, enfasi, transizioni, stile; `list_blocks` le elenca): `Store.add_block` le compone con
 `blocchi.documento` e le mette in traccia come clip html, quindi dopo sono clip normali. I
 parametri sono controllati (testo sempre `html.escape`, colori e numeri validati, errori con
@@ -299,12 +302,32 @@ default e, nei `slow`, lo fotografa in Chromium e controlla che l'uscita lo spen
 davvero). La UI li legge da `/api/state` (`blocchi`): scheda *graphics* della libreria
 (`Library.jsx`), che manda `add_block` con solo i parametri cambiati.
 
+**Movimenti di camera.** `moves.py` ha 16 ricette (`MOSSE`) che `Store.camera_move` applica con
+un solo `set_transform`: restituiscono i quattro campi (x, y, scala, rotazione; quelli non usati
+tornano al valore neutro, cosi' non resta un vecchio spostamento) e *non scoprono mai i bordi*
+(`_copre` per le rotazioni, scala di partenza per panoramiche e inclinazioni).
+`tests/test_moves.py` lo verifica sul fotogramma reale (angoli pieni) e con una funzione che
+controlla, per ogni movimento, dimensione e intensita', che il canvas stia dentro l'immagine.
+Il tremolio e' un hash di `sin`, mai `random()`. **Con la scala animata lo spostamento x/y sta
+dentro `zoompan`** (`graph._scale_transform`, `_posizione_dentro`): zoompan ritaglia la tela
+prima dell'overlay, quindi spostare dopo scopriva una barra nera dal lato opposto; la finestra di
+zoompan resta da sola dentro l'immagine. Un movimento nuovo e' una funzione e una voce in `MOSSE`.
+
+**Piano da approvare.** `piano.py` + `propose_plan` (MCP e chat): scene `{what, duration, source,
+cost?, note?}`, totali, domanda nell'editor (`api.chiedi`), e il piano approvato in
+`<progetto>.piano.json`. Il costo lo scrive l'agente: vedit non conosce i listini e un numero
+sbagliato sarebbe peggio di nessuno; una scena generata senza stima e' segnata "cost unknown".
+Senza editor torna `plan_text` e vuole `confirmed=True` dopo il si' dell'utente, come l'export.
+
 **Generare media.** `generativo.genera` (immagini: OpenAI e compatibili; immagini e video: coda
 di fal.ai) scrive in `<progetto>_gen/` con nome dall'impronta di servizio, modello, prompt e
 parametri: la stessa richiesta non si ripaga. Costa e il prompt parte verso un terzo, quindi
 non e' una decisione dell'agente: `domande.conferma_genera` con l'editor aperto, `confirmed=True`
 senza (MCP), e dalla chat `api.esegui_op` chiede *prima* e genera fuori dal lock. Le chiavi
-stanno in `~/.vedit/gen.json`, mai nel progetto e mai in `generativo.stato()`.
+stanno in `~/.vedit/gen.json`, mai nel progetto e mai in `generativo.stato()`. I test usano
+servizi finti: `python scripts/gen_smoke.py --kind image --yes` prova il servizio *vero* con la
+chiave configurata (senza `--yes` stampa solo cosa partirebbe) ed e' l'unico modo di sapere se i
+modelli predefiniti esistono ancora.
 
 L'ordine degli effetti conta e si cambia con `move_effect`: denoise prima di sharpen pulisce e
 poi incide, l'ordine opposto incide anche il rumore.

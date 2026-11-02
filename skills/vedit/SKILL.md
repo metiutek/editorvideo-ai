@@ -43,13 +43,29 @@ project_create -> import_media -> preview_media (look at the footage first)
 ## Motion graphics: use blocks first
 
 `list_blocks` then `add_block` puts a ready, tuned animation on a track above the footage.
-29 blocks: titles (`lower_third`, `title`, `chapter_card`, `end_card`), text (`caption_pill`,
-`date_badge`, `kinetic_words`, `typewriter`, `ticker`, `quote`...), data (`counter`, `bar_chart`,
-`progress_ring`, `stat_card`, `steps`, `comparison`, `list_reveal`), emphasis (`highlight_box`,
-`circle_highlight`, `arrow_pointer`), transitions (`color_wipe`, `flash_frame`) and style
-(`letterbox`, `vignette`). One call, no CSS; `list_blocks(block=...)` gives the parameters. Only when no block fits
+52 blocks in six families: titles (`lower_third`, `title`, `mask_reveal_title`, `glitch_title`,
+`word_cycle`, `countdown`, `logo_shine`, `chapter_card`, `end_card`), text (`caption_pill`,
+`kinetic_words`, `typewriter`, `chat_messages`, `notification_toast`, `location_pin`, `ticker`,
+`quote`...), data (`counter`, `bar_chart`, `donut_chart`, `line_chart`, `timeline`, `rating_stars`,
+`price_tag`, `checklist`, `stat_card`, `steps`, `comparison`...), emphasis (`highlight_box`,
+`circle_highlight`, `arrow_pointer`, `marker_highlight`, `subscribe_button`, `alert_banner`),
+transitions (`color_wipe`, `flash_frame`, `iris_wipe`, `blinds_wipe`) and style (`letterbox`,
+`vignette`, `film_grain`, `light_leak`, `scanlines`, `viewfinder`). One call, no CSS; `list_blocks(block=...)` gives the parameters. Only when no block fits
 write HTML with `add_html` (transparent background; the page clock is the clip clock, so preview and
 render match). Particles: `add_particles`. Highlighting a moving subject: `track_mask`, `highlight_subject`.
+
+## Camera moves
+
+`camera_move(clip, move)` (`list_moves`): `push_in`, `pull_out`, `slow_push`, `pan_left`, `pan_right`,
+`tilt_up`, `tilt_down`, `drift`, `punch_in`, `zoom_burst`, `whip_pan`, `impact_shake`, `beat_pulse`
+(needs the BPM from `music_beats`), `handheld`, `sway`, `dutch_tilt`. The edges stay covered, one undo.
+Pick one for what the shot says; a different move on every clip is noise.
+
+## Plan before building
+
+For more than a handful of clips, or anything that generates images or video (it costs), call
+`propose_plan` first: scenes with what, seconds, source and an estimated cost. The user sees times and
+totals and approves or asks for changes; only then build. An approved plan is saved next to the project.
 
 ## Narrated videos (voice first)
 

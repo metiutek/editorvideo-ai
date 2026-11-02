@@ -665,6 +665,10 @@ _ALTRI: dict[str, dict] = {
         "parametri": {"forza": ("numero", 0.55, "how dark the edges get, 0-1", (0, 1))}},
 }
 BLOCCHI.update(_ALTRI)
+# altri 23 blocchi, in un file a parte (importa questo modulo: non va importato prima)
+from .blocchi_piu import PIU as _PIU  # noqa: E402
+
+BLOCCHI.update(_PIU)
 
 # parametri comuni a tutti: carattere e colore del testo
 _COMUNI = {"font": ("font", _FONT, "font stack"),
@@ -676,7 +680,12 @@ _COMUNI = {"font": ("font", _FONT, "font stack"),
 _VETRINA = {"counter": 3.0, "progress_ring": 3.0, "bar_chart": 3.5, "ticker": 3.0, "steps": 3.5,
             "list_reveal": 3.5, "typewriter": 2.6, "kinetic_words": 3.0, "comparison": 1.6,
             "color_wipe": 0.55, "flash_frame": 0.1, "letterbox": 1.2, "vignette": 1.5,
-            "chapter_card": 1.2, "quote": 2.5, "end_card": 2.0, "sticker_text": 1.0}
+            "chapter_card": 1.2, "quote": 2.5, "end_card": 2.0, "sticker_text": 1.0,
+            "iris_wipe": 0.55, "blinds_wipe": 0.55, "countdown": 3.0, "word_cycle": 3.4,
+            "chat_messages": 3.5, "marker_highlight": 2.8, "subscribe_button": 3.0,
+            "donut_chart": 3.0, "line_chart": 3.5, "timeline": 4.5, "rating_stars": 2.5,
+            "price_tag": 2.5, "checklist": 3.5, "film_grain": 1.0, "light_leak": 1.2,
+            "scanlines": 1.0, "mask_reveal_title": 1.8, "logo_shine": 2.5}
 
 
 def istante_vetrina(nome: str) -> float:
@@ -733,7 +742,8 @@ def _parole(s: str) -> list[tuple[str, bool]]:
 
 
 # hanno la loro entrata e uscita (coprono il fotogramma o durano quanto la clip)
-_SENZA_USCITA = ("chapter_card", "progress_bar", "color_wipe", "flash_frame")
+_SENZA_USCITA = ("chapter_card", "progress_bar", "color_wipe", "flash_frame", "iris_wipe",
+                 "blinds_wipe")
 
 
 def documento(nome: str, vars: dict | None, durata: float | None = None) -> tuple[str, float]:
@@ -776,9 +786,9 @@ def documento(nome: str, vars: dict | None, durata: float | None = None) -> tupl
         elif tipo == "elenco":
             pass
     # forme che servono ai singoli blocchi
-    if nome == "bar_chart":
+    if "dati" in parametri:
         v["voci"] = _elenco_dati(vars.get("dati", parametri["dati"][1]))
-    if nome == "kinetic_words":
+    if nome in ("kinetic_words", "marker_highlight"):
         v["parole"] = _parole(vars.get("testo", parametri["testo"][1]))
     if nome == "counter":
         for k in ("prefisso", "suffisso"):   # dentro uno script: senza apici ne' barre

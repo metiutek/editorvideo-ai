@@ -123,7 +123,10 @@ def test_api_e_chat_conoscono_add_block():
 # coprono il fotogramma, lo scuriscono o stanno sul bordo: l'angolo non e' trasparente,
 # ed e' voluto
 _COPRONO = {"highlight_box", "vignette", "letterbox", "end_card", "quote", "chapter_card",
-            "color_wipe", "flash_frame", "progress_bar"}
+            "color_wipe", "flash_frame", "progress_bar", "iris_wipe", "blinds_wipe", "film_grain",
+            "light_leak", "scanlines", "alert_banner"}
+# sovrapposizioni leggere per natura: grana, riflessi, righe. Il segno e' un'alfa bassa
+_LEGGERI = {"film_grain", "light_leak", "scanlines"}
 
 
 @pytest.mark.slow
@@ -151,14 +154,15 @@ def test_i_blocchi_si_vedono_davvero(nome):
                         "-i", mov, "-frames:v", "1", "-pix_fmt", "rgba", out], check=True)
         return Image.open(out).convert("RGBA")
 
+    soglia = 12 if nome in _LEGGERI else 100
     meta = immagine(t)
-    coperti = sum(1 for a in meta.getchannel("A").getdata() if a > 100)
+    coperti = sum(1 for a in meta.getchannel("A").getdata() if a > soglia)
     assert coperti > 300, f"{nome}: a {t}s non c'e' niente disegnato"
     if nome not in _COPRONO:
         assert meta.getpixel((2, 2))[3] == 0
     if nome not in blocchi._SENZA_USCITA:
         fine = immagine(round(durata - 0.1, 2))   # l'ultimo fotogramma a 10 fps
-        assert sum(1 for a in fine.getchannel("A").getdata() if a > 100) < coperti * 0.1, \
+        assert sum(1 for a in fine.getchannel("A").getdata() if a > soglia) < coperti * 0.1, \
             f"{nome}: l'uscita non spegne la grafica"
 
 

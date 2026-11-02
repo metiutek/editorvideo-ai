@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from vedit import blocchi, estensioni
+from vedit import blocchi, estensioni, moves
 from vedit import mcp_server as srv
 
 CARTELLA = Path(estensioni.__file__).resolve().parent / "skills_incluse"
@@ -65,7 +65,7 @@ def test_nominano_solo_strumenti_e_blocchi_veri():
         return {t.name for t in await srv.mcp.list_tools()}
 
     strumenti = anyio.run(nomi)
-    non_strumenti = set(blocchi.BLOCCHI) | {
+    non_strumenti = set(blocchi.BLOCCHI) | set(moves.MOSSE) | {
         # termini di altri motori, di CSS e di codice che stanno in backtick
         "font_weight", "font_variation_settings", "clip_path", "ease_out_cubic", "ease_in_cubic",
         "ease_in_out_cubic", "ease_in", "ease_out", "ease_in_out", "stroke_dasharray",

@@ -29,7 +29,7 @@ Scale the body, never the hook: a 60 s short has a longer body and the same 1 s 
 
 Pick one pattern and commit: open loop ("The reason your X keeps Y..."), direct promise ("3 ways to ... in 30 seconds"), pattern interrupt (snap zoom, whip pan, a visual mismatch in frame 1), negation ("Stop doing ...").
 
-- The hook line is **on screen as text by frame 1** (most people watch muted). vedit: `add_block` `kinetic_words`, `title`, or `sticker_text` at `start=0`.
+- The hook line is **on screen as text by frame 1** (most people watch muted). vedit: `add_block` `kinetic_words`, `mask_reveal_title`, `glitch_title` or `sticker_text` at `start=0`.
 - The most striking visual is also the first frame. No slow ramp-in, no fade up from black.
 
 ## Pattern interrupts
@@ -52,4 +52,4 @@ Never cut inside a word: snap to word boundaries. Pad each cut edge 30-200 ms (A
 
 ## Loop and ask
 
-End by feeding back to frame 0, or with one clear ask, never both. Export only when the user asks.
+End by feeding back to frame 0, or with one clear ask, never both. The ask is `subscribe_button`, `handle_tag` or `end_card`. For a story told in messages use `chat_messages` or `notification_toast`; to underline the one word that matters, `marker_highlight`. Export only when the user asks.

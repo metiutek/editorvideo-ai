@@ -39,6 +39,10 @@ Name them by damping: 1.0 never bounces, 0.7-0.85 reads premium, 0.4-0.6 playful
 - Size: 4-9% of the frame height, one or two lines. Quiet lines at 2.5-4% against hero words that fill 60-90% of the width. One word in the accent colour, and it must carry meaning.
 - vedit: `add_block` `title`, `kinetic_words`, `typewriter`, `sticker_text`; custom in `add_html`.
 
+## Camera
+
+`camera_move(clip, move)` writes the keyframes for you with the edges always covered; `list_moves` describes all 16. Pick by what the shot says: `push_in` / `pull_out` for attention and aftermath, `slow_push` to keep a long hold alive, `pan_left` / `pan_right` / `tilt_up` / `tilt_down` to follow or reveal, `drift` (Ken Burns) for stills and maps, `punch_in` on a beat, `zoom_burst` into a cut, `impact_shake` on a hit, `beat_pulse` with the BPM from `music_beats`, `handheld` for raw footage, `sway` for dreamy, `dutch_tilt` when something is wrong. One move per shot with a reason; a different move on every clip is noise, like a transition without a cause.
+
 ## Rhythm
 
 Contrast speeds. Montages cut every 0.13-0.8 s; a demo holds one framing 7-10 s while the UI acts; shots average 1.8-3 s with motion inside them. Hold 0.3-0.75 s before the payoff.

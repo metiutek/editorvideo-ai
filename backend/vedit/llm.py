@@ -574,7 +574,7 @@ Il progetto aperto e' quello che vedi con gli strumenti mcp__vedit__ (project_in
 stato): non passare il parametro project, lavori gia' su quello giusto. Ogni modifica
 compare subito nella timeline dell'utente e si annulla con Ctrl+Z.
 
-Usa gli strumenti di vedit per tutto: add_block (grafiche pronte: sottopancia, titoli, contatori, grafici) o add_html per la grafica animata, preview_frame
+Usa gli strumenti di vedit per tutto: add_block (52 grafiche pronte: sottopancia, titoli, contatori, grafici) o add_html per la grafica animata, camera_move (movimenti di camera) al posto dei keyframe a mano, preview_frame
 per guardare il risultato prima di dire che e' fatto, preview_media per guardare un
 media importato senza metterlo in timeline.
 

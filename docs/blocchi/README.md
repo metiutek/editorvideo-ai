@@ -34,6 +34,36 @@ Full-frame chapter card on a flat color: it wipes in and out. Opaque: put it in 
 
 Closing screen: darkened frame, big title and a pulsing @handle pill. Default length 5 s. Parameters: `titolo`, `handle`, `colore`.
 
+### `mask_reveal_title`
+
+![mask_reveal_title](mask_reveal_title.png)
+
+Title whose lines rise out of an invisible mask, one after the other (editorial, kinetic). Default length 3.5 s. Parameters: `titolo`, `sottotitolo`, `colore`.
+
+### `glitch_title`
+
+![glitch_title](glitch_title.png)
+
+Uppercase title that tears into red and cyan slices for a moment, then settles. Default length 2.5 s. Parameters: `titolo`, `colore`.
+
+### `word_cycle`
+
+![word_cycle](word_cycle.png)
+
+A fixed phrase and one word that rolls through options and stops on the last ('We make FILMS'). Default length 4 s. Parameters: `prefisso`, `voci`, `colore`.
+
+### `countdown`
+
+![countdown](countdown.png)
+
+Big numbers that replace each other: '3, 2, 1, GO'. The last one stays. Default length 3.6 s. Parameters: `voci`, `colore`.
+
+### `logo_shine`
+
+![logo_shine](logo_shine.png)
+
+Wordmark that lands and gets swept by a glint of light, with an optional tagline. Default length 3.5 s. Parameters: `testo`, `sottotitolo`, `colore`.
+
 ## Text
 
 ### `caption_pill`
@@ -96,6 +126,24 @@ White speech bubble placed at x, y (% of the frame), popping in. Default length 
 
 Small @handle watermark in the bottom-right corner. Default length 6 s. Parameters: `handle`, `colore`.
 
+### `chat_messages`
+
+![chat_messages](chat_messages.png)
+
+Messenger-style bubbles popping in, alternating left (received) and right (sent). 1-5 messages. Default length 5 s. Parameters: `voci`, `colore`.
+
+### `notification_toast`
+
+![notification_toast](notification_toast.png)
+
+Phone-style notification card dropping from the top. Default length 4 s. Parameters: `app`, `titolo`, `testo`, `colore`.
+
+### `location_pin`
+
+![location_pin](location_pin.png)
+
+Map pin dropping at x, y (% of the frame, the tip) with a ripple and a place label. Default length 4 s. Parameters: `luogo`, `dettaglio`, `x`, `y`, `colore`.
+
 ## Data
 
 ### `counter`
@@ -140,6 +188,42 @@ Two panels side by side joined by a VS badge. Default length 5 s. Parameters: `s
 
 Panel with a title and bullet points appearing one by one (1-7). Default length 5 s. Parameters: `titolo`, `voci`, `colore`.
 
+### `donut_chart`
+
+![donut_chart](donut_chart.png)
+
+Donut chart sweeping round, with a legend of shares. 1-10 label:value pairs. Default length 5 s. Parameters: `dati`, `titolo`, `colore`.
+
+### `line_chart`
+
+![line_chart](line_chart.png)
+
+Line chart drawn left to right with points popping on it. 2-10 label:value pairs. Default length 5 s. Parameters: `dati`, `titolo`, `colore`.
+
+### `timeline`
+
+![timeline](timeline.png)
+
+Horizontal timeline that draws itself, with milestones above and below. 2-6 items. Default length 6 s. Parameters: `voci`, `colore`.
+
+### `rating_stars`
+
+![rating_stars](rating_stars.png)
+
+Five stars filling up to a rating, with the number and a caption. Default length 3.5 s. Parameters: `valore`, `etichetta`, `colore`.
+
+### `price_tag`
+
+![price_tag](price_tag.png)
+
+Price card: the old price gets struck out, the new one pops, with an optional badge. Default length 4 s. Parameters: `prezzo`, `vecchio`, `etichetta`, `badge`, `colore`.
+
+### `checklist`
+
+![checklist](checklist.png)
+
+Panel whose items get ticked one by one, each tick drawn by hand. 1-6 items. Default length 5 s. Parameters: `titolo`, `voci`, `colore`.
+
 ## Emphasis
 
 ### `highlight_box`
@@ -166,6 +250,24 @@ Bobbing arrow whose tip is at x, y (% of the frame); angle = where it points. De
 
 Ellipse drawn around an area, like circling it with a pen (x, y, size in %). Default length 3 s. Parameters: `x`, `y`, `larghezza`, `altezza`, `colore`.
 
+### `marker_highlight`
+
+![marker_highlight](marker_highlight.png)
+
+A sentence where *starred* words get a marker swipe behind them, one after the other. Default length 4 s. Parameters: `testo`, `colore`.
+
+### `subscribe_button`
+
+![subscribe_button](subscribe_button.png)
+
+Subscribe button that gets pressed, turns into 'Subscribed' and rings its bell. Default length 4 s. Parameters: `testo`, `fatto`, `colore`.
+
+### `alert_banner`
+
+![alert_banner](alert_banner.png)
+
+Bar dropping from the top with a blinking '!' (warning, breaking, update). Default length 3.5 s. Parameters: `testo`, `etichetta`, `colore`.
+
 ## Transitions
 
 ### `color_wipe`
@@ -180,6 +282,18 @@ Transition: a flat color sweeps across the frame and out again. The cut between 
 
 Transition: a short flash of color, for impact or a hard beat. Default length 0.4 s. Parameters: `colore`.
 
+### `iris_wipe`
+
+![iris_wipe](iris_wipe.png)
+
+Transition: the frame closes to a color through an iris and opens again. Cut at the middle. Default length 1.2 s. Parameters: `colore`, `x`, `y`.
+
+### `blinds_wipe`
+
+![blinds_wipe](blinds_wipe.png)
+
+Transition: vertical blinds close in a ripple, stay shut for a beat, then open. Cut at the middle. Default length 1.2 s. Parameters: `colore`, `strisce`.
+
 ## Style
 
 ### `letterbox`
@@ -193,3 +307,27 @@ Cinema bars sliding in at the top and bottom. Default length 6 s. Parameters: `a
 ![vignette](vignette.png)
 
 Soft dark edges that fade in, to pull the eye to the center. Default length 6 s. Parameters: `forza`.
+
+### `film_grain`
+
+![film_grain](film_grain.png)
+
+Moving film grain over the whole frame (subtle; set the clip blend to overlay or soft light if you like). Default length 6 s. Parameters: `forza`.
+
+### `light_leak`
+
+![light_leak](light_leak.png)
+
+Warm light drifting across the frame once, like a leak on film (set the clip blend to screen). Default length 3 s. Parameters: `colore`.
+
+### `scanlines`
+
+![scanlines](scanlines.png)
+
+CRT scanlines with a slow rolling bar: retro monitor, VHS, found footage. Default length 6 s. Parameters: `forza`.
+
+### `viewfinder`
+
+![viewfinder](viewfinder.png)
+
+Camera viewfinder: corner brackets, a blinking REC dot and a crosshair. Default length 6 s. Parameters: `etichetta`, `colore`.

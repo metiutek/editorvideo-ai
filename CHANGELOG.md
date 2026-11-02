@@ -5,6 +5,21 @@ Le voci più recenti stanno in cima.
 ## Non rilasciato
 
 ### Aggiunto
+- **Blocchi grafici: da 29 a 52** (`blocchi_piu.py`): titoli (`mask_reveal_title`, `glitch_title`,
+  `word_cycle`, `countdown`, `logo_shine`), testi (`chat_messages`, `notification_toast`,
+  `location_pin`), dati (`donut_chart`, `line_chart`, `timeline`, `rating_stars`, `price_tag`,
+  `checklist`), enfasi (`marker_highlight`, `subscribe_button`, `alert_banner`), transizioni
+  (`iris_wipe`, `blinds_wipe`) e stile (`film_grain`, `light_leak`, `scanlines`, `viewfinder`).
+  Tutti fotografati in Chromium dai test e nella galleria `docs/blocchi`.
+- **`camera_move` e `list_moves`**: 16 movimenti di camera a keyframe (spinta, panoramica, Ken
+  Burns, punch-in, zoom burst, whip pan, scossa, battito sul BPM, camera a mano, dondolio,
+  orizzonte inclinato) che non scoprono mai i bordi, ripetibili, in un solo undo. Anche nella
+  chat e nell'API della UI.
+- **`scripts/gen_smoke.py`**: prova `generate_media` contro il servizio vero con la chiave
+  dell'utente (senza `--yes` non parte niente); i test usano solo servizi finti.
+- **`propose_plan`**: il piano del video (scene, secondi, fonte, stima del costo) davanti
+  all'utente prima di montare o generare; approvato si salva in `<progetto>.piano.json`. Senza
+  editor torna il testo e vuole `confirmed=True`.
 - **Nove skill incluse nel pacchetto**, lette dall'agente prima del lavoro (`list_skills`,
   `use_skill`): `motion-craft`, `kinetic-typography`, `data-animation`, `short-form-video`,
   `lower-thirds`, `explainer-styles`, `product-launch`, `talking-head-edit`, `external-engines`.
@@ -12,6 +27,13 @@ Le voci più recenti stanno in cima.
   video-use e video-shotcraft, con fonte dichiarata e attribuzione (`skills_incluse/NOTICE.md`).
   Sostituibili con una skill dell'utente dello stesso nome. `external-engines` dice cosa fare in
   Manim, Remotion, HyperFrames o Three.js e come importarlo.
+
+### Corretto
+- **Scala animata + spostamento lasciavano una barra nera.** Con la scala a keyframe `zoompan`
+  ritaglia la tela prima dell'overlay, quindi uno spostamento x/y (a keyframe o un tracking di
+  `pin_to_subject`) scopriva il bordo opposto. Ora lo spostamento sta dentro la finestra di
+  `zoompan`, che resta da sola dentro l'immagine. Trovato dal test dei movimenti di camera sul
+  fotogramma reale.
 
 ### Cambiato
 - `project_create` / `project_open` restituiscono solo le skill dell'utente: quelle incluse stanno

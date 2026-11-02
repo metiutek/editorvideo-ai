@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import effects as fx
-from . import blocchi, captions, htmlclip
+from . import blocchi, captions, htmlclip, moves
 from . import particelle
 from . import keyframes as kf
 from . import probe as probe_mod
@@ -1289,6 +1289,23 @@ class Store:
             setattr(clip.transform, k, v)
         self._done()
         return clip
+
+    def camera_move(self, clip_id: str, move: str, intensity: float = 1.0, bpm: float | None = None,
+                    seed: int = 1) -> Clip:
+        """Un movimento di camera (moves.py) sulla clip: keyframe di posizione, scala e rotazione.
+
+        Sostituisce lo spostamento, l'ingrandimento e la rotazione che la clip aveva
+        (l'opacita' resta): un solo undo.
+        """
+        track, clip = self.clip_for_edit(clip_id)
+        if track.kind == "audio":
+            raise EditError(f"clip {clip_id} is on an audio track: a camera move needs an image")
+        s = self.project.settings
+        try:
+            valori = moves.costruisci(move, clip.duration, s.width, s.height, intensity, bpm, seed)
+        except ValueError as exc:
+            raise EditError(str(exc)) from exc
+        return self.set_transform(clip_id, **valori)
 
     def set_audio(self, clip_id: str, **values: Any) -> Clip:
         track, clip = self.clip_for_edit(clip_id)

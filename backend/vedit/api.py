@@ -42,6 +42,7 @@ from . import chat as chat_mod
 from . import effects as fx
 from . import (blocchi, captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
                render, review, social, stili, tts, web)
+from . import piano as piano_mod
 from . import probe as probe_mod
 from .model import TRANSITIONS, Effect
 from .store import FORMATI, PRESETS, EditError, Store, info_copertina
@@ -69,7 +70,7 @@ OPS = {
     "add_clip", "add_text", "add_color", "add_html", "add_block", "add_particles", "set_particles", "set_html", "remove_clip", "unlink_clip", "move_clip",
     "ripple_trim", "roll_edit", "slip_clip", "slide_clip", "import_subtitles",
     "set_master_volume", "move_layer", "trim_clip",
-    "split_clip", "set_speed", "set_reverse", "set_transform", "set_audio",
+    "split_clip", "set_speed", "set_reverse", "set_transform", "camera_move", "set_audio",
     "set_fades", "set_clip", "set_text", "add_effect", "update_effect",
     "remove_effect", "move_effect", "append_sequence", "crossfade", "set_transition", "close_gaps",
     "set_loudnorm", "set_settings", "set_format", "set_cover", "add_covers", "remove_cover", "add_voiceover", "undo", "redo", "save",
@@ -2259,6 +2260,17 @@ def chat(body: ChatBody) -> StreamingResponse:
         if name == "ask_user":
             # fuori dal lock: si aspetta l'utente, non si tocca il progetto
             return json.dumps(chiedi(args.get("domande", args)), ensure_ascii=False)
+        if name == "propose_plan" and args.get("scenes") is not None:
+            # il piano va davanti all'utente prima di tutto: si aspetta fuori dal lock
+            try:
+                sc = piano_mod.valida(args["scenes"])
+            except ValueError as exc:
+                return json.dumps({"errore": str(exc)}, ensure_ascii=False)
+            esito = chiedi(piano_mod.domanda(str(args.get("title") or ""), sc, str(args.get("notes") or "")))
+            if not domande.approvato(esito):
+                return json.dumps({"approved": False, "feedback": piano_mod.feedback(esito),
+                                   "motivo": esito.get("motivo") or "the user wants changes"},
+                                  ensure_ascii=False)
         if name == "generate_media":
             # costa e il prompt parte verso un servizio di terzi: serve il si' dell'utente,
             # poi la rete lavora fuori dal lock

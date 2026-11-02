@@ -34,7 +34,7 @@ Real data is sparse (one row per year). A smooth race needs keyframes interpolat
 
 ## In vedit
 
-Ready blocks first: `counter` (counts from one value to another), `bar_chart` (labels and values, grows in sequence), `progress_ring` (a percentage), `stat_card` (a figure with a label and a delta chip), `steps` (numbered stages), `comparison` (two panels with VS), `list_reveal` (bullets one by one).
+Ready blocks first: `counter` (counts from one value to another), `bar_chart` (labels and values, grows in sequence), `progress_ring` (a percentage), `stat_card` (a figure with a label and a delta chip), `steps` (numbered stages), `comparison` (two panels with VS), `list_reveal` (bullets one by one), `donut_chart` (shares), `line_chart` (a trend), `timeline` (milestones), `rating_stars`, `checklist`, `price_tag`.
 
 When none fits (line charts, races, maps of numbers) write an `add_html` clip with SVG and `veditRender`. Put it on a track above the footage; for a chart on its own full-frame, put an `add_color` behind it.
 
