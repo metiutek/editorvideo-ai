@@ -54,7 +54,7 @@ def casa(tmp_path, monkeypatch):
 
 
 def test_trova_le_skill(casa):
-    nomi = {s["name"]: s["origin"] for s in estensioni.skill()}
+    nomi = {s["name"]: s["origin"] for s in estensioni.skill() if s["origin"] != "incluse"}
     assert nomi == {"sottotitoli": "user", "computer-use": "account", "cowork:crea": "plugin:cowork"}
     indice = estensioni.indice_skill()
     assert "computer-use: Usare il computer" in indice and "use_skill" in indice
@@ -147,7 +147,7 @@ def test_crea_e_elimina_skill(vedit_skill):
                               "- 9:16\n- stacchi sul battito", {"modelli/titolo.html": "<h1>x</h1>"})
     assert s["name"] == "reel-di-viaggio" and not s["aggiornata"]
     assert (vedit_skill / "reel-di-viaggio" / "modelli" / "titolo.html").is_file()
-    voci = estensioni.skill_vedit()
+    voci = [v for v in estensioni.skill_vedit() if v["origin"] != "incluse"]
     assert [(v["name"], v["description"], v["origin"]) for v in voci] == [
         ("reel-di-viaggio", "reel verticali di viaggio", "vedit")]
     assert "stacchi sul battito" in estensioni.usa_skill("reel-di-viaggio")["istruzioni"]
@@ -157,7 +157,7 @@ def test_crea_e_elimina_skill(vedit_skill):
     with pytest.raises(ValueError):
         estensioni.crea_skill("x", "", "i")
     estensioni.elimina_skill("reel-di-viaggio")
-    assert estensioni.skill_vedit() == []
+    assert [v for v in estensioni.skill_vedit() if v["origin"] != "incluse"] == []
     with pytest.raises(ValueError):
         estensioni.elimina_skill("reel-di-viaggio")
 

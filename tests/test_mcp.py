@@ -684,8 +684,9 @@ async def test_skill_di_montaggio(tmp_path, monkeypatch):
                    instructions="Alterna le camere.", files={"esempio.md": "ciao"})
     assert s["name"] == "podcast"
     p = await call("project_create", path=str(tmp_path / "s.json"), preset="720p")
-    assert p["skill"] == {"podcast": "Podcast con due camere"}
-    assert (await call("list_skills"))["skill"] == {"podcast": "Podcast con due camere"}
+    assert p["skill"] == {"podcast": "Podcast con due camere"}    # solo le sue: le incluse sono nelle istruzioni
+    elenco = (await call("list_skills"))["skill"]
+    assert elenco["podcast"] == "Podcast con due camere" and "motion-craft" in elenco
     assert "Alterna" in (await call("use_skill", name="podcast"))["istruzioni"]
     assert (await call("use_skill", name="podcast", file="esempio.md"))["testo"] == "ciao"
     altra = tmp_path / "altra"
@@ -695,7 +696,8 @@ async def test_skill_di_montaggio(tmp_path, monkeypatch):
     assert (await call("install_skill", source=str(altra)))["installate"] == []
     assert (await call("install_skill", source=str(altra), confirmed=True))["installate"]
     await call("delete_skill", name="podcast")
-    assert set((await call("list_skills"))["skill"]) == {"altra"}
+    rimaste = set((await call("list_skills"))["skill"])
+    assert "altra" in rimaste and "podcast" not in rimaste and "motion-craft" in rimaste
 
 
 @pytest.mark.anyio

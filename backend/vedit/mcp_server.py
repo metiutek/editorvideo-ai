@@ -103,6 +103,13 @@ add_html con un documento HTML/CSS/JS su una traccia sopra la ripresa.
 Lo sfondo e' trasparente, il tempo della pagina e' quello della clip, e
 nell'interfaccia (open_ui) si vede animata dal vivo prima di renderizzare.
 
+Skill incluse (list_skills, poi use_skill): il mestiere dell'animazione e del montaggio,
+da leggere PRIMA di fare quel lavoro. motion-craft (tempi, easing, titoli, transizioni
+con una causa), kinetic-typography, data-animation, short-form-video (ritenzione,
+sottotitoli), lower-thirds, explainer-styles, product-launch, talking-head-edit (girato
+parlato). Per stili che vedit non renderizza da solo (Manim, Remotion, Three.js) leggi
+external-engines: cosa fare altrove e come importarlo.
+
 Effetti speciali: add_particles (neve, scintille, coriandoli... o su misura con
 kind="custom": forma, moto, colori; create_particles le salva), fusioni con
 set_clip blend (screen per luci e particelle), add_effect con glitch, warp, shake,
@@ -506,7 +513,9 @@ def _con_memoria(out: dict) -> dict:
     e' il primo giro di ogni lavoro."""
     if m := memoria.contesto():
         out["memoria"] = m
-    if voci := estensioni.skill_vedit(out.get("path")):
+    # le incluse nel pacchetto stanno gia' nelle istruzioni del server (e in list_skills):
+    # ripeterle a ogni apertura sarebbe contesto in piu' senza dire niente di nuovo
+    if voci := [s for s in estensioni.skill_vedit(out.get("path")) if s["origin"] != "incluse"]:
         out["skill"] = {s["name"]: s["description"] for s in voci}
     return out
 

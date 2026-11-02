@@ -92,7 +92,7 @@ where = ["backend"]
 # L'interfaccia compilata viaggia dentro il pacchetto: chi installa da PyPI non
 # ha Node per compilarla. La copia scripts/build_wheel.py da frontend/dist.
 [tool.setuptools.package-data]
-vedit = ["webui/**/*"]
+vedit = ["webui/**/*", "skills_incluse/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

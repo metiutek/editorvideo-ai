@@ -2,6 +2,21 @@
 
 Le voci più recenti stanno in cima.
 
+## Non rilasciato
+
+### Aggiunto
+- **Nove skill incluse nel pacchetto**, lette dall'agente prima del lavoro (`list_skills`,
+  `use_skill`): `motion-craft`, `kinetic-typography`, `data-animation`, `short-form-video`,
+  `lower-thirds`, `explainer-styles`, `product-launch`, `talking-head-edit`, `external-engines`.
+  Sintesi adattate agli strumenti di vedit di skill MIT e Apache-2.0 di iart.ai, HyperFrames,
+  video-use e video-shotcraft, con fonte dichiarata e attribuzione (`skills_incluse/NOTICE.md`).
+  Sostituibili con una skill dell'utente dello stesso nome. `external-engines` dice cosa fare in
+  Manim, Remotion, HyperFrames o Three.js e come importarlo.
+
+### Cambiato
+- `project_create` / `project_open` restituiscono solo le skill dell'utente: quelle incluse stanno
+  nelle istruzioni del server e in `list_skills`.
+
 ## v0.5.2 — 2026-11-02 · Demo dei blocchi
 
 ### Aggiunto

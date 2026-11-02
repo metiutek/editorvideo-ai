@@ -443,6 +443,21 @@ La repo e' anche un marketplace di plugin per Claude Code: `.claude-plugin/plugi
 pacchetto — **a ogni release va cambiata anche in `plugin.json`** — e pretende che ogni
 strumento nominato nella skill esista nel server MCP.
 
+### Skill incluse (animazione e montaggio)
+
+`backend/vedit/skills_incluse/` porta nove skill nel pacchetto (`package-data`): `motion-craft`,
+`kinetic-typography`, `data-animation`, `short-form-video`, `lower-thirds`, `explainer-styles`,
+`product-launch`, `talking-head-edit`, `external-engines`. Sono sintesi *adattate* agli strumenti
+di vedit (non copie) di skill MIT e Apache-2.0 di terzi: ogni `SKILL.md` dichiara la fonte nella
+riga `source:` e `NOTICE.md` porta l'attribuzione e i testi delle licenze. **Non copiare** da
+fonti senza licenza o AGPL (OpenMontage, OpenChatCut): `NOTICE.md` dice cosa e' stato lasciato
+fuori e perche'. Origine `incluse` in `estensioni._cartelle_skill`: ultima fra quelle di vedit,
+quindi una skill dell'utente con lo stesso nome la sostituisce; `project_create`/`project_open`
+non le ripetono (sono nelle istruzioni MCP, `list_skills` le mostra). `tests/test_skill_incluse.py`
+pretende fonte dichiarata, attribuzione per ogni skill e che ogni strumento nominato esista.
+Per uno stile che vuole un altro motore (Manim, Remotion, Three.js) `external-engines` dice cosa
+fare altrove e come importarlo: vedit non lo finge con CSS.
+
 ### Skill di montaggio
 
 Le skill che l'utente aggiunge a vedit stanno in `~/.vedit/skills/<nome>/SKILL.md` (piu'

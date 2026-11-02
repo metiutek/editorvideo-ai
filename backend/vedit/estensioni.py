@@ -98,6 +98,9 @@ def _cartelle_skill(progetto: str | None) -> list[tuple[str, Path]]:
         out.append(("project", Path(progetto).parent / ".claude" / "skills"))
     out.append(("vedit", _vedit() / "skills"))
     out.append(("user", _home() / "skills"))
+    # quelle del pacchetto (animazione, montaggio parlato...): ultime fra le skill di
+    # vedit, cosi' chi ne scrive una con lo stesso nome la sostituisce
+    out.append(("incluse", Path(__file__).resolve().parent / "skills_incluse"))
     # quelle sincronizzate dall'account Claude: skills/synced/<account>/<skill>
     for d in sorted((_home() / "skills" / "synced").glob("*")):
         if d.is_dir():
@@ -181,7 +184,7 @@ def leggi_file_skill(nome: str, percorso: str, progetto: str | None = None,
 
 MAX_PACCHETTO = 50 * 1024 * 1024    # zip scaricato o caricato
 MAX_FILE_SKILL = 300                # file estratti da un pacchetto
-_ORIGINI_VEDIT = ("project", "vedit")
+_ORIGINI_VEDIT = ("project", "vedit", "incluse")
 
 
 def cartella_vedit() -> Path:

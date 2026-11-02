@@ -697,6 +697,21 @@ analysed by default, and from a video page only that stretch is downloaded; down
 `~/.vedit/riferimenti`. YouTube needs a recent yt-dlp with its JavaScript solver: the `web`
 extra installs `yt-dlp[default]`, and Node.js is used when there is no Deno.
 
+**Built-in animation and editing skills** — nine skills ship inside the package and the agent
+reads them *before* doing that kind of work (`list_skills`, `use_skill`): `motion-craft` (timing,
+easing, springs, title holds, transitions with a cause), `kinetic-typography`, `data-animation`
+(counters, charts, races), `short-form-video` (retention arc, hooks, caption grouping),
+`lower-thirds`, `explainer-styles` (story arc, whiteboard draw-on), `product-launch` (hook /
+tease / reveal / montage cut to the drop), `talking-head-edit` (word-boundary cuts, padding, audio
+fades, self-checks) and `external-engines` (what to make in Manim, Remotion, HyperFrames or
+Three.js and how to import it). They are condensed and adapted for vedit's own tools from the
+MIT and Apache-2.0 skills of [iart.ai](https://github.com/iart-ai/motion-skills),
+[HyperFrames](https://github.com/heygen-com/hyperframes),
+[video-use](https://github.com/browser-use/video-use) and
+[video-shotcraft](https://github.com/Vincentwei1021/video-shotcraft), with attribution in
+`backend/vedit/skills_incluse/NOTICE.md`. Write a skill with the same name in `~/.vedit/skills`
+and yours wins.
+
 **Editing skills** — your own ways of editing (a podcast format, your travel reels, a channel's
 look) saved as skills: a folder with a `SKILL.md`, the same format as Claude Code skills. Add
 them in the model settings under *editing skills*: paste a GitHub link (repo, folder or

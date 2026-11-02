@@ -763,6 +763,21 @@ e la stessa richiesta non si paga due volte (il file ha nome dalla sua impronta)
 installano insieme il server MCP e la skill di montaggio; `npx skills add metiutek/editorvideo-ai`
 installa solo la skill (`skills/vedit/SKILL.md`) per Codex, Cursor e altri agenti.
 
+**Skill incluse di animazione e montaggio** — nove skill viaggiano dentro il pacchetto e
+l'agente le legge *prima* di quel tipo di lavoro (`list_skills`, `use_skill`): `motion-craft`
+(tempi, easing, molle, tenuta dei titoli, transizioni con una causa), `kinetic-typography`,
+`data-animation` (contatori, grafici, classifiche), `short-form-video` (arco di ritenzione, gancio,
+raggruppamento dei sottotitoli), `lower-thirds`, `explainer-styles` (arco narrativo, whiteboard),
+`product-launch` (gancio / tease / rivelazione / montaggio sul drop), `talking-head-edit` (tagli
+sul confine di parola, margini, dissolvenze audio, controlli) ed `external-engines` (cosa fare in
+Manim, Remotion, HyperFrames o Three.js e come importarlo). Sono condensate e adattate agli
+strumenti di vedit dalle skill MIT e Apache-2.0 di [iart.ai](https://github.com/iart-ai/motion-skills),
+[HyperFrames](https://github.com/heygen-com/hyperframes),
+[video-use](https://github.com/browser-use/video-use) e
+[video-shotcraft](https://github.com/Vincentwei1021/video-shotcraft), con l'attribuzione in
+`backend/vedit/skills_incluse/NOTICE.md`. Se scrivi una skill con lo stesso nome in
+`~/.vedit/skills`, vince la tua.
+
 **Skill di montaggio** — i tuoi modi di montare (un formato podcast, i reel di viaggio, il look
 di un canale) salvati come skill: una cartella con un `SKILL.md`, lo stesso formato delle
 skill di Claude Code. Si aggiungono dalle impostazioni del modello, sotto *editing skills*:
