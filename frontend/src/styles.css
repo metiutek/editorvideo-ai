@@ -1329,3 +1329,18 @@ button.copertina-grande { display: block; width: 100%; padding: 0; border: 0; cu
 .copertina-intera-barra { display: flex; align-items: center; gap: 10px; color: #eee; font-size: 13px; }
 .copertina-intera-barra .copertina-scarica { color: #eee; }
 .copertina-scelta-tag { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); }
+
+/* finestra stretta o verticale: le colonne a larghezza fissa spingevano la
+   chat fuori dallo schermo e schiacciavano la schermata iniziale. Le colonne
+   si restringono fino a un minimo, il centro non scende sotto i 360px; sotto
+   gli 860px si impilano (monitor, assistente, materiali) e la pagina scorre */
+.center { min-width: 360px; }
+@media (max-width: 860px) {
+  .middle { flex-direction: column; overflow-y: auto; gap: 8px; }
+  .middle > .divider { display: none; }
+  .middle > .colonna { width: 100% !important; min-width: 0; flex: none !important; }
+  .middle > .center { order: 0; flex: none; min-width: 0; height: 640px; }
+  .middle > .colonna.destra { order: 1; height: 520px; }
+  .middle > .colonna.bin { order: 2; height: 360px; }
+  .passi { grid-template-columns: 1fr; }
+}

@@ -2,6 +2,21 @@
 
 Le voci più recenti stanno in cima.
 
+## v0.4.4 — 2026-11-02 · Chat e finestre strette
+
+### Corretto
+- **Chat che spariva e riappariva**: le colonne laterali avevano larghezza fissa e, in una finestra
+  stretta o verticale, il pannello dell'assistente usciva dallo schermo. Ora si restringono fino a
+  un minimo e sotto gli 860 px l'editor si impila in colonna (monitor, assistente, materiali).
+- **Schermata iniziale schiacciata** in finestra stretta/verticale: il centro non scende sotto i
+  360 px, i tre passi si dispongono in colonna.
+- **Chat che si svuotava da sola, come dopo un `/clear` mai dato**: se l'assistente creava o apriva
+  un progetto durante la risposta (`project_create` / `project_open`), `attach()` sostituiva la
+  conversazione con quella, vuota, del progetto nuovo — il turno in corso restava appeso a una lista
+  ormai scollegata e si perdeva anche la sessione di Claude Code. Ora la conversazione in corso
+  resta (davanti ci vanno i turni già salvati del progetto aperto, se ne ha). La UI, a sua volta,
+  non ricarica più la cronologia a metà turno.
+
 ## v0.4.3 — 2026-11-01 · Opzioni di copertina
 
 ### Aggiunto

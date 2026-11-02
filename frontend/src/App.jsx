@@ -533,7 +533,7 @@ export default function App() {
       </div>
 
       <div className="middle">
-        <div style={{ width: sizes.bin, flex: 'none', display: 'flex', minWidth: 0 }}>
+        <div className="colonna bin" style={{ width: sizes.bin, flex: '0 1 auto', display: 'flex', minWidth: 190 }}>
           <div className="panel">
             <div className="tabs">
               <button className={leftTab === 'media' ? 'on' : ''}
@@ -657,7 +657,7 @@ export default function App() {
         </div>
 
         <Divider onDrag={(dx) => setSizes((s) => ({ ...s, inspector: clamp(s.inspector - dx, 240, 600) }))} />
-        <div style={{ width: sizes.inspector, flex: 'none', display: 'flex', minWidth: 0 }}>
+        <div className="colonna destra" style={{ width: sizes.inspector, flex: '0 1 auto', display: 'flex', minWidth: 240 }}>
           <div className="panel">
             <div className="tabs destra">
               <button className={rightTab === 'chat' ? 'on' : ''}

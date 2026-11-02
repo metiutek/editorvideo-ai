@@ -148,9 +148,17 @@ export default function Chat({
 
   // ogni progetto ha la sua chat, salvata accanto al file: aprendolo torna
   const percorso = project?.path || ''
+  // durante un turno i turni a schermo sono piu' recenti di quelli salvati: se
+  // la cronologia arrivasse adesso (l'agente crea o apre un progetto a meta'
+  // turno) cancellerebbe la risposta in corso, che riapparirebbe solo a turno
+  // finito. Il turno che finisce salva da se', quindi qui si salta
+  const busyRef = useRef(false)
+  busyRef.current = busy
   useEffect(() => {
     let vivo = true
-    api.chatStoria().then((r) => { if (vivo) setTurns(r.vista || []) }).catch(() => {})
+    api.chatStoria().then((r) => {
+      if (vivo && !busyRef.current) setTurns(r.vista || [])
+    }).catch(() => {})
     return () => { vivo = false }
   }, [percorso, nuovoProgetto])
 

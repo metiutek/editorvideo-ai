@@ -2160,6 +2160,27 @@ def carica_chat() -> None:
     S.vista = vista
 
 
+def _chat_del_progetto(store: Store, in_corso: bool) -> None:
+    """Quale conversazione mostrare quando cambia il progetto.
+
+    Di norma ogni progetto ha la sua. Ma se l'assistente crea o apre un progetto
+    *durante* un turno (project_create / project_open), la conversazione in
+    corso non deve sparire: ``carica_chat`` la sostituiva con quella del progetto nuovo (vuota)
+    e la chat si svuotava da sola, come dopo un /clear mai dato, perdendo anche
+    la sessione di Claude Code. Qui resta quella viva; se il progetto aperto ne
+    aveva una sua gia' salvata, i turni vecchi vengono prima.
+    """
+    from . import conversazioni
+
+    if not in_corso:
+        carica_chat()   # ogni progetto ha la sua conversazione
+        return
+    _, salvata = conversazioni.carica(store.path)
+    if salvata:
+        S.vista[:0] = salvata   # lo stesso elenco: il turno in corso continua a scriverci
+    salva_chat()
+
+
 def salva_chat() -> None:
     from . import conversazioni
     if S.store is None:
@@ -2376,12 +2397,13 @@ def attach(store: Store) -> None:
     l'ultimo vincerebbe. Condividendo l'oggetto c'e' un solo scrittore, e
     ``on_change`` fa aggiornare il browser quando a montare e' l'agente.
     """
-    if S.store is not None and S.store is not store:
-        S.store.on_change = None
-    nuovo = S.store is not store
+    prima = S.store
+    if prima is not None and prima is not store:
+        prima.on_change = None
+    nuovo = prima is not store
     S.store = store
     if nuovo:
-        carica_chat()   # ogni progetto ha la sua conversazione
+        _chat_del_progetto(store, in_corso=S.in_turno)
 
     def cambiato() -> None:
         S.publish({"type": "project"})

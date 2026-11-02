@@ -204,6 +204,35 @@ def test_ogni_progetto_ha_la_sua_chat(tmp_path, monkeypatch, senza_modello):
         api_mod.S.store = None
 
 
+def test_progetto_aperto_a_meta_turno_non_svuota_la_chat(tmp_path, monkeypatch, senza_modello):
+    """L'assistente crea un progetto mentre risponde: la conversazione resta."""
+    from vedit.store import Store
+
+    b = str(tmp_path / "b.json")
+
+    def finto_run(store, stato, domanda, run_op, refs=None, mcp_url=None, fermo=None,
+                  stile=None, precedente=""):
+        stato["sessione"] = "sess-1"
+        yield {"type": "text", "text": "Creo il progetto. "}
+        api_mod.attach(Store.create(name="b", preset="720p", path=b))   # come project_create via MCP
+        yield {"type": "text", "text": "Fatto."}
+        yield {"type": "done"}
+
+    monkeypatch.setattr(chat, "run", finto_run)
+    api_mod.S.store = None
+    try:
+        with TestClient(api_mod.app) as c:
+            c.post("/api/project/create", json={"path": str(tmp_path / "a.json"), "preset": "720p"})
+            c.post("/api/chat", json={"message": "fammi un video"})
+            vista = c.get("/api/chat/storia").json()["vista"]
+            assert [t["role"] for t in vista] == ["user", "assistant"]
+            assert vista[1]["text"] == "Creo il progetto. Fatto."
+            assert api_mod.S.chat["sessione"] == "sess-1"
+            assert (tmp_path / "b.chat.json").is_file()   # salvata col progetto nuovo
+    finally:
+        api_mod.S.store = None
+
+
 def test_contesto_quando_la_cronologia_riparte(tmp_path, monkeypatch, senza_modello):
     """Altro modello, o sessione persa: il testo della chat entra nel primo turno."""
     visto = {}
