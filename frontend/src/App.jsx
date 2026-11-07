@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { api, connectEvents } from './api.js'
 import Chat from './Chat.jsx'
-import { NuovaRaccolta, Raccolta, RaccolteHome } from './Raccolte.jsx'
+import { NuovaRaccolta, RaccolteHome, SpazioRaccolta } from './Raccolte.jsx'
+import { Cestino, MenuProgetto } from './Progetti.jsx'
 import { Confirm, CopiaErrore, FileBrowser, NewProject, ProjectFormat, RenderDialog } from './Dialogs.jsx'
 import Voce from './Voce.jsx'
 import Generazione from './Generazione.jsx'
@@ -354,6 +355,7 @@ export default function App() {
     const onKey = (e) => {
       const tag = e.target.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (document.querySelector('.spazio, .overlay')) return
       const step = 1 / (project?.settings?.fps || 30)
       const fallito = (err) => setError(err.message)
       const sel = selected ? findClip(project, selected) : null
@@ -456,6 +458,21 @@ export default function App() {
   const openProject = useCallback((p) =>
     api.openProject(p).then(progettoAperto).catch((e) => setError(e.message)), [progettoAperto])
 
+  /** Dopo rinomina, copia, spostamento, eliminazione: elenchi nuovi. Il
+   * progetto aperto, se e' cambiato, arriva con l'evento "project". */
+  const progettiCambiati = useCallback((r) => {
+    setSys((s) => (s ? { ...s, ...(r.recenti ? { recenti: r.recenti } : {}),
+      ...(r.raccolte ? { raccolte: r.raccolte } : {}) } : s))
+  }, [])
+  const chiudiProgetto = useCallback(() => api.chiudiProgetto()
+    .then((r) => { progettoAperto(r) }).catch((e) => setError(e.message)), [progettoAperto])
+  /** Dalla raccolta all'editor: lo stesso video aperto non si ricarica. */
+  const apriDaRaccolta = useCallback((p) => {
+    if (p === path) { setRaccoltaAperta(null); return }
+    api.openProject(p).then((r) => { progettoAperto(r); setRaccoltaAperta(null) })
+      .catch((e) => setError(e.message))
+  }, [path, progettoAperto])
+
   return (
     <div
       className={`app ${dropping ? 'dropping' : ''}`}
@@ -538,7 +555,12 @@ Its memory and reference images reach the assistant in every video`}
             {project.settings.format || project.settings.resolution}
           </button>
         )}
-        <span className="path" title={path || ''}>{path || 'no project'}</span>
+        <span className="path nome-progetto" title={path || ''}>{project ? project.name : 'no project'}</span>
+        {project && path && (
+          <MenuProgetto path={path} name={project.name} raccolte={sys?.raccolte} setError={setError}
+            flash={flash} onFatto={progettiCambiati} onChiudi={chiudiProgetto}
+            titolo="This project: rename, duplicate, move, delete, close" />
+        )}
         <button className="ghost" disabled={!project}
           title="Make low-resolution copies: much faster previews"
           onClick={() => { setBusy('building proxies…'); api.buildProxies() }}>
@@ -602,7 +624,12 @@ Its memory and reference images reach the assistant in every video`}
           ) : !project ? (
             <Benvenuto recenti={sys.recenti} onNew={() => setDialog('new')}
               onOpen={() => setDialog('open')} onRecent={openProject}
-              raccolte={sys.raccolte} onRaccolta={setRaccoltaAperta} onNuovaRaccolta={() => setDialog('nuova-raccolta')} />
+              raccolte={sys.raccolte} onRaccolta={setRaccoltaAperta} onNuovaRaccolta={() => setDialog('nuova-raccolta')}
+              onCestino={() => setDialog('cestino')}
+              menu={(r) => (
+                <MenuProgetto path={r.path} name={r.name} raccolte={sys.raccolte} setError={setError}
+                  flash={flash} onFatto={progettiCambiati} onApri={() => openProject(r.path)} />
+              )} />
           ) : tab === 'source' && source ? (
             <SourceMonitor media={source} tracks={project?.tracks || []} run={run}
               setError={setError} playhead={playhead}
@@ -744,14 +771,20 @@ Its memory and reference images reach the assistant in every video`}
           }} />
       )}
       {raccoltaAperta && (
-        <Raccolta path={raccoltaAperta} setError={setError} flash={flash}
+        <SpazioRaccolta path={raccoltaAperta} setError={setError} flash={flash}
+          raccolte={sys?.raccolte} progettoAperto={path}
           onClose={() => setRaccoltaAperta(null)}
-          onApriVideo={openProject}
-          onCreaVideo={(body) => api.videoRaccolta(body).then(progettoNuovo).catch((e) => setError(e.message))}
+          onApriVideo={apriDaRaccolta}
+          onProgetti={progettiCambiati}
+          onCreaVideo={(body) => api.videoRaccolta(body)
+            .then((r) => { progettoNuovo(r); setRaccoltaAperta(null) }).catch((e) => setError(e.message))}
           onCambiata={(c) => {
             if (raccolta?.path === c.path) setRaccolta({ path: c.path, name: c.name })
             setSys((x) => (x ? { ...x, raccolte: (x.raccolte || []).map((k) => (k.path === c.path ? { ...k, name: c.name, description: c.description } : k)) } : x))
           }} />
+      )}
+      {dialog === 'cestino' && (
+        <Cestino setError={setError} flash={flash} onClose={() => setDialog(null)} onFatto={progettiCambiati} />
       )}
       {dialog === 'pubblica' && project && (
         <Pubblica file={job?.state === 'done' ? job.output : ''} nome={project.name}
@@ -825,7 +858,7 @@ Its memory and reference images reach the assistant in every video`}
  * spenti e nessuna indicazione su da dove partire. Qui ci sono le due cose che
  * si possono fare, e i progetti aperti di recente a un clic.
  */
-function Benvenuto({ recenti, onNew, onOpen, onRecent, raccolte, onRaccolta, onNuovaRaccolta }) {
+function Benvenuto({ recenti, onNew, onOpen, onRecent, raccolte, onRaccolta, onNuovaRaccolta, onCestino, menu }) {
   return (
     <div className="preview benvenuto">
       <div className="benvenuto-box">
@@ -844,17 +877,22 @@ function Benvenuto({ recenti, onNew, onOpen, onRecent, raccolte, onRaccolta, onN
           <div className="benvenuto-recenti">
             <div className="hint">recent</div>
             {recenti.slice(0, 6).map((r) => (
-              <button key={r.path} className="ghost recente" title={r.path}
-                onClick={() => onRecent(r.path)}>
-                <Icon name="apri" size={14} />
-                <span className="nome">{r.name}</span>
-                <span className="hint">{r.path}</span>
-              </button>
+              <div key={r.path} className="recente-riga">
+                <button className="ghost recente" title={r.path} onClick={() => onRecent(r.path)}>
+                  <Icon name="apri" size={14} />
+                  <span className="nome">{r.name}</span>
+                  <span className="hint">{r.path}</span>
+                </button>
+                {menu?.(r)}
+              </div>
             ))}
           </div>
         )}
         <RaccolteHome raccolte={raccolte} onApri={onRaccolta} onNuova={onNuovaRaccolta} />
-        <div className="hint">You can also drop files here: the project is created for you.</div>
+        <div className="hint">
+          You can also drop files here: the project is created for you.
+          {' '}<button className="link" onClick={onCestino}>trash</button>
+        </div>
       </div>
     </div>
   )

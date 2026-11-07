@@ -242,6 +242,11 @@ def _e_progetto(f: Path) -> dict | None:
             "resolution": f"{s.get('width')}x{s.get('height')}" if s.get("width") else None}
 
 
+# le cartelle che vedit mette accanto a un progetto: dentro non ci sono progetti
+# (le istantanee di .versioni lo sembrerebbero)
+_ACCANTO = ("_gen", "_voice", "_covers", "_web", "_sottotitoli", ".versioni")
+
+
 def video(cartella: str | Path) -> list[dict]:
     """I progetti dentro la raccolta, dal piu' recente."""
     c = Path(cartella)
@@ -251,8 +256,8 @@ def video(cartella: str | Path) -> list[dict]:
         livello = len(r.relative_to(c).parts)
         # le cartelle che vedit crea accanto ai progetti non contengono progetti
         dirs[:] = [d for d in dirs if livello + 1 < PROFONDITA and not d.startswith(".")
-                   and d != CARTELLA_RIF and not d.endswith("_gen")
-                   and d not in ("media", "web", "proxy", "render")]
+                   and d != CARTELLA_RIF and not d.endswith(_ACCANTO)
+                   and d not in ("media", "web", "proxy", "render", "allegati")]
         for n in files:
             if not n.lower().endswith(".json"):
                 continue
@@ -274,6 +279,7 @@ def info(cartella: str) -> dict:
     d = _dati(c)
     return {"path": str(c), "name": d.get("name") or c.name,
             "description": d.get("description", ""),
+            "formato": d.get("formato") if isinstance(d.get("formato"), dict) else None,
             "memoria": memoria.leggi(file_memoria(c)), "riferimenti": riferimenti(c),
             "video": video(c)}
 
@@ -312,9 +318,28 @@ def percorso_video(cartella: str, nome: str) -> str:
     c = trova(cartella)
     n = nome_file(nome)
     d, i = c / n, 2
-    while (d / f"{n}.json").exists():
+    while d.exists():      # anche una cartella rimasta con i media di un video eliminato
         d, i = c / f"{n} {i}", i + 1
     return str(d / f"{d.name}.json")
+
+
+def nome_nuovo(cartella: str) -> str:
+    """Il nome di un video nuovo senza titolo: Video 1, Video 2... il primo libero."""
+    c = trova(cartella)
+    usati = {v["name"].lower() for v in video(c)}
+    i = len(usati) + 1
+    while f"video {i}" in usati or (c / f"Video {i}").exists():
+        i += 1
+    return f"Video {i}"
+
+
+def ricorda_formato(cartella: str, preset: str, size: int | None) -> None:
+    """Il formato dell'ultimo video creato: il prossimo parte da li'."""
+    c = trova(cartella)
+    with _lock:
+        d = _dati(c)
+        d["formato"] = {"preset": preset, "size": size}
+        _scrivi_dati(c, d)
 
 
 def dentro(cartella: Path, path: str) -> str:

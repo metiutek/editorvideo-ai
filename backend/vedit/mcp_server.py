@@ -33,7 +33,7 @@ from . import analyze, captions, cleanup, colormatch, ops
 from .allinea import METODO as METODO_VOCE
 from . import domande as domande_mod
 from . import effects as fx
-from . import apprendi, blocchi, estensioni, ffmpeg, generativo, hw, memoria, moves, particelle, piano, raccolte, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
+from . import apprendi, blocchi, estensioni, ffmpeg, generativo, hw, memoria, moves, particelle, piano, progetti, raccolte, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
 from .store import EditError, Store, rapporto
 
@@ -229,6 +229,9 @@ remember(scope="collection"). Un video nuovo della raccolta:
 project_create(collection=..., name=...) lo mette nella cartella giusta.
 collection_list le elenca, collection_create ne crea una, collection_update
 cambia nome, descrizione e riferimenti.
+project_manage duplica, rinomina, sposta (anche dentro una raccolta) ed
+elimina i progetti; eliminare li mette nel cestino di vedit, e solo se
+l'utente lo chiede.
 
 SKILL DI MONTAGGIO. project_create e project_open restituiscono anche "skill":
 i modi di montare che l'utente ha aggiunto a vedit (nome e quando usarli).
@@ -514,6 +517,8 @@ def project_create(path: str | None = None, name: str = "untitled", preset: str 
     """
     if collection:
         c = raccolte.trova(collection)
+        if name in ("", "untitled"):
+            name = raccolte.nome_nuovo(str(c))      # Video 1, Video 2...
         path = raccolte.dentro(c, path) if path else raccolte.percorso_video(str(c), name)
     elif not path:
         raise EditError("give path (where to save the project .json) or collection")
@@ -2997,6 +3002,63 @@ async def collection_update(collection: str | None = None, name: str | None = No
 
 
 @_strumento()
+def project_manage(action: str, project: str | None = None, name: str | None = None,
+                   collection: str | None = None, folder: str | None = None,
+                   id: str | None = None) -> dict | list[dict]:
+    """I file dei progetti: duplicare, rinominare, spostare, eliminare, ripristinare.
+
+    action:
+    - duplicate: una copia (name opzionale, "<nome> copy"; collection= la mette in
+      una raccolta). Stessi media, conversazione nuova. Non diventa quella corrente.
+    - rename: name= nuovo nome; anche i file e la cartella del video se si puo'.
+    - move: in una raccolta (collection=) o in una cartella (folder=). I media di
+      una cartella tutta del video lo seguono, gli altri restano dove sono.
+    - delete: nel cestino di vedit, da cui si ripristina. Solo se l'utente lo chiede.
+    - trash: i progetti eliminati, con l'id per restore.
+    - restore: id= rimette il progetto dov'era.
+    Senza project agisce sul progetto corrente.
+    """
+    if action == "trash":
+        return progetti.cestino()
+    if action == "restore":
+        if not id:
+            raise EditError("restore wants id= (from action=\"trash\")")
+        return progetti.ripristina(id)
+    if action not in ("duplicate", "rename", "move", "delete"):
+        raise EditError(f"unknown action {action!r}: duplicate, rename, move, delete, trash, restore")
+    path = str(Path(project).resolve()) if project else _percorso_corrente()
+    if not path:
+        raise EditError("no project: give project= or open one")
+    aperto = _stores.get(path)
+    api = sys.modules.get("vedit.api")
+    if aperto is None and api is not None and api.S.store is not None and api.S.store.path == path:
+        aperto = api.S.store
+    if action == "duplicate":
+        return progetti.duplica(path, name, collection)
+    if action == "delete":
+        _stores.pop(path, None)
+        if _current[0] == path:
+            _current[0] = None
+        if api is not None and api.S.store is not None and api.S.store.path == path:
+            api.stacca()
+        out = progetti.elimina(path)
+        return {k: out[k] for k in ("id", "name", "restano")}
+    if action == "rename":
+        if not name:
+            raise EditError("rename wants name=")
+        out = progetti.rinomina(path, name, store=aperto)
+    else:
+        out = progetti.sposta(path, collection, folder, store=aperto)
+    if out["path"] != path and path in _stores:
+        _stores[out["path"]] = _stores.pop(path)
+        if _current[0] == path:
+            _current[0] = out["path"]
+    if api is not None and aperto is not None and api.S.store is aperto:
+        api.S.publish({"type": "project"})
+    return {k: v for k, v in out.items() if k != "da"}
+
+
+@_strumento()
 async def clear_cache(kind: str | None = None) -> dict:
     """Svuota la cache di proxy/miniature/stabilizzazione."""
     freed = await _off(proxy.clear, kind)
@@ -3011,7 +3073,7 @@ _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "pro
                 "preview_grid", "scope_image", "undo", "redo", "restore_snapshot",
                 "remember", "forget", "memory", "voice_engines", "publish_video",
                 "collection_list", "collection_create", "collection_info", "collection_update",
-                "social_accounts", "web_search", "web_read", "web_download", "speech_times",
+                "project_manage", "social_accounts", "web_search", "web_read", "web_download", "speech_times",
                 "list_skills", "use_skill", "create_skill", "install_skill", "delete_skill",
                 "make_covers", "propose_plan"}
 

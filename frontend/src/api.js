@@ -33,6 +33,15 @@ export const api = {
   project: () => req('/api/project'),
   recenti: () => req('/api/recenti'),
 
+  // i file dei progetti (progetti.py): duplicare, rinominare, spostare, eliminare nel cestino
+  chiudiProgetto: () => req('/api/project/close', { method: 'POST' }),
+  duplicaProgetto: (path, nome, raccolta) => req('/api/progetto/duplica', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, nome, raccolta }) }),
+  rinominaProgetto: (path, nome) => req('/api/progetto/rinomina', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, nome }) }),
+  spostaProgetto: (path, dove) => req('/api/progetto/sposta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, ...dove }) }),
+  eliminaProgetto: (path) => req(`/api/progetto?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  cestino: () => req('/api/progetti/cestino'),
+  ripristina: (id) => req('/api/progetti/cestino/ripristina', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }),
+  svuotaCestino: (id) => req(`/api/progetti/cestino${id ? `?id=${encodeURIComponent(id)}` : ''}`, { method: 'DELETE' }),
   // raccolte: tanti video con memoria e riferimenti comuni (raccolte.py)
   raccolte: () => req('/api/raccolte'),
   creaRaccolta: (nome, cartella, descrizione) => req('/api/raccolte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome, cartella, descrizione }) }),

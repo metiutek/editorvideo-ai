@@ -24,6 +24,10 @@ const paths = {
   memoria: <path d="M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1z" />,
   // raccolta: una pila di riquadri, tanti video sotto un nome
   raccolta: <><rect x="3" y="9" width="18" height="11" rx="2" /><path d="M6 6h12M9 3h6" /></>,
+  // altre azioni: tre puntini
+  altro: <><circle cx="5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="19" cy="12" r="1.3" /></>,
+  // ripristina dal cestino
+  ripristina: <><path d="M4 12a8 8 0 1 0 2.3-5.6" /><path d="M4 4v4h4" /></>,
   // voce generata: microfono
   voce: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
   // pubblicare: freccia che esce verso l'alto da una nuvola

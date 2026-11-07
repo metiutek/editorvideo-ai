@@ -138,6 +138,27 @@ class EditError(ValueError):
     """Errore di editing con messaggio comprensibile all'utente."""
 
 
+def porta_percorsi(dati: Any, old: str, new: str) -> tuple[Any, int]:
+    """Copia di ``dati`` con i percorsi sotto ``old`` portati sotto ``new``, e quanti sono."""
+    vecchio, nuovo = str(Path(old)), str(Path(new))
+    cambiati = 0
+
+    def porta(v: Any) -> Any:
+        nonlocal cambiati
+        if isinstance(v, str):
+            if v == vecchio or v.startswith((vecchio + "\\", vecchio + "/")):
+                cambiati += 1
+                return nuovo + v[len(vecchio):]
+            return v
+        if isinstance(v, list):
+            return [porta(x) for x in v]
+        if isinstance(v, dict):
+            return {k: porta(x) for k, x in v.items()}
+        return v
+
+    return porta(dati), cambiati
+
+
 class Store:
     def __init__(self, project: Project, path: str | None = None, autosave: bool = True):
         self.project = project
@@ -1901,6 +1922,29 @@ class Store:
             raise EditError(str(exc)) from exc
         self.add_covers([f["path"] for f in fatte], choose=choose)
         return fatte
+
+    def rename(self, name: str) -> str:
+        """Il nome del progetto, quello che si vede nell'editor e negli elenchi."""
+        name = " ".join((name or "").split())
+        if not name:
+            raise EditError("the project name cannot be empty")
+        if len(name) > 200:
+            raise EditError("the project name is at most 200 characters")
+        self._touch()
+        self.project.name = name
+        self._done()
+        return name
+
+    def relocate(self, old: str, new: str) -> int:
+        """Porta i percorsi che stanno sotto ``old`` sotto ``new``: serve quando
+        si sposta o si rinomina la cartella del progetto, con i media dentro.
+        Restituisce quanti percorsi sono cambiati."""
+        dati, cambiati = porta_percorsi(self.project.to_dict(), old, new)
+        if cambiati:
+            self._touch()
+            self.project = Project.from_obj(dati)
+            self._done()
+        return cambiati
 
     def set_settings(self, **values: Any) -> Settings:
         allowed = set(vars(Settings()))

@@ -817,10 +817,18 @@ video (un progetto ciascuno), piu' una **memoria della raccolta** e delle **imma
 riferimento** (logo, miniature, palette, persone, grafiche, ognuna con una nota). Ogni video
 dentro porta quel contesto all'assistente e all'agente MCP — descrizione, memoria e il foglio
 dei riferimenti come immagine — cosi' aspetto, tono, persone e pubblico non si ripetono a ogni
-video. Le raccolte si creano e si aprono dalla schermata iniziale; dalla testata di un suo
-video il nome della raccolta la riapre. Per gli agenti: `collection_create`, `collection_list`,
+video. Aprire una raccolta apre il suo spazio di lavoro, come un progetto di Claude: a sinistra i
+video e **new video**, che porta subito nell'editor (senza chiedere il titolo: si rinomina
+dopo), a destra il contesto comune. Le raccolte si creano e si aprono dalla schermata
+iniziale; dalla testata di un suo video il nome della raccolta riporta li'. Per gli agenti: `collection_create`, `collection_list`,
 `collection_info`, `collection_update`, `project_create(collection=...)` e
 `remember(scope="collection")`.
+
+**Gestire i progetti** — ogni progetto ha un menu `…` (schermata iniziale, spazio della
+raccolta, testata): rinomina (file e cartella seguono il nome), duplica (stessi media, chat
+nuova), sposta in una raccolta o in una cartella, elimina. Eliminare porta il progetto nel
+cestino di vedit, da cui si ripristina per 30 giorni; i media non si toccano mai. Per gli
+agenti: `project_manage`.
 
 ---
 
@@ -857,6 +865,7 @@ backend/vedit/
   social.py      pubblicare: YouTube (OAuth, caricamento a riprese), casella TikTok
   memoria.py     memoria fra i progetti (~/.vedit/MEMORIA.md)
   raccolte.py    raccolte: tanti video con memoria e immagini di riferimento comuni
+  progetti.py    file dei progetti: duplicare, rinominare, spostare, eliminare nel cestino
   allinea.py     quando la voce dice cosa, in secondi di timeline (speech_times)
   conversazioni.py  la chat di ogni progetto, salvata accanto
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito

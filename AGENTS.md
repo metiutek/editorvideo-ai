@@ -120,6 +120,7 @@ backend/vedit/
   social.py      pubblicare su YouTube e TikTok
   memoria.py     memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
   raccolte.py    raccolte: cartella di video con memoria e riferimenti comuni
+  progetti.py    file dei progetti: duplicare, rinominare, spostare, cestino
   allinea.py     tempi della voce in timeline (speech_times) e metodo dei video a voce
   conversazioni.py  chat di ogni progetto, salvata in <progetto>.chat.json
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito
@@ -438,8 +439,22 @@ allineato. `~/.vedit/raccolte.json` ricorda solo quali cartelle sono raccolte. I
 col foglio dei riferimenti come immagine per i modelli via API, solo percorsi per Claude
 Code). `remember`/`forget`/`memory` prendono `scope="collection"`. Non chiamarle "canali" nei
 testi: servono anche per i video di famiglia. UI: `Raccolte.jsx` (schermata iniziale,
-finestra della raccolta, pulsante in testata), API `/api/raccolte`, `/api/raccolta*`. Test in
+`SpazioRaccolta`: la raccolta a pagina intera, video a sinistra e contesto a destra, "new
+video" crea `Video N` senza chiedere il titolo e ricorda il formato in `raccolta.json`;
+pulsante in testata), API `/api/raccolte`, `/api/raccolta*`. Test in
 `tests/test_raccolte.py`.
+
+**File dei progetti.** `progetti.py`: duplicare, rinominare, spostare, eliminare. Un progetto
+viaggia coi compagni dello stesso nome (`.chat.json`, `.piano.json`, `.versioni/`); le
+cartelle di media restano dove sono (il documento le nomina per percorso assoluto, una copia
+le condivide) tranne quando il video ha una cartella tutta sua (`<x>/<nome>/<nome>.json`):
+allora si sposta la cartella intera e `Store.relocate` porta i percorsi del documento (e
+delle istantanee) sotto quella nuova. Nome e percorsi passano da `Store` (`rename`,
+`relocate`); se il progetto e' quello aperto si usa lo *stesso* Store, che cambia `path` e
+continua a salvare li'. Eliminare = `~/.vedit/cestino/<id>/`, ripristinabile, svuotato dopo
+30 giorni; il progetto aperto si chiude prima (`api.stacca`). MCP `project_manage`, API
+`/api/progetto/*`, `/api/progetti/cestino*`, `/api/project/close`; UI `Progetti.jsx`
+(`MenuProgetto`, `Cestino`). Test in `tests/test_progetti.py`.
 
 ### Stile da un video di riferimento
 

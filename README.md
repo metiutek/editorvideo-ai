@@ -748,10 +748,17 @@ TikTok channel, family videos, a client, a series, a course. It holds all its vi
 project each), plus a **collection memory** and **reference images** (logo, thumbnails,
 palette, people, graphics, each with a note). Every video inside brings that context to the
 assistant and to the MCP agent — description, memory and the reference sheet as an image — so
-the look, tone, people and audience don't have to be repeated video after video. Create and
-open collections from the start screen; the collection badge in the top bar opens it from any
-of its videos. For agents: `collection_create`, `collection_list`, `collection_info`,
+the look, tone, people and audience don't have to be repeated video after video. Opening a
+collection opens its workspace, like a Claude project: its videos on the left and
+**new video** that drops you straight into the editor (no title asked: rename it later), the
+shared context on the right. Create and open collections from the start screen; the
+collection badge in the top bar brings you back from any of its videos. For agents: `collection_create`, `collection_list`, `collection_info`,
 `collection_update`, `project_create(collection=...)` and `remember(scope="collection")`.
+
+**Managing projects** — every project has a `…` menu (start screen, collection workspace,
+top bar): rename (the file and its folder follow), duplicate (same media, fresh chat), move
+into a collection or a folder, delete. Deleting moves the project to the vedit trash, where it
+can be restored for 30 days; media files are never touched. For agents: `project_manage`.
 
 ---
 
@@ -788,6 +795,7 @@ backend/vedit/
   social.py      publishing: YouTube (OAuth, resumable upload), TikTok inbox
   memoria.py     memory across projects (~/.vedit/MEMORIA.md)
   raccolte.py    collections: many videos sharing a memory and reference images
+  progetti.py    project files: duplicate, rename, move, delete to the trash
   allinea.py     when the voice says what, in timeline seconds (speech_times)
   conversazioni.py  the chat of each project, saved next to it
   web.py         web search, page reading, media download from any site

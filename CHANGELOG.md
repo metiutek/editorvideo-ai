@@ -5,6 +5,17 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Gestire i progetti** (`progetti.py`): rinominare (anche file e cartella del video),
+  duplicare (stessi media, conversazione nuova), spostare in una raccolta o in una cartella,
+  eliminare nel cestino di vedit e ripristinare (30 giorni; i media non si toccano). Menu `…`
+  su ogni progetto nella schermata iniziale, nella raccolta e in testata, che ora mostra il
+  nome del progetto; cestino dalla schermata iniziale; "close project". Strumento MCP
+  `project_manage`.
+- **La raccolta come spazio di lavoro**: aprirla non e' piu' una finestra ma una pagina,
+  come un progetto di Claude: video a sinistra, descrizione, riferimenti e memoria a destra.
+  **new video** non chiede il titolo: crea `Video N` nel formato scelto (ricordato per la
+  raccolta) e apre subito l'editor; dalla testata il nome della raccolta riporta li'.
+  `project_create(collection=...)` senza nome fa lo stesso.
 - **Raccolte** (`raccolte.py`): una cartella per qualunque gruppo di video che stanno insieme
   (un canale YouTube o TikTok, i video di famiglia, un cliente, una serie), con una memoria
   propria (`MEMORIA.md` della raccolta) e immagini di riferimento con una nota ciascuna (logo,

@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import (blocchi, captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy, raccolte,
+from . import (blocchi, captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, progetti, proxy, raccolte,
                render, review, social, stili, tts, web)
 from . import piano as piano_mod
 from . import probe as probe_mod
@@ -186,10 +186,13 @@ def recenti() -> list[dict]:
 
 def ricorda_recente(store: Store) -> None:
     """Segna il progetto fra i recenti: e' quello che la schermata iniziale propone."""
-    if not store.path:
-        return
-    voci = [v for v in recenti() if v["path"] != store.path]
-    voci.insert(0, {"path": store.path, "name": store.project.name, "quando": time.time()})
+    if store.path:
+        _recenti_aggiungi(store.path, store.project.name)
+
+
+def _recenti_aggiungi(path: str, nome: str) -> None:
+    voci = [v for v in recenti() if v["path"] != path]
+    voci.insert(0, {"path": path, "name": nome, "quando": time.time()})
     try:
         _file_recenti().write_text(json.dumps(voci[:RECENTI_MAX], ensure_ascii=False, indent=1),
                                    encoding="utf-8")
@@ -427,6 +430,135 @@ def project_open(body: OpenBody) -> dict:
 
 
 # --------------------------------------------------------------------------
+# i file dei progetti: duplicare, rinominare, spostare, eliminare (progetti.py)
+# --------------------------------------------------------------------------
+
+
+class ProgettoBody(BaseModel):
+    path: str
+    nome: str | None = None
+    raccolta: str | None = None
+    cartella: str | None = None
+
+
+class CestinoBody(BaseModel):
+    id: str
+
+
+def _recenti_cambia(vecchio: str, nuovo: str | None, nome: str | None = None) -> None:
+    """Il progetto spostato resta fra i recenti col percorso nuovo; quello eliminato esce."""
+    try:   # il file com'e': recenti() salterebbe il percorso vecchio, che non c'e' piu'
+        lette = json.loads(_file_recenti().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    voci = []
+    for v in lette if isinstance(lette, list) else []:
+        if not isinstance(v, dict):
+            continue
+        if Path(str(v.get("path", ""))) == Path(vecchio):
+            if nuovo is None:
+                continue
+            v = {**v, "path": nuovo, "name": nome or v.get("name")}
+        voci.append(v)
+    try:
+        _file_recenti().write_text(json.dumps(voci, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _aperto_e(path: str) -> Store | None:
+    """Lo Store aperto nell'editor, se e' quello del file."""
+    st = S.store
+    if st is not None and st.path and Path(st.path) == Path(path).resolve():
+        return st
+    return None
+
+
+def stacca() -> None:
+    """Nessun progetto aperto: l'editor torna alla schermata iniziale."""
+    if S.store is not None:
+        S.store.on_change = None
+    S.store = None
+    carica_chat()
+    S.publish({"type": "project"})
+
+
+def _gestito(fn, *args, **kw) -> dict:
+    try:
+        with S.lock:
+            out = fn(*args, **kw)
+    except (ValueError, OSError, EditError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if c := raccolte.di_progetto(out.get("path")):
+        raccolte.usa(c)
+    if S.store is not None and out.get("da") and Path(S.store.path or "") == Path(out["path"]):
+        S.publish({"type": "project"})      # e' il progetto aperto: nome o percorso nuovi
+    return {**out, "recenti": recenti(), "raccolte": raccolte.elenco(),
+            "aperto": S.store.path if S.store else None}
+
+
+@app.post("/api/project/close")
+def project_close() -> dict:
+    stacca()
+    return {**S.state_of_project(), "recenti": recenti(), "raccolte": raccolte.elenco()}
+
+
+@app.post("/api/progetto/duplica")
+def progetto_duplica(body: ProgettoBody) -> dict:
+    """Una copia che si monta per conto suo; i media sono gli stessi file."""
+    out = _gestito(progetti.duplica, body.path, body.nome, body.raccolta)
+    _recenti_aggiungi(out["path"], out["name"])
+    return {**out, "recenti": recenti()}
+
+
+@app.post("/api/progetto/rinomina")
+def progetto_rinomina(body: ProgettoBody) -> dict:
+    if not body.nome:
+        raise HTTPException(400, "give the new name")
+    out = _gestito(progetti.rinomina, body.path, body.nome, store=_aperto_e(body.path))
+    _recenti_cambia(body.path, out["path"], out["name"])
+    return {**out, "recenti": recenti()}
+
+
+@app.post("/api/progetto/sposta")
+def progetto_sposta(body: ProgettoBody) -> dict:
+    """In una raccolta (nella sua cartella per video) o in una cartella."""
+    out = _gestito(progetti.sposta, body.path, body.raccolta, body.cartella,
+                   store=_aperto_e(body.path))
+    _recenti_cambia(body.path, out["path"])
+    return {**out, "recenti": recenti()}
+
+
+@app.delete("/api/progetto")
+def progetto_elimina(path: str) -> dict:
+    """Nel cestino di vedit: si ripristina. Se e' quello aperto, si chiude."""
+    with S.lock:
+        if _aperto_e(path) is not None:
+            stacca()
+    out = _gestito(progetti.elimina, path)
+    _recenti_cambia(path, None)
+    return {**out, "recenti": recenti()}
+
+
+@app.get("/api/progetti/cestino")
+def progetti_cestino() -> list[dict]:
+    return progetti.cestino()
+
+
+@app.post("/api/progetti/cestino/ripristina")
+def progetti_ripristina(body: CestinoBody) -> dict:
+    out = _gestito(progetti.ripristina, body.id)
+    _recenti_aggiungi(out["path"], out["name"])
+    return {**out, "recenti": recenti()}
+
+
+@app.delete("/api/progetti/cestino")
+def progetti_svuota(id: str | None = None) -> dict:
+    """Cancella per sempre: uno, o tutto il cestino senza id."""
+    return _gestito(progetti.svuota, id)
+
+
+# --------------------------------------------------------------------------
 # raccolte: tanti video con memoria e riferimenti comuni (raccolte.py)
 # --------------------------------------------------------------------------
 
@@ -462,7 +594,7 @@ class RaccoltaNotaBody(BaseModel):
 
 class RaccoltaVideoBody(BaseModel):
     path: str
-    nome: str = "new video"
+    nome: str | None = None      # senza: Video 1, Video 2... si rinomina dopo
     preset: str = "1080p"
     size: int | None = None
     fps: float | None = None
@@ -548,13 +680,16 @@ def raccolta_immagine(path: str, file: str) -> FileResponse:
 
 @app.post("/api/raccolta/video")
 def raccolta_video(body: RaccoltaVideoBody) -> dict:
-    """Un video nuovo dentro la raccolta, nella sua cartella."""
-    dove = _raccolta(raccolte.percorso_video, body.path, body.nome)
+    """Un video nuovo dentro la raccolta, nella sua cartella. Senza titolo:
+    si entra subito a montare, il nome si cambia quando lo si sa."""
+    nome = (body.nome or "").strip() or _raccolta(raccolte.nome_nuovo, body.path)
+    dove = _raccolta(raccolte.percorso_video, body.path, nome)
     try:
-        attach(Store.create(name=body.nome, preset=body.preset, path=dove,
+        attach(Store.create(name=nome, preset=body.preset, path=dove,
                             size=body.size, fps=body.fps))
     except (EditError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
+    _raccolta(raccolte.ricorda_formato, body.path, body.preset, body.size)
     return _aperto()
 
 
