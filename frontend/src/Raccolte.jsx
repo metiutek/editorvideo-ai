@@ -247,6 +247,9 @@ export function SpazioRaccolta({ path, raccolte, progettoAperto, onClose, onApri
               placeholder="What these videos are, who they are for, their tone" />
           </section>
 
+          <Documenti path={path} documenti={info.documenti || []} setError={setError}
+            applica={(c) => applica(c, false)} />
+
           <section>
             <h4>references <span className="hint">logo, thumbnails, palette, people</span></h4>
             <div className={`ch-rif ${sopra ? 'sopra' : ''}`}
@@ -270,6 +273,9 @@ export function SpazioRaccolta({ path, raccolte, progettoAperto, onClose, onApri
             <input ref={file} type="file" accept="image/*" multiple hidden
               onChange={(e) => { if (e.target.files?.length) carica(e.target.files); e.target.value = '' }} />
           </section>
+
+          <SkillRaccolta path={path} skill={info.skill || []} setError={setError}
+            applica={(c) => applica(c, false)} />
 
           <section>
             <h4>memory <span className="hint">audience, tone, format, people, mistakes to avoid</span></h4>
@@ -306,5 +312,167 @@ function Riferimento({ rif, src, onNota, onTogli }) {
         onBlur={() => nota !== rif.nota && onNota(nota)}
         onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
     </div>
+  )
+}
+
+// raccolte.DOCUMENTI: testi e pdf
+const DOCUMENTO = /\.(md|txt|csv|tsv|json|srt|vtt|html?|xml|ya?ml|rtf|pdf)$/i
+const peso = (b) => (b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`)
+
+/**
+ * File di informazioni della raccolta (raccolte.documenti): brief, copioni,
+ * dati, pdf. I testi brevi arrivano interi all'assistente in ogni video, gli
+ * altri li legge quando servono. Un testo si apre e si corregge qui.
+ */
+function Documenti({ path, documenti, applica, setError }) {
+  const [sopra, setSopra] = useState(false)
+  const [sfoglia, setSfoglia] = useState(false)
+  const [aperto, setAperto] = useState(null)      // {file, nuovo}
+  const input = useRef(null)
+  const carica = (files) => {
+    const ok = [...files].filter((f) => DOCUMENTO.test(f.name))
+    if (!ok.length) { setError('information files are text (md, txt, csv, json, srt…) or pdf'); return }
+    api.caricaDocumenti(path, ok).then(applica).catch((e) => setError(e.message))
+  }
+  return (
+    <section>
+      <h4>files <span className="hint">briefs, scripts, notes, data, pdf</span></h4>
+      <div className={`sp-file ${sopra ? 'sopra' : ''}`}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation(); setSopra(true) } }}
+        onDragLeave={() => setSopra(false)}
+        onDrop={(e) => {
+          e.preventDefault(); e.stopPropagation(); setSopra(false)
+          if (e.dataTransfer.files?.length) carica(e.dataTransfer.files)
+        }}>
+        {documenti.map((d) => (
+          <div key={d.file} className="sp-riga">
+            <Icon name={d.testo ? 'testo' : 'graffetta'} size={14} />
+            {d.testo
+              ? <button className="link nome" title={`Open ${d.path}`} onClick={() => setAperto({ file: d.file })}>{d.file}</button>
+              : <span className="nome" title={d.path}>{d.file}</span>}
+            <span className="hint">{peso(d.size)}</span>
+            <button className="icon sm danger" title="Remove the file"
+              onClick={() => api.togliDocumento(path, d.file).then(applica).catch((e) => setError(e.message))}>
+              <Icon name="cestino" size={13} /></button>
+          </div>
+        ))}
+        {!documenti.length && <div className="hint">drop files here</div>}
+        <div className="sp-azioni">
+          <button onClick={() => setAperto({ file: '', nuovo: true })}><Icon name="piu" size={14} />new note</button>
+          <button className="ghost" onClick={() => input.current?.click()}>upload</button>
+          <button className="ghost" onClick={() => setSfoglia(true)}><Icon name="cartella" size={14} />from disk…</button>
+        </div>
+      </div>
+      <input ref={input} type="file" multiple hidden accept=".md,.txt,.csv,.tsv,.json,.srt,.vtt,.html,.htm,.xml,.yaml,.yml,.rtf,.pdf"
+        onChange={(e) => { if (e.target.files?.length) carica(e.target.files); e.target.value = '' }} />
+      {sfoglia && (
+        <FileBrowser title="Information files" memoria="raccolta-doc" onClose={() => setSfoglia(false)}
+          filter={(n) => DOCUMENTO.test(n)}
+          onPick={(paths) => api.aggiungiDocumenti(path, paths).then(applica).catch((e) => setError(e.message))} />
+      )}
+      {aperto && (
+        <EditorDocumento path={path} {...aperto} onClose={() => setAperto(null)} applica={applica} setError={setError} />
+      )}
+    </section>
+  )
+}
+
+function EditorDocumento({ path, file, nuovo, onClose, applica, setError }) {
+  const [nome, setNome] = useState(file)
+  const [testo, setTesto] = useState(nuovo ? '' : null)
+  const [letto, setLetto] = useState(nuovo ? '' : null)
+  useEffect(() => {
+    if (nuovo) return
+    api.documento(path, file).then((r) => { setTesto(r.testo ?? ''); setLetto(r.testo ?? '') })
+      .catch((e) => { setError(e.message); onClose() })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const salva = () => api.scriviDocumento(path, nome.trim(), testo)
+    .then((c) => { applica(c); onClose() }).catch((e) => setError(e.message))
+  return (
+    <Modal title={nuovo ? 'New note' : file} onClose={onClose}
+      actions={<>
+        <button onClick={onClose}>cancel</button>
+        <button className="primary" disabled={testo === null || !nome.trim() || (!nuovo && testo === letto)}
+          onClick={salva}>save</button>
+      </>}>
+      {nuovo && (
+        <div className="row"><label>name</label>
+          <input value={nome} placeholder="brief.md" onChange={(e) => setNome(e.target.value)} /><span /></div>
+      )}
+      <textarea className="memoria-testo" style={{ minHeight: 280 }} value={testo ?? 'loading…'}
+        disabled={testo === null} spellCheck={false} onChange={(e) => setTesto(e.target.value)}
+        placeholder={'## brief\n- who the videos are for\n- what to say, what to avoid'} />
+      <div className="hint">The assistant reads it in every video of the collection.</div>
+    </Modal>
+  )
+}
+
+/**
+ * Skill della raccolta (<raccolta>/skills): procedure che valgono solo per i
+ * suoi video. Si scrivono qui, si caricano (.md, .zip) o arrivano da un link.
+ */
+function SkillRaccolta({ path, skill, applica, setError }) {
+  const [nuova, setNuova] = useState(null)
+  const [sorgente, setSorgente] = useState('')
+  const [occupato, setOccupato] = useState(false)
+  const input = useRef(null)
+  const fai = async (fn) => {
+    setOccupato(true)
+    try { applica(await fn()); return true } catch (e) { setError(e.message); return false } finally { setOccupato(false) }
+  }
+  return (
+    <section>
+      <h4>skills <span className="hint">ways of editing only for these videos</span></h4>
+      <div className="sp-file">
+        {skill.map((k) => (
+          <div key={k.name} className="sp-riga" title={k.description}>
+            <Icon name="libreria" size={14} />
+            <span className="nome">{k.name}</span>
+            <span className="hint">{k.description}</span>
+            <button className="icon sm danger" title="Remove the skill" disabled={occupato}
+              onClick={() => fai(() => api.togliSkillRaccolta(path, k.name))}>
+              <Icon name="cestino" size={13} /></button>
+          </div>
+        ))}
+        {!skill.length && !nuova && <div className="hint">The assistant follows a skill when a request matches it.</div>}
+        {nuova && (
+          <div className="sp-nuova-skill">
+            <input value={nuova.name} placeholder="name, e.g. intro-with-logo"
+              onChange={(e) => setNuova({ ...nuova, name: e.target.value })} />
+            <input value={nuova.description} placeholder="when to use it"
+              onChange={(e) => setNuova({ ...nuova, description: e.target.value })} />
+            <textarea className="memoria-testo" value={nuova.instructions} spellCheck={false}
+              placeholder={'- open with the logo for 2 seconds\n- yellow captions at the bottom'}
+              onChange={(e) => setNuova({ ...nuova, instructions: e.target.value })} />
+            <div className="sp-azioni">
+              <button onClick={() => setNuova(null)}>cancel</button>
+              <button className="primary" disabled={occupato || !nuova.name.trim() || !nuova.description.trim() || !nuova.instructions.trim()}
+                onClick={() => fai(() => api.creaSkillRaccolta(path, nuova)).then((ok) => ok && setNuova(null))}>save skill</button>
+            </div>
+          </div>
+        )}
+        {!nuova && (
+          <>
+            <div className="sp-azioni">
+              <button onClick={() => setNuova({ name: '', description: '', instructions: '' })}>
+                <Icon name="piu" size={14} />write one</button>
+              <button className="ghost" disabled={occupato} onClick={() => input.current?.click()}>upload .md / .zip</button>
+            </div>
+            <div className="sp-azioni">
+              <input value={sorgente} disabled={occupato} placeholder="or a GitHub link, .zip, .md"
+                onChange={(e) => setSorgente(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sorgente.trim()
+                  && fai(() => api.installaSkillRaccolta(path, sorgente.trim())).then((ok) => ok && setSorgente(''))} />
+              <button className="ghost" disabled={occupato || !sorgente.trim()}
+                onClick={() => fai(() => api.installaSkillRaccolta(path, sorgente.trim())).then((ok) => ok && setSorgente(''))}>
+                {occupato ? 'adding…' : 'add'}</button>
+            </div>
+          </>
+        )}
+      </div>
+      <input ref={input} type="file" hidden accept=".md,.zip,.markdown,.txt"
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) fai(() => api.caricaSkillRaccolta(path, f)) }} />
+    </section>
   )
 }

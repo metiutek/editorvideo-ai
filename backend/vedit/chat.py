@@ -61,7 +61,14 @@ cliente, una serie: una cartella di video con qualcosa in comune) ti arriva
 anche il suo contesto: descrizione, memoria della raccolta, immagini di
 riferimento come logo, miniature, palette, persone. Rispettalo in ogni scelta di
 grafica, colore, tono e formato. Cio' che vale per la raccolta e non per tutti i
-video dell'utente va in remember con scope "collection".
+video dell'utente va in remember con scope "collection". La raccolta puo' avere
+file di informazioni (brief, copioni, dati: quelli lunghi li leggi con
+collection_file) e skill sue, che usi come le altre.
+
+Memoria del progetto: questo video ha il suo quaderno, remember con scope
+"project". Annotaci, breve e senza chiedere, cio' che serve a chi riprende il
+lavoro: cosa ha chiesto l'utente, scelte fatte e perche', cosa resta da fare,
+dove sta il materiale. Ti arriva come "Memoria di questo progetto".
 
 Web: web_search cerca in tutto il web (pagine, immagini, video, notizie),
 web_read legge una pagina, web_download scarica immagini e video da qualunque
@@ -371,11 +378,18 @@ def build_tools() -> list[dict]:
               "Salva nella memoria una preferenza o scelta dell'utente, una riga breve. "
               "scope 'all' (predefinito): vale in tutti i progetti (formato, stile, voce, cose "
               "da evitare). scope 'collection': vale solo per i video della raccolta di questo "
-              "progetto (pubblico, tono, grafica, nomi ricorrenti).",
-              {"note": _STR, "section": _STR, "scope": {"type": "string", "enum": ["all", "collection"]}},
+              "progetto (pubblico, tono, grafica, nomi ricorrenti). scope 'project': il quaderno "
+              "di questo video soltanto (richieste, scelte fatte, cosa resta da fare).",
+              {"note": _STR, "section": _STR,
+               "scope": {"type": "string", "enum": ["all", "collection", "project"]}},
               ["note"]),
-        _tool("forget", "Toglie dalla memoria (scope 'all' o 'collection') le voci che contengono match.",
-              {"match": _STR, "scope": {"type": "string", "enum": ["all", "collection"]}}, ["match"]),
+        _tool("forget", "Toglie dalla memoria (scope 'all', 'collection' o 'project') le voci che contengono match.",
+              {"match": _STR, "scope": {"type": "string", "enum": ["all", "collection", "project"]}},
+              ["match"]),
+        _tool("collection_file",
+              "Legge un file di informazioni della raccolta di questo video (brief, copione, "
+              "dati): il contesto riporta per intero solo i testi brevi.",
+              {"file": _STR}, ["file"]),
         _tool("learn_style",
               "Impara uno stile di montaggio da un video di riferimento (file, link "
               "YouTube/TikTok/Instagram o media importato): misura ritmo, transizioni, "
@@ -390,9 +404,11 @@ def build_tools() -> list[dict]:
               "Salva una skill di montaggio dell'utente (~/.vedit/skills): un modo di "
               "lavorare che vuole riusare (\"il mio formato podcast\", \"i miei reel di "
               "viaggio\"). description = quando usarla; instructions = i passi concreti "
-              "con gli strumenti di vedit. Stesso nome = la aggiorna. Solo se l'utente lo chiede.",
+              "con gli strumenti di vedit. Stesso nome = la aggiorna. Solo se l'utente lo chiede. "
+              "collection=true: la mette nella raccolta del video, vale solo per i suoi video.",
               {"name": _STR, "description": _STR, "instructions": _STR,
-               "files": {"type": "object", "description": "file di supporto: percorso -> testo"}},
+               "files": {"type": "object", "description": "file di supporto: percorso -> testo"},
+               "collection": {"type": "boolean"}},
               ["name", "description", "instructions"]),
         _tool("undo", "Annulla l'ultima modifica.", {}, []),
     ]
@@ -405,7 +421,7 @@ def build_tools() -> list[dict]:
 # strumenti che non sono metodi di Store
 _SPECIAL = {"speech_times", "project_info", "apply_preset", "apply_style", "review_edit", "create_style",
             "create_skill", "learn_style", "list_blocks", "list_moves", "propose_plan", "generate_media", "generation_services",
-            "remember", "forget", "generate_voice", "web_search", "web_read", "web_download"}
+            "remember", "forget", "collection_file", "generate_voice", "web_search", "web_read", "web_download"}
 
 
 def prepara_download(store: Any, args: dict) -> tuple[list[dict], list[dict]]:
@@ -560,9 +576,24 @@ def execute(store: Any, name: str, args: dict) -> str:
         return llm.ConImmagine(testo, foglio)
 
     if name == "create_skill":
+        dove = None
+        if args.get("collection"):
+            dove = raccolte.cartella_skill(raccolte.trova(None, store.path))
         return json.dumps(estensioni.crea_skill(args["name"], args["description"],
-                                                args["instructions"], args.get("files")),
+                                                args["instructions"], args.get("files"), dove),
                           ensure_ascii=False)
+
+    if name == "collection_file":
+        return json.dumps(raccolte.leggi_documento(None, args["file"], store.path), ensure_ascii=False)
+
+    if name in ("remember", "forget") and args.get("scope") == "project":
+        if not store.path:
+            raise ValueError("the project is not saved yet: no project memory")
+        f = memoria.file_progetto(store.path)
+        out = (memoria.ricorda(args["note"], args.get("section") or "general", f,
+                               memoria.INTESTAZIONE_PROGETTO)
+               if name == "remember" else memoria.dimentica(args["match"], f))
+        return json.dumps(out, ensure_ascii=False)
 
     if name == "remember":
         if args.get("scope") == "collection":
@@ -869,6 +900,11 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
     if ricordi and ricordi != stato_chat.get("memoria_inviata"):
         contenuto.append({"type": "text", "text": ricordi})
         stato_chat["memoria_inviata"] = ricordi
+    # il quaderno di questo video, con la stessa regola
+    quaderno = memoria.contesto_progetto(store.path)
+    if quaderno and quaderno != stato_chat.get("memoria_progetto_inviata"):
+        contenuto.append({"type": "text", "text": quaderno})
+        stato_chat["memoria_progetto_inviata"] = quaderno
     # la raccolta del video: descrizione, memoria e riferimenti, piu' il foglio delle
     # immagini. Come la memoria, una volta per conversazione e di nuovo se cambia
     contenuto += blocco_raccolta(store.path, stato_chat, p["tipo"] == "claude_code")

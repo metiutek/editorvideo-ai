@@ -9,6 +9,9 @@ serie, un corso, i viaggi. Dentro::
       MEMORIA.md           memoria della raccolta, stesso formato di memoria.py
       riferimenti/         immagini che valgono per ogni video (logo, miniature,
                            palette, persone, grafiche) + note.json con una nota a testa
+      documenti/           file di informazioni (brief, copioni, testi, dati, pdf): i
+                           testi brevi entrano nel contesto, gli altri si leggono a richiesta
+      skills/              skill che valgono solo per i video di questa raccolta
       <video>/<video>.json un progetto per video, con le sue cartelle accanto
 
 Un progetto fa parte della raccolta se il suo file sta dentro la cartella: si
@@ -40,6 +43,17 @@ from . import memoria
 
 FILE = "raccolta.json"
 CARTELLA_RIF = "riferimenti"
+CARTELLA_DOC = "documenti"
+CARTELLA_SKILL = "skills"
+# file di informazioni che si leggono come testo; i pdf si accettano per chi li sa
+# leggere da se' (Claude Code), agli altri modelli arriva solo il nome
+TESTI = {".md", ".txt", ".csv", ".tsv", ".json", ".srt", ".vtt", ".html", ".htm", ".xml",
+         ".yaml", ".yml", ".rtf"}
+DOCUMENTI = TESTI | {".pdf"}
+MAX_DOCUMENTO = 20 * 1024 * 1024
+# quanto testo dei documenti entra da solo nel contesto; il resto a richiesta
+MAX_DOC_CONTESTO = 12000
+MAX_LETTURA = 200_000
 NOTE = "note.json"
 IMMAGINI = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 # fin dove si risale per trovare la raccolta di un progetto: <raccolta>/<video>/<video>.json
@@ -257,7 +271,8 @@ def video(cartella: str | Path) -> list[dict]:
         # le cartelle che vedit crea accanto ai progetti non contengono progetti
         dirs[:] = [d for d in dirs if livello + 1 < PROFONDITA and not d.startswith(".")
                    and d != CARTELLA_RIF and not d.endswith(_ACCANTO)
-                   and d not in ("media", "web", "proxy", "render", "allegati")]
+                   and d not in ("media", "web", "proxy", "render", "allegati",
+                                 CARTELLA_DOC, CARTELLA_SKILL)]
         for n in files:
             if not n.lower().endswith(".json"):
                 continue
@@ -281,6 +296,7 @@ def info(cartella: str) -> dict:
             "description": d.get("description", ""),
             "formato": d.get("formato") if isinstance(d.get("formato"), dict) else None,
             "memoria": memoria.leggi(file_memoria(c)), "riferimenti": riferimenti(c),
+            "documenti": documenti(c), "skill": skill(c),
             "video": video(c)}
 
 
@@ -467,6 +483,126 @@ def immagine(cartella: str, file: str) -> Path:
     raise RaccoltaError(f"no reference called {file!r}")
 
 
+# --------------------------------------------------------------------------
+# documenti: file di informazioni per tutti i video
+# --------------------------------------------------------------------------
+
+
+def cartella_doc(cartella: str | Path) -> Path:
+    return Path(cartella) / CARTELLA_DOC
+
+
+def documenti(cartella: str | Path) -> list[dict]:
+    d = cartella_doc(cartella)
+    if not d.is_dir():
+        return []
+    return [{"file": f.name, "path": str(f), "size": f.stat().st_size,
+             "testo": f.suffix.lower() in TESTI}
+            for f in sorted(d.iterdir(), key=lambda f: f.name.lower())
+            if f.is_file() and f.suffix.lower() in DOCUMENTI and not f.name.startswith(("~", "."))]
+
+
+def libero_doc(cartella: str | Path, nome: str) -> Path:
+    """Un percorso libero in documenti/ per un file che si chiama ``nome``."""
+    d = cartella_doc(cartella)
+    d.mkdir(parents=True, exist_ok=True)
+    nome = Path(nome).name
+    ext = Path(nome).suffix.lower()
+    if ext not in DOCUMENTI:
+        raise RaccoltaError(f"{nome}: information files are text or pdf "
+                            f"({', '.join(sorted(DOCUMENTI))})")
+    base = Path(nome_file(Path(nome).stem)).name
+    f, i = d / f"{base}{ext}", 2
+    while f.exists():
+        f, i = d / f"{base}_{i}{ext}", i + 1
+    return f
+
+
+def aggiungi_documenti(cartella: str, paths: list[str]) -> dict:
+    """Copia i file in documenti/: la raccolta non dipende da dove stavano."""
+    c = trova(cartella)
+    if not paths:
+        raise RaccoltaError("give the files to add in paths")
+    nuovi = []
+    for p in paths:
+        src = Path(p).expanduser()
+        if not src.is_file():
+            raise RaccoltaError(f"file not found: {p}")
+        if src.stat().st_size > MAX_DOCUMENTO:
+            raise RaccoltaError(f"{src.name} is too big (max {MAX_DOCUMENTO // 2**20} MB)")
+        dest = libero_doc(c, src.name)
+        shutil.copy2(src, dest)
+        nuovi.append(dest.name)
+    return {"aggiunti": nuovi, "documenti": documenti(c)}
+
+
+def _documento(c: Path, file: str) -> Path:
+    for x in documenti(c):
+        if x["file"] == Path(file).name:
+            return Path(x["path"])
+    nomi = ", ".join(x["file"] for x in documenti(c)) or "none"
+    raise RaccoltaError(f"no information file called {file!r}. Files: {nomi}")
+
+
+def scrivi_documento(cartella: str, file: str, testo: str) -> dict:
+    """Scrive (o riscrive) un file di testo in documenti/: note, brief, copioni."""
+    c = trova(cartella)
+    nome = Path(file or "").name.strip()
+    if not nome:
+        raise RaccoltaError("give the file a name")
+    if not Path(nome).suffix:
+        nome += ".md"
+    if Path(nome).suffix.lower() not in TESTI:
+        raise RaccoltaError(f"{nome}: only text files can be written ({', '.join(sorted(TESTI))})")
+    if len(testo) > MAX_LETTURA:
+        raise RaccoltaError(f"the text is at most {MAX_LETTURA} characters")
+    d = cartella_doc(c)
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / (Path(nome_file(Path(nome).stem)).name + Path(nome).suffix.lower())
+    tmp = f.with_name(f"~{f.name}")
+    tmp.write_text(testo, encoding="utf-8")
+    os.replace(tmp, f)
+    return {"file": f.name, "documenti": documenti(c)}
+
+
+def leggi_documento(cartella: str | None, file: str, progetto: str | None = None) -> dict:
+    c = trova(cartella, progetto)
+    f = _documento(c, file)
+    if f.suffix.lower() not in TESTI:
+        return {"file": f.name, "path": str(f),
+                "testo": None, "nota": "not a text file: read it from its path if you can open it"}
+    testo = f.read_text(encoding="utf-8", errors="replace")
+    tagliato = len(testo) > MAX_LETTURA
+    return {"file": f.name, "path": str(f), "testo": testo[:MAX_LETTURA],
+            **({"tagliato": True} if tagliato else {})}
+
+
+def togli_documenti(cartella: str, files: list[str]) -> dict:
+    c = trova(cartella)
+    tolti = []
+    for x in files:
+        f = _documento(c, x)
+        f.unlink()
+        tolti.append(f.name)
+    return {"tolti": tolti, "documenti": documenti(c)}
+
+
+# --------------------------------------------------------------------------
+# skill della raccolta: <raccolta>/skills/<nome>/SKILL.md
+# --------------------------------------------------------------------------
+# Le stesse skill di vedit (estensioni.py), ma valgono solo per i video della
+# raccolta: estensioni._cartelle_skill le mette prima di tutte le altre.
+
+
+def cartella_skill(cartella: str | Path) -> Path:
+    return Path(cartella) / CARTELLA_SKILL
+
+
+def skill(cartella: str | Path) -> list[dict]:
+    from . import estensioni
+    return estensioni.skill_in(cartella_skill(cartella))
+
+
 def foglio(cartella: str | Path, lato: int = 360, colonne: int = 4) -> str | None:
     """I riferimenti in un'immagine sola, col nome sotto ciascuno: e' cosi' che
     arrivano a un modello, che vede tutto in un'immagine invece che in dieci."""
@@ -546,6 +682,25 @@ def contesto(progetto: str | None, limite: int = memoria.MAX_CONTESTO) -> str:
         righe += ["", "Riferimenti visivi della raccolta (immagini da rispettare per grafica, "
                       "colori, persone, miniature; si importano come media se servono in timeline):"]
         righe += [f"- {r['path']}" + (f" — {r['nota']}" if r["nota"] else "") for r in rif]
+    if doc := documenti(c):
+        righe += ["", "File di informazioni della raccolta (brief, copioni, dati: valgono per "
+                      "ogni video; quelli non riportati qui si leggono con collection_file):"]
+        resto = MAX_DOC_CONTESTO
+        for x in doc:
+            righe.append(f"- {x['path']}")
+            if not x["testo"] or resto <= 0:
+                continue
+            try:
+                t = Path(x["path"]).read_text(encoding="utf-8", errors="replace").strip()
+            except OSError:
+                continue
+            if t and len(t) <= resto:
+                righe += [f"  --- {x['file']} ---", t, f"  --- fine di {x['file']} ---"]
+                resto -= len(t)
+    if sk := skill(c):
+        righe += ["", "Skill della raccolta (procedure da seguire in questi video; use_skill col "
+                      "nome per le istruzioni):"]
+        righe += [f"- {x['name']}: {x['description']}" for x in sk]
     righe += ["", "Le preferenze che valgono per questa raccolta (e non per tutti i video "
                   "dell'utente) si salvano con remember(scope=\"collection\")."]
     return "\n".join(righe)

@@ -96,6 +96,10 @@ def _cartelle_skill(progetto: str | None) -> list[tuple[str, Path]]:
     out = []
     if progetto:
         out.append(("project", Path(progetto).parent / ".claude" / "skills"))
+        # quelle della raccolta del video (raccolte.py): valgono solo li' dentro
+        from . import raccolte
+        if c := raccolte.di_progetto(progetto):
+            out.append(("collection", raccolte.cartella_skill(c)))
     out.append(("vedit", _vedit() / "skills"))
     out.append(("user", _home() / "skills"))
     # quelle del pacchetto (animazione, montaggio parlato...): ultime fra le skill di
@@ -130,6 +134,19 @@ def skill(progetto: str | None = None) -> list[dict]:
             viste[nome] = {"name": nome, "description": meta.get("description", "")[:500],
                            "origin": origine, "dir": str(f.parent)}
     return sorted(viste.values(), key=lambda s: s["name"].lower())
+
+
+def skill_in(base: Path) -> list[dict]:
+    """Le skill di una cartella sola (quella di una raccolta, per esempio)."""
+    out = []
+    for f in sorted(Path(base).glob("*/SKILL.md")) if Path(base).is_dir() else []:
+        try:
+            meta, _ = _frontmatter(f.read_text(encoding="utf-8", errors="replace")[:8000])
+        except OSError:
+            continue
+        out.append({"name": meta.get("name") or f.parent.name,
+                    "description": meta.get("description", "")[:500], "dir": str(f.parent)})
+    return out
 
 
 def indice_skill(progetto: str | None = None, solo_vedit: bool = False,
@@ -184,7 +201,7 @@ def leggi_file_skill(nome: str, percorso: str, progetto: str | None = None,
 
 MAX_PACCHETTO = 50 * 1024 * 1024    # zip scaricato o caricato
 MAX_FILE_SKILL = 300                # file estratti da un pacchetto
-_ORIGINI_VEDIT = ("project", "vedit", "incluse")
+_ORIGINI_VEDIT = ("project", "collection", "vedit", "incluse")
 
 
 def cartella_vedit() -> Path:
@@ -204,15 +221,16 @@ def _nome_cartella(nome: str) -> str:
 
 
 def crea_skill(nome: str, descrizione: str, istruzioni: str,
-               file: dict[str, str] | None = None) -> dict:
-    """Scrive (o riscrive) una skill di montaggio: SKILL.md piu' file di supporto."""
+               file: dict[str, str] | None = None, dove: Path | None = None) -> dict:
+    """Scrive (o riscrive) una skill di montaggio: SKILL.md piu' file di supporto.
+    ``dove`` e' la cartella delle skill (quella di una raccolta); senza, ~/.vedit/skills."""
     cartella = _nome_cartella(nome)
     descrizione = " ".join(descrizione.split())
     if not descrizione:
         raise ValueError("the description says when to use the skill: it cannot be empty")
     if not istruzioni.strip():
         raise ValueError("the skill has no instructions")
-    dest = cartella_vedit() / cartella
+    dest = Path(dove or cartella_vedit()) / cartella
     radice = dest.resolve()
     # i percorsi si controllano prima di scrivere: o tutto o niente
     scritti = []
@@ -232,11 +250,15 @@ def crea_skill(nome: str, descrizione: str, istruzioni: str,
     return {"name": cartella, "dir": str(dest), "aggiornata": esisteva}
 
 
-def elimina_skill(nome: str) -> dict:
-    """Toglie una skill da ~/.vedit/skills (le altre non sono di vedit)."""
+def elimina_skill(nome: str, dove: Path | None = None) -> dict:
+    """Toglie una skill da ~/.vedit/skills, o dalla cartella ``dove`` (quella di
+    una raccolta). Le altre skill non sono di vedit."""
     import shutil
 
-    s = next((x for x in skill() if x["name"] == nome and x["origin"] == "vedit"), None)
+    if dove is not None:
+        s = next((x for x in skill_in(dove) if x["name"] == nome), None)
+    else:
+        s = next((x for x in skill() if x["name"] == nome and x["origin"] == "vedit"), None)
     if s is None:
         raise ValueError(f"no vedit skill named {nome!r}: only skills added to vedit "
                          f"can be removed here")
@@ -258,7 +280,7 @@ def _cerca_skill(radice: Path) -> list[Path]:
     return sorted(trovate)
 
 
-def _copia_skill(sorgente: Path) -> dict:
+def _copia_skill(sorgente: Path, dove: Path | None = None) -> dict:
     import shutil
 
     testo = (sorgente / "SKILL.md").read_text(encoding="utf-8", errors="replace")
@@ -270,7 +292,7 @@ def _copia_skill(sorgente: Path) -> dict:
             and not any(x.startswith(".") for x in p.relative_to(sorgente).parts)]
     if len(file) > MAX_FILE_SKILL:
         raise ValueError(f"{nome}: too many files ({len(file)}) for a skill")
-    dest = cartella_vedit() / nome
+    dest = Path(dove or cartella_vedit()) / nome
     esisteva = dest.exists()
     if esisteva:
         shutil.rmtree(dest)
@@ -343,7 +365,7 @@ def _url_github(url: str) -> tuple[str, str]:
 
 
 def installa_skill(sorgente: str | Path, nome_file: str = "",
-                   dati: bytes | None = None) -> dict:
+                   dati: bytes | None = None, dove: Path | None = None) -> dict:
     """Aggiunge a vedit le skill che stanno in ``sorgente``.
 
     ``sorgente``: una cartella con SKILL.md (o una raccolta di cartelle), un
@@ -408,8 +430,8 @@ def installa_skill(sorgente: str | Path, nome_file: str = "",
             trovate = _cerca_skill(base)
         if not trovate:
             raise ValueError("no SKILL.md found: a skill is a folder with a SKILL.md inside")
-        installate = [_copia_skill(c) for c in trovate]
-    return {"installate": installate, "dir": str(cartella_vedit())}
+        installate = [_copia_skill(c, dove) for c in trovate]
+    return {"installate": installate, "dir": str(dove or cartella_vedit())}
 
 
 # --------------------------------------------------------------------------

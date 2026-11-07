@@ -444,6 +444,21 @@ video" crea `Video N` senza chiedere il titolo e ricorda il formato in `raccolta
 pulsante in testata), API `/api/raccolte`, `/api/raccolta*`. Test in
 `tests/test_raccolte.py`.
 
+Dentro la raccolta anche `documenti/` (file di informazioni: testi e pdf;
+`raccolte.contesto` riporta interi i testi fino a `MAX_DOC_CONTESTO`, gli altri solo per
+percorso, letti con `collection_file`) e `skills/` (le skill della raccolta:
+`estensioni._cartelle_skill` le mette con origine `collection` subito dopo quelle del
+progetto, quindi valgono solo per i suoi video; `crea_skill`/`installa_skill`/`elimina_skill`
+prendono `dove=`). Test in `tests/test_raccolte_file.py`.
+
+**Memoria del progetto.** `memoria.file_progetto`: `<progetto>.memoria.md`, il quaderno
+dell'AI per un video solo (richieste, scelte, cosa resta da fare). `remember`/`forget`/`memory`
+con `scope="project"` (MCP e chat); `project_open` la restituisce come `memoria_progetto`, la
+chat la passa una volta per conversazione e di nuovo se cambia (`memoria.contesto_progetto`).
+E' un compagno del progetto (`progetti.COMPAGNI`): si sposta e va nel cestino con lui, una
+copia riparte senza. UI: `EditorMemoria` in `Chat.jsx`, schede "this project" / "all
+projects", API `/api/memoria?scope=project`.
+
 **File dei progetti.** `progetti.py`: duplicare, rinominare, spostare, eliminare. Un progetto
 viaggia coi compagni dello stesso nome (`.chat.json`, `.piano.json`, `.versioni/`); le
 cartelle di media restano dove sono (il documento le nomina per percorso assoluto, una copia

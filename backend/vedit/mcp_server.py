@@ -229,6 +229,13 @@ remember(scope="collection"). Un video nuovo della raccolta:
 project_create(collection=..., name=...) lo mette nella cartella giusta.
 collection_list le elenca, collection_create ne crea una, collection_update
 cambia nome, descrizione e riferimenti.
+Una raccolta puo' avere file di informazioni (brief, copioni, dati: quelli
+lunghi si leggono con collection_file) e skill sue (use_skill come le altre;
+create_skill(collection=".") ne crea una solo per i video della raccolta).
+MEMORIA DEL PROGETTO: ogni video ha il suo quaderno, remember(scope="project"):
+cosa ha chiesto l'utente, scelte fatte, cosa resta da fare, dove sta il
+materiale. Scrivilo mentre lavori, breve: project_open lo restituisce come
+"memoria_progetto" e chi riapre il video riparte da li'.
 project_manage duplica, rinomina, sposta (anche dentro una raccolta) ed
 elimina i progetti; eliminare li mette nel cestino di vedit, e solo se
 l'utente lo chiede.
@@ -550,6 +557,8 @@ def _con_memoria(out: dict) -> dict:
     ci sono: e' il primo giro di ogni lavoro."""
     if m := memoria.contesto():
         out["memoria"] = m
+    if mp := memoria.contesto_progetto(out.get("path")):
+        out["memoria_progetto"] = mp
     if c := raccolte.contesto(out.get("path")):
         out["raccolta"] = c
         raccolte.usa(raccolte.di_progetto(out["path"]))
@@ -2423,7 +2432,7 @@ def use_skill(name: str, file: str | None = None) -> dict:
 
 @_strumento()
 def create_skill(name: str, description: str, instructions: str,
-                 files: dict[str, str] | None = None) -> dict:
+                 files: dict[str, str] | None = None, collection: str | None = None) -> dict:
     """Salva (o con lo stesso nome aggiorna) una skill di montaggio dell'utente.
 
     Una skill e' un modo di lavorare da riusare: "il mio formato podcast",
@@ -2431,20 +2440,32 @@ def create_skill(name: str, description: str, instructions: str,
     (e' cio' che il modello legge per sceglierla); ``instructions`` sono i
     passi concreti, in Markdown, con gli strumenti di vedit; ``files`` sono
     file di supporto (percorso -> testo: modelli html, esempi). Resta in
-    ~/.vedit/skills e vale per ogni progetto, nella chat e da MCP.
+    ~/.vedit/skills e vale per ogni progetto, nella chat e da MCP. Con
+    ``collection`` (nome o cartella; "." = quella del progetto aperto) sta nella
+    raccolta e vale solo per i suoi video.
     """
-    return estensioni.crea_skill(name, description, instructions, files)
+    return estensioni.crea_skill(name, description, instructions, files, _dove_skill(collection))
+
+
+def _dove_skill(collection: str | None) -> Path | None:
+    if not collection:
+        return None
+    rif = None if collection == "." else collection
+    return raccolte.cartella_skill(raccolte.trova(rif, _percorso_corrente()))
 
 
 @_strumento()
-async def install_skill(source: str, confirmed: bool = False) -> dict:
+async def install_skill(source: str, confirmed: bool = False,
+                        collection: str | None = None) -> dict:
     """Aggiunge a vedit una o piu' skill da una cartella con SKILL.md (anche una
     raccolta), un file .md o .zip, o un link (repo o cartella GitHub, zip, .md).
 
     Solo se l'utente l'ha chiesto: una skill sono istruzioni che il modello
     seguira'. Con l'editor aperto gli si chiede conferma; senza, serve
-    confirmed=True dopo il suo si' per *questa* sorgente.
+    confirmed=True dopo il suo si' per *questa* sorgente. collection: dentro una
+    raccolta ("." = quella del progetto aperto), solo per i suoi video.
     """
+    dove = _dove_skill(collection)
     api = sys.modules.get("vedit.api")
     if api is not None and (api.MCP_ATTIVO or api.background_info())             and (api.S.store is not None):
         esito = await _off(api.chiedi, domande_mod.conferma_skill(source))
@@ -2455,13 +2476,13 @@ async def install_skill(source: str, confirmed: bool = False) -> dict:
         return {"installate": [],
                 "motivo": "serve la conferma dell'utente: chiediglielo e richiama con "
                           "confirmed=True solo se dice di installare questa skill"}
-    return await _off(estensioni.installa_skill, source)
+    return await _off(estensioni.installa_skill, source, "", None, dove)
 
 
 @_strumento()
-def delete_skill(name: str) -> dict:
-    """Toglie una skill di montaggio aggiunta a vedit."""
-    return estensioni.elimina_skill(name)
+def delete_skill(name: str, collection: str | None = None) -> dict:
+    """Toglie una skill di montaggio aggiunta a vedit (o a una raccolta con ``collection``)."""
+    return estensioni.elimina_skill(name, _dove_skill(collection))
 
 
 @_strumento()
@@ -2899,9 +2920,16 @@ async def web_download(url: str | None = None, urls: list[str] | None = None,
 
 def _scope(scope: str, collection: str | None) -> bool:
     """True se si lavora sulla memoria di una raccolta."""
-    if scope not in ("all", "collection"):
-        raise EditError("scope is 'all' (every project) or 'collection' (the videos of a collection)")
-    return scope == "collection" or bool(collection)
+    if scope not in ("all", "collection", "project"):
+        raise EditError("scope is 'all' (every project), 'collection' (the videos of a collection) "
+                        "or 'project' (only the open video)")
+    return scope == "collection" or (bool(collection) and scope != "project")
+
+
+def _memoria_progetto() -> Path:
+    if not (p := _percorso_corrente()):
+        raise EditError("no project open: scope='project' is the memory of the open video")
+    return memoria.file_progetto(p)
 
 
 @_strumento()
@@ -2913,8 +2941,13 @@ async def remember(note: str, section: str = "general", scope: str = "all",
     ritmo, musica, voce, errori da non ripetere. scope="collection": vale per i video
     della raccolta del progetto aperto (o di ``collection``): pubblico, tono, grafica,
     nomi ricorrenti, sigla. section raggruppa: preferences, style, audio, voice,
-    graphics, publishing...
+    graphics, publishing... scope="project": il quaderno di QUESTO video soltanto
+    (<progetto>.memoria.md): cosa ha chiesto l'utente, scelte fatte, cosa resta da
+    fare, dove sta il materiale; si rilegge riaprendo il progetto.
     """
+    if scope == "project":
+        _scope(scope, collection)
+        return memoria.ricorda(note, section, _memoria_progetto(), memoria.INTESTAZIONE_PROGETTO)
     if _scope(scope, collection):
         return raccolte.ricorda(collection, note, section, _percorso_corrente())
     return memoria.ricorda(note, section)
@@ -2922,7 +2955,9 @@ async def remember(note: str, section: str = "general", scope: str = "all",
 
 @_strumento()
 async def forget(match: str, scope: str = "all", collection: str | None = None) -> dict:
-    """Toglie dalla memoria (scope "all" o "collection") le voci che contengono ``match``."""
+    """Toglie dalla memoria (scope "all", "collection" o "project") le voci che contengono ``match``."""
+    if scope == "project":
+        return memoria.dimentica(match, _memoria_progetto())
     if _scope(scope, collection):
         return raccolte.dimentica(collection, match, _percorso_corrente())
     return memoria.dimentica(match)
@@ -2931,7 +2966,10 @@ async def forget(match: str, scope: str = "all", collection: str | None = None) 
 @_strumento()
 async def memory(scope: str = "all", collection: str | None = None) -> dict:
     """La memoria per intero e dove sta il file: comune a tutti i progetti
-    (scope="all") o della raccolta (scope="collection")."""
+    (scope="all"), della raccolta (scope="collection") o del progetto aperto (scope="project")."""
+    if scope == "project":
+        f = _memoria_progetto()
+        return {"file": str(f), "testo": memoria.leggi(f)}
     if _scope(scope, collection):
         f = raccolte.file_memoria(raccolte.trova(collection, _percorso_corrente()))
         return {"file": str(f), "testo": memoria.leggi(f)}
@@ -2971,6 +3009,8 @@ async def collection_info(collection: str | None = None):
     out["riferimenti"] = [{"file": r["file"], "path": r["path"],
                            **({"nota": r["nota"]} if r["nota"] else {})}
                           for r in out["riferimenti"]]
+    out["documenti"] = [{"file": d["file"], "path": d["path"]} for d in out["documenti"]]
+    out["skill"] = [{"name": k["name"], "description": k["description"]} for k in out["skill"]]
     foglio = await _off(raccolte.foglio, c)
     return [out, Image(path=foglio)] if foglio else out
 
@@ -2980,12 +3020,18 @@ async def collection_update(collection: str | None = None, name: str | None = No
                             description: str | None = None,
                             add_references: list[str] | None = None,
                             notes: dict[str, str] | None = None,
-                            remove_references: list[str] | None = None) -> dict:
+                            remove_references: list[str] | None = None,
+                            add_files: list[str] | None = None,
+                            write_file: dict[str, str] | None = None,
+                            remove_files: list[str] | None = None) -> dict:
     """Cambia una raccolta (quella del progetto aperto se manca ``collection``).
 
     add_references: immagini da copiare nei riferimenti (logo, miniature, palette,
     persone, grafiche). notes: {"file": "che cos'e' e come usarlo"} per i riferimenti
     (stringa vuota toglie la nota). remove_references: nomi di file da togliere.
+    add_files: file di informazioni da copiare nella raccolta (brief, copioni, testi,
+    dati, pdf). write_file: {"nome.md": "testo"} scrive o riscrive un file di testo
+    della raccolta. remove_files: nomi dei file di informazioni da togliere.
     """
     c = str(raccolte.trova(collection, _percorso_corrente()))
     if name is not None or description is not None:
@@ -2996,9 +3042,23 @@ async def collection_update(collection: str | None = None, name: str | None = No
         raccolte.annota(c, notes)
     if remove_references:
         raccolte.togli(c, remove_references)
+    if add_files:
+        raccolte.aggiungi_documenti(c, add_files)
+    for nome, testo in (write_file or {}).items():
+        raccolte.scrivi_documento(c, nome, testo)
+    if remove_files:
+        raccolte.togli_documenti(c, remove_files)
     out = raccolte.info(c)
     return {"name": out["name"], "description": out["description"],
-            "riferimenti": [r["file"] for r in out["riferimenti"]]}
+            "riferimenti": [r["file"] for r in out["riferimenti"]],
+            "documenti": [d["file"] for d in out["documenti"]]}
+
+
+@_strumento()
+async def collection_file(file: str, collection: str | None = None) -> dict:
+    """Legge un file di informazioni della raccolta (brief, copione, dati...): il
+    contesto della raccolta riporta per intero solo i testi brevi."""
+    return raccolte.leggi_documento(collection, file, _percorso_corrente())
 
 
 @_strumento()
@@ -3073,6 +3133,7 @@ _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "pro
                 "preview_grid", "scope_image", "undo", "redo", "restore_snapshot",
                 "remember", "forget", "memory", "voice_engines", "publish_video",
                 "collection_list", "collection_create", "collection_info", "collection_update",
+                "collection_file",
                 "project_manage", "social_accounts", "web_search", "web_read", "web_download", "speech_times",
                 "list_skills", "use_skill", "create_skill", "install_skill", "delete_skill",
                 "make_covers", "propose_plan"}

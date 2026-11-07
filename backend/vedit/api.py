@@ -678,6 +678,105 @@ def raccolta_immagine(path: str, file: str) -> FileResponse:
     return FileResponse(f, media_type=mimetypes.guess_type(f.name)[0] or "image/png")
 
 
+class RaccoltaDocBody(BaseModel):
+    path: str
+    file: str
+    testo: str
+
+
+class RaccoltaSkillBody(BaseModel):
+    path: str
+    name: str
+    description: str
+    instructions: str
+
+
+class RaccoltaSorgenteBody(BaseModel):
+    path: str
+    source: str
+
+
+@app.post("/api/raccolta/documenti")
+def raccolta_documenti(body: RaccoltaRifBody) -> dict:
+    """File di informazioni scelti sul disco: si copiano nella raccolta."""
+    _raccolta(raccolte.aggiungi_documenti, body.path, body.files)
+    return _raccolta(raccolte.info, body.path)
+
+
+@app.post("/api/raccolta/documenti/carica")
+async def raccolta_documenti_carica(path: str = Form(...),
+                                    files: list[UploadFile] = File(...)) -> dict:
+    c = _raccolta(raccolte.trova, path)
+    for f in files:
+        dest = _raccolta(raccolte.libero_doc, c, f.filename or "file.md")
+        scritti = 0
+        with dest.open("wb") as out:
+            while chunk := await f.read(1 << 20):
+                scritti += len(chunk)
+                if scritti > raccolte.MAX_DOCUMENTO:
+                    break
+                out.write(chunk)
+        if scritti > raccolte.MAX_DOCUMENTO:
+            dest.unlink(missing_ok=True)
+            raise HTTPException(400, f"{f.filename} is too big "
+                                     f"(max {raccolte.MAX_DOCUMENTO // 2**20} MB)")
+    return _raccolta(raccolte.info, str(c))
+
+
+@app.get("/api/raccolta/documento")
+def raccolta_documento(path: str, file: str) -> dict:
+    return _raccolta(raccolte.leggi_documento, path, file)
+
+
+@app.put("/api/raccolta/documento")
+def raccolta_documento_scrivi(body: RaccoltaDocBody) -> dict:
+    """Scrive o riscrive un file di testo della raccolta (una nota, un brief)."""
+    _raccolta(raccolte.scrivi_documento, body.path, body.file, body.testo)
+    return _raccolta(raccolte.info, body.path)
+
+
+@app.delete("/api/raccolta/documento")
+def raccolta_documento_togli(path: str, file: str) -> dict:
+    _raccolta(raccolte.togli_documenti, path, [file])
+    return _raccolta(raccolte.info, path)
+
+
+def _skill_raccolta(path: str, fn, *args) -> dict:
+    """Una funzione delle skill (estensioni.py) con la cartella della raccolta come ``dove``."""
+    c = _raccolta(raccolte.trova, path)
+    _raccolta(fn, *args, raccolte.cartella_skill(c))
+    return _raccolta(raccolte.info, str(c))
+
+
+@app.post("/api/raccolta/skill")
+def raccolta_skill(body: RaccoltaSkillBody) -> dict:
+    """Una skill che vale solo per i video della raccolta."""
+    from . import estensioni
+    return _skill_raccolta(body.path, estensioni.crea_skill, body.name, body.description,
+                           body.instructions, None)
+
+
+@app.post("/api/raccolta/skill/installa")
+def raccolta_skill_installa(body: RaccoltaSorgenteBody) -> dict:
+    from . import estensioni
+    return _skill_raccolta(body.path, estensioni.installa_skill, body.source.strip(), "", None)
+
+
+@app.post("/api/raccolta/skill/carica")
+async def raccolta_skill_carica(path: str = Form(...), file: UploadFile = File(...)) -> dict:
+    from . import estensioni
+    dati = await file.read(estensioni.MAX_PACCHETTO + 1)
+    if len(dati) > estensioni.MAX_PACCHETTO:
+        raise HTTPException(400, "the file is too big for a skill")
+    return _skill_raccolta(path, estensioni.installa_skill, "", file.filename or "", dati)
+
+
+@app.delete("/api/raccolta/skill")
+def raccolta_skill_togli(path: str, nome: str) -> dict:
+    from . import estensioni
+    return _skill_raccolta(path, estensioni.elimina_skill, nome)
+
+
 @app.post("/api/raccolta/video")
 def raccolta_video(body: RaccoltaVideoBody) -> dict:
     """Un video nuovo dentro la raccolta, nella sua cartella. Senza titolo:
@@ -2123,19 +2222,33 @@ class MemoriaBody(BaseModel):
     testo: str
 
 
+def _file_memoria(scope: str) -> Path | None:
+    """None = la memoria comune; "project" = quella del progetto aperto."""
+    if scope == "all":
+        return None
+    if scope != "project":
+        raise HTTPException(400, "scope is 'all' or 'project'")
+    if S.store is None or not S.store.path:
+        raise HTTPException(400, "no project open")
+    return memoria.file_progetto(S.store.path)
+
+
 @app.get("/api/memoria")
-def memoria_leggi() -> dict:
-    """La memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)."""
-    return {"file": str(memoria.percorso()), "testo": memoria.leggi()}
+def memoria_leggi(scope: str = "all") -> dict:
+    """La memoria comune a tutti i progetti (~/.vedit/MEMORIA.md), o con
+    scope=project quella del progetto aperto (<progetto>.memoria.md)."""
+    f = _file_memoria(scope)
+    return {"file": str(f or memoria.percorso()), "testo": memoria.leggi(f)}
 
 
 @app.put("/api/memoria")
-def memoria_scrivi(body: MemoriaBody) -> dict:
+def memoria_scrivi(body: MemoriaBody, scope: str = "all") -> dict:
+    f = _file_memoria(scope)
     try:
-        out = memoria.sostituisci(body.testo)
+        out = memoria.sostituisci(body.testo, f)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {**out, "testo": memoria.leggi()}
+    return {**out, "testo": memoria.leggi(f)}
 
 
 class StileBody(BaseModel):

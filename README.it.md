@@ -824,6 +824,17 @@ iniziale; dalla testata di un suo video il nome della raccolta riporta li'. Per 
 `collection_info`, `collection_update`, `project_create(collection=...)` e
 `remember(scope="collection")`.
 
+Una raccolta puo' contenere anche **file di informazioni** (brief, copioni, note, dati, pdf:
+i testi brevi arrivano interi all'assistente, quelli lunghi li legge quando servono con
+`collection_file`) e **skill** sue, modi di montare che valgono solo per i suoi video
+(`create_skill(collection=".")`).
+
+**Memoria del progetto** — ogni video ha il suo quaderno, `<progetto>.memoria.md`: l'assistente
+ci scrive da solo cosa hai chiesto, le scelte fatte e cosa resta da fare
+(`remember(scope="project")`) e lo rilegge quando il progetto si riapre, in un'altra sessione o
+con un altro modello. Viaggia col progetto; si corregge dal pulsante della memoria nella scheda
+dell'assistente ("this project").
+
 **Gestire i progetti** — ogni progetto ha un menu `…` (schermata iniziale, spazio della
 raccolta, testata): rinomina (file e cartella seguono il nome), duplica (stessi media, chat
 nuova), sposta in una raccolta o in una cartella, elimina. Eliminare porta il progetto nel

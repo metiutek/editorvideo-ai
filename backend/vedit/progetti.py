@@ -2,8 +2,8 @@
 
 Un progetto e' ``<nome>.json`` piu' i file che vedit gli mette accanto con lo
 stesso nome: ``<nome>.chat.json`` (la conversazione), ``<nome>.piano.json`` (il
-piano approvato) e ``<nome>.versioni/`` (le istantanee). Quelli viaggiano
-sempre col progetto. Le cartelle di media (``media/``, ``<nome>_gen/``,
+piano approvato), ``<nome>.memoria.md`` (la memoria del progetto) e
+``<nome>.versioni/`` (le istantanee). Quelli viaggiano sempre col progetto. Le cartelle di media (``media/``, ``<nome>_gen/``,
 ``<nome>_voice/``...) invece sono *media*: il progetto le nomina per percorso
 assoluto, una copia le condivide, e restano dove sono quando il progetto si
 sposta o si elimina — tranne quando il progetto ha una cartella tutta sua
@@ -27,7 +27,7 @@ from pathlib import Path
 from . import proxy, raccolte
 from .store import Store, porta_percorsi
 
-COMPAGNI = (".chat.json", ".piano.json")      # file <nome><suffisso>
+COMPAGNI = (".chat.json", ".piano.json", ".memoria.md")   # file <nome><suffisso>
 CARTELLA_VERSIONI = ".versioni"                # cartella <nome>.versioni
 GIORNI_CESTINO = 30
 

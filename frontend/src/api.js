@@ -50,6 +50,26 @@ export const api = {
   modificaRaccolta: (path, nome, descrizione) => req('/api/raccolta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, nome, descrizione }) }),
   memoriaRaccolta: (path, testo) => req('/api/raccolta/memoria', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, testo }) }),
   aggiungiRiferimenti: (path, files) => req('/api/raccolta/riferimenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, files }) }),
+  // file di informazioni e skill della raccolta
+  aggiungiDocumenti: (path, files) => req('/api/raccolta/documenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, files }) }),
+  caricaDocumenti: (path, files) => {
+    const fd = new FormData()
+    fd.append('path', path)
+    for (const f of files) fd.append('files', f)
+    return req('/api/raccolta/documenti/carica', { method: 'POST', body: fd })
+  },
+  documento: (path, file) => req(`/api/raccolta/documento?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`),
+  scriviDocumento: (path, file, testo) => req('/api/raccolta/documento', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, file, testo }) }),
+  togliDocumento: (path, file) => req(`/api/raccolta/documento?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
+  creaSkillRaccolta: (path, body) => req('/api/raccolta/skill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, ...body }) }),
+  installaSkillRaccolta: (path, source) => req('/api/raccolta/skill/installa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, source }) }),
+  caricaSkillRaccolta: (path, file) => {
+    const fd = new FormData()
+    fd.append('path', path)
+    fd.append('file', file)
+    return req('/api/raccolta/skill/carica', { method: 'POST', body: fd })
+  },
+  togliSkillRaccolta: (path, nome) => req(`/api/raccolta/skill?path=${encodeURIComponent(path)}&nome=${encodeURIComponent(nome)}`, { method: 'DELETE' }),
   caricaRiferimenti: (path, files) => {
     const fd = new FormData()
     fd.append('path', path)
@@ -312,12 +332,12 @@ export const api = {
   pubblica: (body) => req('/api/social/pubblica', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   statoPubblica: (id) => req(`/api/social/pubblica/${id}`),
   // memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
-  memoria: () => req('/api/memoria'),
+  memoria: (scope = 'all') => req(`/api/memoria?scope=${scope}`),
   copertina: () => req('/api/cover'),
   // copertine dai fotogrammi migliori del montaggio (Store.make_covers)
   faiCopertine: (body) => req('/api/cover/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-  salvaMemoria: (testo) =>
-    req('/api/memoria', {
+  salvaMemoria: (testo, scope = 'all') =>
+    req(`/api/memoria?scope=${scope}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ testo }),

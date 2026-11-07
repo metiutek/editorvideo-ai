@@ -369,7 +369,7 @@ export default function Chat({
           {stili.find((s) => s.id === stile)?.nome || 'style'}
         </button>
         <button className="icon sm" onClick={() => { setMenu(null); setMemoriaAperta(true) }}
-          title="Memory: what the assistant remembers across all your projects">
+          title="Memory: what the assistant remembers for this project and across all your projects">
           <Icon name="memoria" size={14} />
         </button>
         <button className="icon sm" onClick={reset} title="Start the conversation over">
@@ -439,7 +439,7 @@ export default function Chat({
       )}
       </div>
 
-      {memoriaAperta && <EditorMemoria setError={setError} onClose={() => setMemoriaAperta(false)} />}
+      {memoriaAperta && <EditorMemoria setError={setError} progetto={!!project} onClose={() => setMemoriaAperta(false)} />}
 
       <div className="chatlog">
         {!turns.length && (
@@ -1083,35 +1083,56 @@ function SkillMontaggio({ st, setSt, setError }) {
  * Memoria comune a tutti i progetti (memoria.py): la scrivono l'assistente e
  * l'agente MCP, qui si legge e si corregge a mano. E' un file Markdown.
  */
-function EditorMemoria({ setError, onClose }) {
+function EditorMemoria({ setError, onClose, progetto }) {
+  // la memoria di questo video (<progetto>.memoria.md) o quella di tutti i progetti
+  const [scope, setScope] = useState(progetto ? 'project' : 'all')
   const [testo, setTesto] = useState(null)
+  const [letto, setLetto] = useState(null)
   const [file, setFile] = useState('')
   const [saving, setSaving] = useState(false)
   useEffect(() => {
-    api.memoria().then((r) => { setTesto(r.testo); setFile(r.file) })
+    setTesto(null)
+    api.memoria(scope).then((r) => { setTesto(r.testo); setLetto(r.testo); setFile(r.file) })
       .catch((e) => { setError(e.message); onClose() })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [scope])
   const salva = async () => {
     setSaving(true)
-    try { await api.salvaMemoria(testo); onClose() }
+    try { await api.salvaMemoria(testo, scope); onClose() }
     catch (e) { setError(e.message) } finally { setSaving(false) }
   }
+  // con modifiche non salvate l'altra scheda aspetta: save o cancel prima
+  const fermo = testo !== letto
   return (
-    <Modal title="Memory across projects" onClose={onClose}
+    <Modal title="Memory" onClose={onClose}
       actions={<>
         <button onClick={onClose}>cancel</button>
-        <button className="primary" disabled={testo === null || saving} onClick={salva}>
+        <button className="primary" disabled={testo === null || saving || testo === letto} onClick={salva}>
           {saving ? 'saving…' : 'save'}</button>
       </>}>
+      <div className="tabs memoria-tabs">
+        <button className={scope === 'project' ? 'on' : ''} disabled={!progetto || (fermo && scope !== 'project')}
+          title={!progetto ? 'Open a project first' : fermo ? 'Save or cancel the changes first' : 'Only this video'}
+          onClick={() => setScope('project')}>this project</button>
+        <button className={scope === 'all' ? 'on' : ''} disabled={fermo && scope !== 'all'}
+          title={fermo ? 'Save or cancel the changes first' : 'Every project'}
+          onClick={() => setScope('all')}>all projects</button>
+      </div>
       <div className="hint" style={{ marginBottom: 8 }}>
-        Preferences and choices the assistant keeps for every project: usual format, style,
-        voice, channel, things to avoid. It adds them when you state one; edit or delete
-        lines freely. Stays on this computer{file ? <> (<code>{file}</code>)</> : ''}.
+        {scope === 'project'
+          ? <>The assistant's notebook for this video only: what you asked, choices made, what is
+            left to do. It writes here while it works and reads it back when you reopen the
+            project. It travels with the project</>
+          : <>Preferences and choices the assistant keeps for every project: usual format, style,
+            voice, channel, things to avoid. It adds them when you state one; edit or delete
+            lines freely. Stays on this computer</>}
+        {file ? <> (<code>{file}</code>)</> : ''}.
       </div>
       <textarea className="memoria-testo" value={testo ?? 'loading…'} disabled={testo === null}
         spellCheck={false} onChange={(e) => setTesto(e.target.value)}
-        placeholder={'## preferences\n- my videos are 9:16 for Reels'} />
+        placeholder={scope === 'project'
+          ? '## requests\n- end on the logo, 30 seconds\n\n## todo\n- final music'
+          : '## preferences\n- my videos are 9:16 for Reels'} />
     </Modal>
   )
 }

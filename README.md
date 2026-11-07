@@ -755,6 +755,17 @@ shared context on the right. Create and open collections from the start screen; 
 collection badge in the top bar brings you back from any of its videos. For agents: `collection_create`, `collection_list`, `collection_info`,
 `collection_update`, `project_create(collection=...)` and `remember(scope="collection")`.
 
+A collection can also hold **information files** (briefs, scripts, notes, data, pdf: short
+texts reach the assistant whole, long ones it reads when needed with `collection_file`) and
+its own **skills**, ways of editing that apply only to its videos
+(`create_skill(collection=".")`).
+
+**Project memory** — every video has its own notebook, `<project>.memoria.md`: the assistant
+writes there by itself what you asked, the choices made and what is left to do
+(`remember(scope="project")`), and reads it back when the project is reopened, in another
+session or with another model. It travels with the project; edit it from the memory button in
+the assistant tab ("this project").
+
 **Managing projects** — every project has a `…` menu (start screen, collection workspace,
 top bar): rename (the file and its folder follow), duplicate (same media, fresh chat), move
 into a collection or a folder, delete. Deleting moves the project to the vedit trash, where it

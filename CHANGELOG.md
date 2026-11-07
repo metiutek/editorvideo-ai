@@ -5,6 +5,20 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **File di informazioni nelle raccolte** (`<raccolta>/documenti/`): brief, copioni, note,
+  dati, pdf. I testi brevi entrano interi nel contesto di ogni video della raccolta, gli altri
+  si leggono con `collection_file` (MCP e chat). Nella raccolta: "new note" per scriverne
+  uno, upload, dal disco, trascinamento; un testo si apre e si corregge li'.
+  `collection_update(add_files=, write_file=, remove_files=)`.
+- **Skill della raccolta** (`<raccolta>/skills/`): valgono solo per i suoi video. Si
+  scrivono, si caricano (.md, .zip) o arrivano da un link dalla pagina della raccolta;
+  `create_skill`, `install_skill`, `delete_skill` con `collection=` (MCP),
+  `create_skill(collection=true)` dalla chat.
+- **Memoria del progetto** (`<progetto>.memoria.md`): il quaderno dell'AI per quel video
+  solo, scritto da lei mentre lavora (`remember(scope="project")`: richieste, scelte, cosa
+  manca) e riletto alla riapertura (`memoria_progetto` in `project_open`, una volta per
+  conversazione nella chat). Viaggia col progetto. Nella finestra della memoria: schede
+  "this project" e "all projects".
 - **Gestire i progetti** (`progetti.py`): rinominare (anche file e cartella del video),
   duplicare (stessi media, conversazione nuova), spostare in una raccolta o in una cartella,
   eliminare nel cestino di vedit e ripristinare (30 giorni; i media non si toccano). Menu `…`

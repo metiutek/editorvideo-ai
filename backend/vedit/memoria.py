@@ -138,3 +138,34 @@ def contesto(limite: int = MAX_CONTESTO) -> str:
         return ""
     return ("Memoria di chi monta, valida per tutti i progetti (preferenze e scelte gia' "
             "fatte: seguile se la richiesta non dice altro):\n" + testo)
+
+
+# --------------------------------------------------------------------------
+# memoria di un progetto solo: <progetto>.memoria.md accanto al .json
+# --------------------------------------------------------------------------
+#
+# Il quaderno dell'AI per quel video: richieste dell'utente, scelte fatte, cosa
+# manca, dove sta il materiale. Riaprendo il progetto (altra sessione, altro
+# modello) si riparte da li' invece che da zero. Viaggia col progetto
+# (progetti.COMPAGNI): si copia, si sposta e va nel cestino con lui.
+
+INTESTAZIONE_PROGETTO = """\
+# Memoria del progetto
+
+Cose che valgono solo per questo video: cosa ha chiesto l'utente, scelte gia'
+fatte, cosa resta da fare, dove sta il materiale. La scrivono l'assistente e
+l'agente (`remember` con scope="project"); si puo' modificare a mano.
+"""
+
+
+def file_progetto(progetto: str | Path) -> Path:
+    p = Path(progetto)
+    return p.with_name(f"{p.stem}.memoria.md")
+
+
+def contesto_progetto(progetto: str | None, limite: int = MAX_CONTESTO) -> str:
+    """La memoria del progetto come blocco di contesto, o "" se e' vuota."""
+    if not progetto or not (testo := corpo(file_progetto(progetto), limite)):
+        return ""
+    return ("Memoria di questo progetto (solo questo video: richieste, scelte fatte, cosa "
+            "resta da fare; aggiornala con remember(scope=\"project\")):\n" + testo)
