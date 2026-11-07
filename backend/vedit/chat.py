@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from . import allinea, domande, estensioni, generativo, llm, memoria, presets, stili, tts, web
+from . import allinea, canali, domande, estensioni, generativo, llm, memoria, presets, stili, tts, web
 
 SYSTEM = """Sei l'assistente di montaggio dentro vedit, un editor video non lineare.
 
@@ -56,6 +56,11 @@ Memoria: quello che vale per tutti i progetti di questo utente (formato
 abituale, stile, voce, canale, cose che non vuole) ti arriva come "Memoria di
 chi monta". Quando l'utente esprime una preferenza che vale oltre questo video,
 salvala con remember, breve e senza chiedere; se ne smentisce una, forget.
+Se il video fa parte di un canale ti arriva anche il suo contesto (descrizione,
+memoria del canale, immagini di riferimento come logo, miniature, palette,
+personaggi): rispettalo in ogni scelta di grafica, colore, tono e formato. Cio'
+che vale per il canale e non per tutti i video dell'utente va in
+remember con scope "channel".
 
 Web: web_search cerca in tutto il web (pagine, immagini, video, notizie),
 web_read legge una pagina, web_download scarica immagini e video da qualunque
@@ -362,11 +367,14 @@ def build_tools() -> list[dict]:
               {"urls": {"type": "array", "items": _STR}, "max_height": {"type": "integer"}},
               ["urls"]),
         _tool("remember",
-              "Salva nella memoria comune a tutti i progetti una preferenza o scelta "
-              "dell'utente (formato, stile, voce, canale, cose da evitare). Una riga breve.",
-              {"note": _STR, "section": _STR}, ["note"]),
-        _tool("forget", "Toglie dalla memoria comune le voci che contengono match.",
-              {"match": _STR}, ["match"]),
+              "Salva nella memoria una preferenza o scelta dell'utente, una riga breve. "
+              "scope 'all' (predefinito): vale in tutti i progetti (formato, stile, voce, cose "
+              "da evitare). scope 'channel': vale solo per i video del canale di questo "
+              "progetto (pubblico, tono, grafica, nomi ricorrenti).",
+              {"note": _STR, "section": _STR, "scope": {"type": "string", "enum": ["all", "channel"]}},
+              ["note"]),
+        _tool("forget", "Toglie dalla memoria (scope 'all' o 'channel') le voci che contengono match.",
+              {"match": _STR, "scope": {"type": "string", "enum": ["all", "channel"]}}, ["match"]),
         _tool("learn_style",
               "Impara uno stile di montaggio da un video di riferimento (file, link "
               "YouTube/TikTok/Instagram o media importato): misura ritmo, transizioni, "
@@ -556,10 +564,15 @@ def execute(store: Any, name: str, args: dict) -> str:
                           ensure_ascii=False)
 
     if name == "remember":
-        return json.dumps(memoria.ricorda(args["note"], args.get("section") or "general"),
-                          ensure_ascii=False)
+        if args.get("scope") == "channel":
+            out = canali.ricorda(None, args["note"], args.get("section") or "general", store.path)
+        else:
+            out = memoria.ricorda(args["note"], args.get("section") or "general")
+        return json.dumps(out, ensure_ascii=False)
 
     if name == "forget":
+        if args.get("scope") == "channel":
+            return json.dumps(canali.dimentica(None, args["match"], store.path), ensure_ascii=False)
         return json.dumps(memoria.dimentica(args["match"]), ensure_ascii=False)
 
     if name == "review_edit":
@@ -790,6 +803,31 @@ def comando_skill(question: str, claude_code: bool, progetto: str | None = None)
     return out
 
 
+def blocco_canale(progetto: str | None, stato_chat: dict, claude_code: bool) -> list[dict]:
+    """Il contesto del canale da aggiungere al turno, se non e' gia' stato mandato.
+
+    Claude Code le immagini le legge da se' (i percorsi sono nel testo); agli
+    altri modelli arriva il foglio dei riferimenti come immagine sola."""
+    testo = canali.contesto(progetto)
+    if not testo:
+        stato_chat.pop("canale_inviato", None)
+        return []
+    c = canali.di_progetto(progetto)
+    foglio = None if claude_code else canali.foglio(c)
+    firma = f"{testo}|{foglio}"
+    if firma == stato_chat.get("canale_inviato"):
+        return []
+    stato_chat["canale_inviato"] = firma
+    out = [{"type": "text", "text": testo}]
+    if foglio:
+        try:
+            out += [{"type": "text", "text": "Foglio dei riferimenti del canale (il nome del file "
+                                             "sotto ogni immagine):"}, llm.immagine(foglio)]
+        except OSError:
+            pass
+    return out
+
+
 def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict], str],
         refs: list[dict] | None = None, mcp_url: str | None = None,
         fermo: Callable[[], bool] = lambda: False, stile: str | None = None,
@@ -830,6 +868,9 @@ def run(store: Any, stato_chat: dict, question: str, run_op: Callable[[str, dict
     if ricordi and ricordi != stato_chat.get("memoria_inviata"):
         contenuto.append({"type": "text", "text": ricordi})
         stato_chat["memoria_inviata"] = ricordi
+    # il canale del video: descrizione, memoria e riferimenti, piu' il foglio delle
+    # immagini. Come la memoria, una volta per conversazione e di nuovo se cambia
+    contenuto += blocco_canale(store.path, stato_chat, p["tipo"] == "claude_code")
     guida = stili.blocco(stile)
     if guida and guida != stato_chat.get("stile_inviato"):
         contenuto.append({"type": "text", "text": guida})

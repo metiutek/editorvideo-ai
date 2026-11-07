@@ -2,6 +2,20 @@
 
 Le voci più recenti stanno in cima.
 
+## Non ancora rilasciato
+
+### Aggiunto
+- **Canali** (`canali.py`): un canale YouTube, una serie o un cliente e' una cartella che
+  raccoglie tutti i suoi video, con una memoria propria (`MEMORIA.md` del canale) e immagini di
+  riferimento con una nota ciascuna (logo, miniature, palette, personaggi). Ogni video del
+  canale porta quel contesto all'agente MCP (`canale` in `project_create`/`project_open`) e
+  all'assistente della chat (una volta per conversazione, col foglio dei riferimenti come
+  immagine). Strumenti MCP `channel_create`, `channel_list`, `channel_info` (con il foglio),
+  `channel_update`; `project_create(channel=...)` mette il video nella cartella del canale;
+  `remember`/`forget`/`memory` con `scope="channel"`. Nella UI: canali nella schermata iniziale,
+  finestra del canale (video, nuovo video, riferimenti trascinabili, memoria), nome del canale
+  nella testata. Una cartella che ha gia' dei progetti diventa canale con tutti dentro.
+
 ## v0.5.3 — 2026-11-02 · 52 blocchi, movimenti di camera, piano, skill incluse
 
 ### Aggiunto

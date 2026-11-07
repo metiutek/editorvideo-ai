@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { api, connectEvents } from './api.js'
 import Chat from './Chat.jsx'
+import { Canale, CanaliHome, NuovoCanale } from './Canali.jsx'
 import { Confirm, CopiaErrore, FileBrowser, NewProject, ProjectFormat, RenderDialog } from './Dialogs.jsx'
 import Voce from './Voce.jsx'
 import Generazione from './Generazione.jsx'
@@ -48,6 +49,9 @@ export default function App() {
   const [sys, setSys] = useState(null)
   const [project, setProject] = useState(null)
   const [path, setPath] = useState(null)
+  // il canale di cui fa parte il progetto aperto (canali.py), e quello mostrato nella finestra
+  const [canale, setCanale] = useState(null)
+  const [canaleAperto, setCanaleAperto] = useState(null)
   const [revision, setRevision] = useState('0')
   const [selected, setSelected] = useState(null)
   // effetto sotto il mouse nel catalogo: il monitor lo mostra applicato senza
@@ -119,6 +123,7 @@ export default function App() {
     }
     setProject(r.project)
     if ('path' in r) setPath(r.path)
+    if ('canale' in r) setCanale(r.canale)
     if (r.revision) setRevision(r.revision)
   }, [])
 
@@ -432,6 +437,7 @@ export default function App() {
     setSource(null)
     setTab('program')
     if (r.recenti) setSys((s) => (s ? { ...s, recenti: r.recenti } : s))
+    if (r.canali) setSys((s) => (s ? { ...s, canali: r.canali } : s))
   }, [applyState])
   // un progetto nuovo riparte senza stile di montaggio: quello del progetto
   // prima non e' una scelta fatta per questo
@@ -457,7 +463,8 @@ export default function App() {
         if (!e.dataTransfer.types.includes('Files')) return
         // sopra la chat il file diventa un allegato: l'invito a importarlo
         // nel progetto direbbe il contrario di quello che succede
-        if (e.target.closest?.('.chat')) { setDropping(false); return }
+        // dentro una finestra (i riferimenti di un canale) il file e' suo
+        if (e.target.closest?.('.chat, .overlay')) { setDropping(false); return }
         e.preventDefault(); setDropping(true)
       }}
       onDragLeave={(e) => {
@@ -467,7 +474,7 @@ export default function App() {
       }}
       onDragEnd={() => setDropping(false)}
       onDrop={(e) => {
-        if (!e.dataTransfer.files?.length) return
+        if (!e.dataTransfer.files?.length || e.target.closest?.('.overlay')) return
         e.preventDefault()
         setDropping(false)
         importFiles(leggiTrascinati(e.dataTransfer))
@@ -519,6 +526,12 @@ export default function App() {
           onSuMisura={() => setDialog('particelle')} />
 
         <span className="spacer" />
+        {project && canale && (
+          <button className="ghost ch-badge" title={`Channel: ${canale.path}
+Its memory and reference images reach the assistant in every video`}
+            onClick={() => setCanaleAperto(canale.path)}>
+            <Icon name="canale" />{canale.name}</button>
+        )}
         {project && (
           <button className="ghost" title="Video format: 16:9, 9:16, 1:1, 4:5…"
             onClick={() => setDialog('formato')}>
@@ -588,7 +601,8 @@ export default function App() {
             </div></div>
           ) : !project ? (
             <Benvenuto recenti={sys.recenti} onNew={() => setDialog('new')}
-              onOpen={() => setDialog('open')} onRecent={openProject} />
+              onOpen={() => setDialog('open')} onRecent={openProject}
+              canali={sys.canali} onCanale={setCanaleAperto} onNuovoCanale={() => setDialog('nuovo-canale')} />
           ) : tab === 'source' && source ? (
             <SourceMonitor media={source} tracks={project?.tracks || []} run={run}
               setError={setError} playhead={playhead}
@@ -722,6 +736,23 @@ export default function App() {
           onCreate={(p, name, preset, extra) => api.createProject(p, name, preset, extra)
             .then(progettoNuovo).catch((e) => setError(e.message))} />
       )}
+      {dialog === 'nuovo-canale' && (
+        <NuovoCanale home={sys?.home} setError={setError} onClose={() => setDialog(null)}
+          onCreato={(c) => {
+            api.canali().then((r) => setSys((x) => (x ? { ...x, canali: r.canali } : x))).catch(() => {})
+            setCanaleAperto(c.path)
+          }} />
+      )}
+      {canaleAperto && (
+        <Canale path={canaleAperto} setError={setError} flash={flash}
+          onClose={() => setCanaleAperto(null)}
+          onApriVideo={openProject}
+          onCreaVideo={(body) => api.videoCanale(body).then(progettoNuovo).catch((e) => setError(e.message))}
+          onCambiato={(c) => {
+            if (canale?.path === c.path) setCanale({ path: c.path, name: c.name })
+            setSys((x) => (x ? { ...x, canali: (x.canali || []).map((k) => (k.path === c.path ? { ...k, name: c.name, description: c.description } : k)) } : x))
+          }} />
+      )}
       {dialog === 'pubblica' && project && (
         <Pubblica file={job?.state === 'done' ? job.output : ''} nome={project.name}
           setError={setError} flash={flash} onClose={() => setDialog(null)} />
@@ -794,7 +825,7 @@ export default function App() {
  * spenti e nessuna indicazione su da dove partire. Qui ci sono le due cose che
  * si possono fare, e i progetti aperti di recente a un clic.
  */
-function Benvenuto({ recenti, onNew, onOpen, onRecent }) {
+function Benvenuto({ recenti, onNew, onOpen, onRecent, canali, onCanale, onNuovoCanale }) {
   return (
     <div className="preview benvenuto">
       <div className="benvenuto-box">
@@ -822,6 +853,7 @@ function Benvenuto({ recenti, onNew, onOpen, onRecent }) {
             ))}
           </div>
         )}
+        <CanaliHome canali={canali} onApri={onCanale} onNuovo={onNuovoCanale} />
         <div className="hint">You can also drop files here: the project is created for you.</div>
       </div>
     </div>

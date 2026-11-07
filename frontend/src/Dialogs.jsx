@@ -46,7 +46,7 @@ export function CopiaErrore({ testo }) {
   )
 }
 
-export function Modal({ title, children, onClose, actions, narrow }) {
+export function Modal({ title, children, onClose, actions, narrow, wide }) {
   const box = useRef(null)
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export function Modal({ title, children, onClose, actions, narrow }) {
 
   return (
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`dialog ${narrow ? 'narrow' : ''}`} ref={box}
+      <div className={`dialog ${narrow ? 'narrow' : ''} ${wide ? 'wide' : ''}`} ref={box}
         role="dialog" aria-modal="true" aria-label={title}>
         <h3>{title}</h3>
         <div className="body">{children}</div>
@@ -235,7 +235,7 @@ const QUALITA = [{ lato: 720, nome: '720p' }, { lato: 1080, nome: '1080p' },
   { lato: 1440, nome: '1440p' }, { lato: 2160, nome: '4K' }]
 
 /** Riquadri cliccabili, ognuno disegnato nella sua proporzione. */
-function SceltaFormato({ formato, lato, onFormato, onLato }) {
+export function SceltaFormato({ formato, lato, onFormato, onLato }) {
   return (
     <>
       <div className="formati" role="radiogroup" aria-label="aspect ratio">

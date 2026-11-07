@@ -811,6 +811,15 @@ le tue preferenze durature (formato abituale, stile, voce, canale, cose che non 
 `remember` / `forget`, e le rileggono a ogni progetto. Si modifica a mano, o dal pulsante col
 segnalibro nella scheda assistente.
 
+**Canali** — un canale YouTube, una serie, un cliente: una cartella con tutti i suoi video (un
+progetto ciascuno), piu' una **memoria del canale** e delle **immagini di riferimento** (logo,
+miniature, palette, personaggi, grafiche, ognuna con una nota). Ogni video del canale porta
+quel contesto all'assistente e all'agente MCP — descrizione, memoria e il foglio dei
+riferimenti come immagine — cosi' aspetto, tono e pubblico del canale non si ripetono a ogni
+video. I canali si creano e si aprono dalla schermata iniziale; dalla testata di un suo video
+il nome del canale lo riapre. Per gli agenti: `channel_create`, `channel_list`, `channel_info`,
+`channel_update`, `project_create(channel=...)` e `remember(scope="channel")`.
+
 ---
 
 ## Keyframe
@@ -845,6 +854,7 @@ backend/vedit/
   tts.py         voce dal testo: compatibili OpenAI, ElevenLabs, Piper, voce di sistema
   social.py      pubblicare: YouTube (OAuth, caricamento a riprese), casella TikTok
   memoria.py     memoria fra i progetti (~/.vedit/MEMORIA.md)
+  canali.py      canali: tanti video con memoria e immagini di riferimento comuni
   allinea.py     quando la voce dice cosa, in secondi di timeline (speech_times)
   conversazioni.py  la chat di ogni progetto, salvata accanto
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito

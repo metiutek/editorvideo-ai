@@ -33,7 +33,7 @@ from . import analyze, captions, cleanup, colormatch, ops
 from .allinea import METODO as METODO_VOCE
 from . import domande as domande_mod
 from . import effects as fx
-from . import apprendi, blocchi, estensioni, ffmpeg, generativo, hw, memoria, moves, particelle, piano, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
+from . import apprendi, blocchi, canali, estensioni, ffmpeg, generativo, hw, memoria, moves, particelle, piano, social, tts, web, probe, proxy, render, review, stili, story, versions, vision
 from .model import TRANSITIONS
 from .store import EditError, Store, rapporto
 
@@ -216,6 +216,18 @@ questo video ("i miei video sono sempre 9:16", "niente musica epica", "il canale
 si chiama...", "voce femminile calma"), salvala con remember, breve e concreta,
 senza chiedere. Una preferenza smentita va tolta con forget. memory la legge
 per intero. Non salvare cio' che riguarda solo il progetto aperto.
+
+CANALI. Un canale (YouTube, TikTok, una serie, un cliente) raccoglie molti video
+con una memoria e delle immagini di riferimento comuni (logo, miniature, palette,
+personaggi). Se il progetto ne fa parte, project_create e project_open
+restituiscono "canale": descrizione, memoria del canale e riferimenti con le
+note. Rispettali in ogni video: grafica, colori, tono, formato. Guarda le
+immagini con channel_info prima di disegnare grafica o miniature. Una preferenza
+che vale per il canale e non per tutti i video dell'utente va in
+remember(scope="channel"). Un video nuovo del canale:
+project_create(channel=..., name=...) lo mette nella cartella giusta.
+channel_list li elenca, channel_create ne crea uno, channel_update cambia nome,
+descrizione e riferimenti.
 
 SKILL DI MONTAGGIO. project_create e project_open restituiscono anche "skill":
 i modi di montare che l'utente ha aggiunto a vedit (nome e quando usarli).
@@ -486,15 +498,23 @@ async def _off(fn, *args, **kwargs):
 
 
 @_strumento()
-def project_create(path: str, name: str = "untitled", preset: str = "1080p",
+def project_create(path: str | None = None, name: str = "untitled", preset: str = "1080p",
                    width: int | None = None, height: int | None = None,
-                   fps: float | None = None, size: int | None = None) -> dict:
+                   fps: float | None = None, size: int | None = None,
+                   channel: str | None = None) -> dict:
     """Crea un progetto e lo rende quello corrente.
 
     preset: 1080p, 1080p60, 4k, 720p, vertical, vertical60, square, oppure un
     formato: 16:9, 9:16 (reel/short/TikTok), 1:1, 4:5 (feed), 4:3, 3:4, 21:9,
     2:3, WxH. size e' il lato corto dei formati (1080 di norma, 2160 per il 4k).
+    channel (nome o cartella di un canale): il video nasce dentro il canale, in
+    <canale>/<name>/<name>.json se manca path; path relativo e' relativo al canale.
     """
+    if channel:
+        c = canali.trova(channel)
+        path = canali.dentro(c, path) if path else canali.percorso_video(str(c), name)
+    elif not path:
+        raise EditError("give path (where to save the project .json) or channel")
     s = Store.create(name=name, preset=preset, path=path, width=width, height=height, fps=fps,
                      size=size)
     key = str(Path(s.path).resolve())
@@ -519,10 +539,13 @@ def project_open(path: str) -> dict:
 
 
 def _con_memoria(out: dict) -> dict:
-    """Aggiunge la memoria fra i progetti e le skill di montaggio, se ci sono:
-    e' il primo giro di ogni lavoro."""
+    """Aggiunge la memoria fra i progetti, il canale e le skill di montaggio, se
+    ci sono: e' il primo giro di ogni lavoro."""
     if m := memoria.contesto():
         out["memoria"] = m
+    if c := canali.contesto(out.get("path")):
+        out["canale"] = c
+        canali.usa(canali.di_progetto(out["path"]))
     # le incluse nel pacchetto stanno gia' nelle istruzioni del server (e in list_skills):
     # ripeterle a ogni apertura sarebbe contesto in piu' senza dire niente di nuovo
     if voci := [s for s in estensioni.skill_vedit(out.get("path")) if s["origin"] != "incluse"]:
@@ -2867,26 +2890,107 @@ async def web_download(url: str | None = None, urls: list[str] | None = None,
     return out
 
 
+def _scope(scope: str, channel: str | None) -> bool:
+    """True se si lavora sulla memoria di un canale."""
+    if scope not in ("all", "channel"):
+        raise EditError("scope is 'all' (every project) or 'channel' (the videos of a channel)")
+    return scope == "channel" or bool(channel)
+
+
 @_strumento()
-async def remember(note: str, section: str = "general") -> dict:
-    """Salva nella memoria comune a TUTTI i progetti (MEMORIA.md) una preferenza
-    o una scelta di chi monta: formato abituale, stile, ritmo, musica, voce,
-    nome del canale, pubblico, errori da non ripetere. Una riga breve e concreta.
-    section raggruppa: preferences, style, audio, voice, channel, publishing...
+async def remember(note: str, section: str = "general", scope: str = "all",
+                   channel: str | None = None) -> dict:
+    """Salva nella memoria una preferenza o una scelta di chi monta, breve e concreta.
+
+    scope="all" (MEMORIA.md): vale in TUTTI i progetti: formato abituale, stile,
+    ritmo, musica, voce, errori da non ripetere. scope="channel": vale per i video
+    del canale del progetto aperto (o di ``channel``): pubblico, tono, grafica,
+    nomi ricorrenti, sigla. section raggruppa: preferences, style, audio, voice,
+    graphics, publishing...
     """
+    if _scope(scope, channel):
+        return canali.ricorda(channel, note, section, _percorso_corrente())
     return memoria.ricorda(note, section)
 
 
 @_strumento()
-async def forget(match: str) -> dict:
-    """Toglie dalla memoria comune le voci che contengono ``match``."""
+async def forget(match: str, scope: str = "all", channel: str | None = None) -> dict:
+    """Toglie dalla memoria (scope "all" o "channel") le voci che contengono ``match``."""
+    if _scope(scope, channel):
+        return canali.dimentica(channel, match, _percorso_corrente())
     return memoria.dimentica(match)
 
 
 @_strumento()
-async def memory() -> dict:
-    """La memoria comune a tutti i progetti, per intero, e dove sta il file."""
+async def memory(scope: str = "all", channel: str | None = None) -> dict:
+    """La memoria per intero e dove sta il file: comune a tutti i progetti
+    (scope="all") o del canale (scope="channel")."""
+    if _scope(scope, channel):
+        f = canali.file_memoria(canali.trova(channel, _percorso_corrente()))
+        return {"file": str(f), "testo": memoria.leggi(f)}
     return {"file": str(memoria.percorso()), "testo": memoria.leggi()}
+
+
+# --------------------------------------------------------------------------
+# canali
+# --------------------------------------------------------------------------
+
+
+@_strumento()
+async def channel_list() -> list[dict]:
+    """I canali: nome, cartella, descrizione, quanti riferimenti. I video di
+    ognuno li da' channel_info."""
+    return canali.elenco()
+
+
+@_strumento()
+async def channel_create(name: str, folder: str | None = None, description: str = "") -> dict:
+    """Crea un canale: una cartella che raccoglie i video, con memoria e immagini
+    di riferimento comuni. Senza folder sta nella cartella Video dell'utente. Una
+    cartella che esiste gia' diventa canale con i progetti che contiene."""
+    out = canali.crea(name, folder, description)
+    return {"path": out["path"], "name": out["name"], "video": len(out["video"])}
+
+
+@_strumento()
+async def channel_info(channel: str | None = None):
+    """Il canale (quello del progetto aperto se manca ``channel``): descrizione,
+    memoria, riferimenti con le note, video che contiene; piu' il foglio delle
+    immagini di riferimento da guardare."""
+    c = canali.trova(channel, _percorso_corrente())
+    out = canali.info(str(c))
+    out["video"] = [{k: v[k] for k in ("path", "name", "duration")} for v in out["video"]]
+    out["riferimenti"] = [{"file": r["file"], "path": r["path"],
+                           **({"nota": r["nota"]} if r["nota"] else {})}
+                          for r in out["riferimenti"]]
+    foglio = await _off(canali.foglio, c)
+    return [out, Image(path=foglio)] if foglio else out
+
+
+@_strumento()
+async def channel_update(channel: str | None = None, name: str | None = None,
+                         description: str | None = None,
+                         add_references: list[str] | None = None,
+                         notes: dict[str, str] | None = None,
+                         remove_references: list[str] | None = None) -> dict:
+    """Cambia un canale (quello del progetto aperto se manca ``channel``).
+
+    add_references: immagini da copiare nei riferimenti (logo, miniature, palette,
+    personaggi). notes: {"file": "che cos'e' e come usarlo"} per i riferimenti
+    (stringa vuota toglie la nota). remove_references: nomi di file da togliere.
+    """
+    c = str(canali.trova(channel, _percorso_corrente()))
+    if name is not None or description is not None:
+        canali.modifica(c, name, description)
+    if add_references:
+        canali.aggiungi(c, add_references)
+    if notes:
+        canali.annota(c, notes)
+    if remove_references:
+        canali.togli(c, remove_references)
+    out = canali.info(c)
+    return {"name": out["name"], "description": out["description"],
+            "riferimenti": [r["file"] for r in out["riferimenti"]]}
 
 
 @_strumento()
@@ -2903,6 +3007,7 @@ _FUORI_BATCH = {"batch", "render_video", "ask_user", "open_ui", "close_ui", "pro
                 "project_open", "install_ffmpeg", "preview_frame", "preview_media",
                 "preview_grid", "scope_image", "undo", "redo", "restore_snapshot",
                 "remember", "forget", "memory", "voice_engines", "publish_video",
+                "channel_list", "channel_create", "channel_info", "channel_update",
                 "social_accounts", "web_search", "web_read", "web_download", "speech_times",
                 "list_skills", "use_skill", "create_skill", "install_skill", "delete_skill",
                 "make_covers", "propose_plan"}

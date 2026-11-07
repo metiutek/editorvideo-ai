@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import (blocchi, captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
+from . import (blocchi, canali, captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
                render, review, social, stili, tts, web)
 from . import piano as piano_mod
 from . import probe as probe_mod
@@ -129,8 +129,11 @@ class Session:
 
     def state_of_project(self) -> dict:
         """Progetto, percorso e revisione: quello che la UI applica a ogni cambio."""
+        c = canali.di_progetto(self.store.path) if self.store else None
         return {"project": self.store.summary("full") if self.store else None,
                 "path": self.store.path if self.store else None,
+                # il canale di cui fa parte il video: la testata lo mostra
+                "canale": canali.breve(c) if c else None,
                 "revision": self.revision(), "seq": self.seq}
 
     def revision(self) -> str:
@@ -365,6 +368,7 @@ def state() -> dict:
         # l'editor per la prima volta non deve inventarsi un percorso
         "home": _cartella_video(),
         "recenti": recenti(),
+        "canali": canali.elenco(),
         "effects": fx.describe(),
         "transitions": list(TRANSITIONS),
         "library": presets.describe(),
@@ -381,11 +385,7 @@ def state() -> dict:
 
 def _cartella_video() -> str:
     """Dove proporre i nuovi progetti: la cartella Video dell'utente se c'e'."""
-    home = Path.home()
-    for nome in ("Videos", "Video", "Movies", "Filmati"):
-        if (home / nome).is_dir():
-            return str(home / nome)
-    return str(home)
+    return str(canali.cartella_video())
 
 
 @app.get("/api/project")
@@ -405,9 +405,16 @@ def project_create(body: CreateBody) -> dict:
                             size=body.size, fps=body.fps))
     except (EditError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
+    return _aperto()
+
+
+def _aperto() -> dict:
+    """Dopo aver creato o aperto un progetto: recenti, canale in cima, evento."""
     ricorda_recente(S.store)
+    if c := canali.di_progetto(S.store.path):
+        canali.usa(c)
     S.publish({"type": "project"})
-    return {**S.state_of_project(), "recenti": recenti()}
+    return {**S.state_of_project(), "recenti": recenti(), "canali": canali.elenco()}
 
 
 @app.post("/api/project/open")
@@ -416,9 +423,139 @@ def project_open(body: OpenBody) -> dict:
         attach(Store.open(body.path))
     except (EditError, OSError, ValueError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    ricorda_recente(S.store)
-    S.publish({"type": "project"})
-    return {**S.state_of_project(), "recenti": recenti()}
+    return _aperto()
+
+
+# --------------------------------------------------------------------------
+# canali: tanti video con memoria e riferimenti comuni (canali.py)
+# --------------------------------------------------------------------------
+
+
+class CanaleBody(BaseModel):
+    nome: str
+    cartella: str | None = None
+    descrizione: str = ""
+
+
+class CanaleModBody(BaseModel):
+    path: str
+    nome: str | None = None
+    descrizione: str | None = None
+
+
+class CanaleMemoriaBody(BaseModel):
+    path: str
+    testo: str
+
+
+class CanaleRifBody(BaseModel):
+    path: str
+    files: list[str]
+    nota: str = ""
+
+
+class CanaleNotaBody(BaseModel):
+    path: str
+    file: str
+    nota: str
+
+
+class CanaleVideoBody(BaseModel):
+    path: str
+    nome: str = "new video"
+    preset: str = "1080p"
+    size: int | None = None
+    fps: float | None = None
+
+
+def _canale(fn, *args):
+    try:
+        return fn(*args)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/canali")
+def canali_elenco() -> dict:
+    return {"canali": canali.elenco(), "home": _cartella_video()}
+
+
+@app.post("/api/canali")
+def canale_crea(body: CanaleBody) -> dict:
+    return _canale(canali.crea, body.nome, body.cartella, body.descrizione)
+
+
+@app.delete("/api/canali")
+def canale_dimentica(path: str) -> dict:
+    """Toglie il canale dall'elenco; la cartella e i video restano."""
+    canali.dimentica_canale(path)
+    return {"canali": canali.elenco()}
+
+
+@app.get("/api/canale")
+def canale_info(path: str) -> dict:
+    return _canale(canali.info, path)
+
+
+@app.put("/api/canale")
+def canale_modifica(body: CanaleModBody) -> dict:
+    return _canale(canali.modifica, body.path, body.nome, body.descrizione)
+
+
+@app.put("/api/canale/memoria")
+def canale_memoria(body: CanaleMemoriaBody) -> dict:
+    _canale(canali.scrivi_memoria, body.path, body.testo)
+    return _canale(canali.info, body.path)
+
+
+@app.post("/api/canale/riferimenti")
+def canale_riferimenti(body: CanaleRifBody) -> dict:
+    """Immagini scelte sul disco: si copiano nella cartella del canale."""
+    _canale(canali.aggiungi, body.path, body.files, body.nota)
+    return _canale(canali.info, body.path)
+
+
+@app.post("/api/canale/riferimenti/carica")
+async def canale_riferimenti_carica(path: str = Form(...),
+                                    files: list[UploadFile] = File(...)) -> dict:
+    """Immagini trascinate dal desktop: il browser non dice da dove vengono."""
+    c = _canale(canali.trova, path)
+    for f in files:
+        dest = _canale(canali.libero, c, f.filename or "image.png")
+        with dest.open("wb") as out:
+            while chunk := await f.read(1 << 20):
+                out.write(chunk)
+    return _canale(canali.info, str(c))
+
+
+@app.put("/api/canale/riferimento")
+def canale_nota(body: CanaleNotaBody) -> dict:
+    _canale(canali.annota, body.path, {body.file: body.nota})
+    return _canale(canali.info, body.path)
+
+
+@app.delete("/api/canale/riferimento")
+def canale_togli(path: str, file: str) -> dict:
+    _canale(canali.togli, path, [file])
+    return _canale(canali.info, path)
+
+
+@app.get("/api/canale/immagine")
+def canale_immagine(path: str, file: str) -> FileResponse:
+    f = _canale(canali.immagine, path, file)
+    return FileResponse(f, media_type=mimetypes.guess_type(f.name)[0] or "image/png")
+
+
+@app.post("/api/canale/video")
+def canale_video(body: CanaleVideoBody) -> dict:
+    """Un video nuovo dentro il canale, nella sua cartella."""
+    dove = _canale(canali.percorso_video, body.path, body.nome)
+    try:
+        attach(Store.create(name=body.nome, preset=body.preset, path=dove,
+                            size=body.size, fps=body.fps))
+    except (EditError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return _aperto()
 
 
 @app.get("/api/recenti")
