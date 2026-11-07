@@ -1,26 +1,28 @@
-"""Canali: tanti video sotto un tetto, con memoria e riferimenti comuni.
+"""Raccolte: tanti video sotto un tetto, con memoria e riferimenti comuni.
 
-Un canale (YouTube, TikTok, una serie, un cliente) e' una cartella::
+Una raccolta e' una cartella per qualunque gruppo di video che hanno qualcosa
+in comune: un canale YouTube o TikTok, i video di famiglia, un cliente, una
+serie, un corso, i viaggi. Dentro::
 
-    <canale>/
-      canale.json          nome e descrizione
-      MEMORIA.md           memoria del canale, stesso formato di memoria.py
+    <raccolta>/
+      raccolta.json        nome e descrizione
+      MEMORIA.md           memoria della raccolta, stesso formato di memoria.py
       riferimenti/         immagini che valgono per ogni video (logo, miniature,
-                           palette, personaggi, grafiche) + note.json con una nota a testa
+                           palette, persone, grafiche) + note.json con una nota a testa
       <video>/<video>.json un progetto per video, con le sue cartelle accanto
 
-Un progetto fa parte del canale se il suo file sta dentro la cartella: si
-risale dalle cartelle che lo contengono fino a ``canale.json``. Niente indice da
-tenere allineato: spostare un video dentro o fuori basta, e trasformare in
-canale una cartella che ha gia' dei progetti li adotta tutti.
+Un progetto fa parte della raccolta se il suo file sta dentro la cartella: si
+risale dalle cartelle che lo contengono fino a ``raccolta.json``. Niente indice
+da tenere allineato: spostare un video dentro o fuori basta, e trasformare in
+raccolta una cartella che ha gia' dei progetti li adotta tutti.
 
-Il contesto del canale (descrizione, memoria, elenco dei riferimenti con le
+Il contesto della raccolta (descrizione, memoria, elenco dei riferimenti con le
 note) arriva all'agente MCP all'apertura del progetto e all'assistente della
 chat una volta per conversazione, insieme al foglio dei riferimenti come
-immagine: e' il "chi siamo" che non si deve ripetere a ogni video.
+immagine: e' il "di che cosa si tratta" che non si deve ripetere a ogni video.
 
-``~/.vedit/canali.json`` ricorda solo quali cartelle sono canali, per elencarli
-nella schermata iniziale; quelle sparite si saltano.
+``~/.vedit/raccolte.json`` ricorda solo quali cartelle sono raccolte, per
+elencarle nella schermata iniziale; quelle sparite si saltano.
 """
 
 from __future__ import annotations
@@ -36,30 +38,31 @@ from pathlib import Path
 
 from . import memoria
 
-FILE = "canale.json"
+FILE = "raccolta.json"
 CARTELLA_RIF = "riferimenti"
 NOTE = "note.json"
 IMMAGINI = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-# fin dove si risale per trovare il canale di un progetto: <canale>/<video>/<video>.json
+# fin dove si risale per trovare la raccolta di un progetto: <raccolta>/<video>/<video>.json
 # e' a due livelli, qualche sottocartella in piu' e' organizzazione dell'utente
 RISALITA = 5
-# quanti progetti cercare nella cartella del canale, e a che profondita'
+# quanto in profondita' cercare i progetti nella cartella, e quanti al massimo
 PROFONDITA = 3
 MAX_VIDEO = 500
 
 _INTESTAZIONE = """\
-# Memoria del canale
+# Memoria della raccolta
 
-Cose che valgono per tutti i video di questo canale: pubblico, tono, formato,
-grafica, nomi ricorrenti, errori da non ripetere. La scrivono l'assistente e
-l'agente (`remember` con scope="channel"); si puo' modificare a mano.
+Cose che valgono per tutti i video di questa raccolta: di che cosa si tratta,
+pubblico, tono, formato, grafica, nomi e persone ricorrenti, errori da non
+ripetere. La scrivono l'assistente e l'agente (`remember` con
+scope="collection"); si puo' modificare a mano.
 """
 
 _lock = threading.Lock()
 
 
-class CanaleError(ValueError):
-    """Richiesta impossibile su un canale: il testo va a chi l'ha fatta."""
+class RaccoltaError(ValueError):
+    """Richiesta impossibile su una raccolta: il testo va a chi l'ha fatta."""
 
 
 # --------------------------------------------------------------------------
@@ -68,11 +71,11 @@ class CanaleError(ValueError):
 
 
 def _registro() -> Path:
-    return Path(os.environ.get("VEDIT_CACHE") or (Path.home() / ".vedit")) / "canali.json"
+    return Path(os.environ.get("VEDIT_CACHE") or (Path.home() / ".vedit")) / "raccolte.json"
 
 
 def cartella_video() -> Path:
-    """Dove proporre i canali e i progetti nuovi: la cartella Video dell'utente se c'e'."""
+    """Dove proporre raccolte e progetti nuovi: la cartella Video dell'utente se c'e'."""
     home = Path.home()
     for nome in ("Videos", "Video", "Movies", "Filmati"):
         if (home / nome).is_dir():
@@ -108,27 +111,27 @@ def _registra(cartella: Path) -> None:
         _salva_registro([str(cartella), *voci])
 
 
-def dimentica_canale(cartella: str) -> dict:
-    """Toglie il canale dall'elenco. I file restano dove sono."""
+def dimentica_raccolta(cartella: str) -> dict:
+    """Toglie la raccolta dall'elenco. I file restano dove sono."""
     c = Path(cartella).resolve()
     with _lock:
         voci = _letti()
         tenute = [v for v in voci if Path(v).resolve() != c]
         _salva_registro(tenute)
-    return {"tolto": len(voci) != len(tenute)}
+    return {"tolta": len(voci) != len(tenute)}
 
 
-def _e_canale(cartella: Path) -> bool:
+def _e_raccolta(cartella: Path) -> bool:
     return (cartella / FILE).is_file()
 
 
 def di_progetto(path: str | None) -> Path | None:
-    """La cartella del canale di cui fa parte il progetto, o None."""
+    """La cartella della raccolta di cui fa parte il progetto, o None."""
     if not path:
         return None
     d = Path(path).resolve().parent
     for _ in range(RISALITA):
-        if _e_canale(d):
+        if _e_raccolta(d):
             return d
         if d.parent == d:
             break
@@ -137,28 +140,28 @@ def di_progetto(path: str | None) -> Path | None:
 
 
 def trova(rif: str | None, progetto: str | None = None) -> Path:
-    """Il canale indicato per cartella o per nome; senza, quello del progetto."""
+    """La raccolta indicata per cartella o per nome; senza, quella del progetto."""
     if not rif:
         if c := di_progetto(progetto):
             return c
-        raise CanaleError("the open project is not in a channel: give channel= (name or folder), "
-                          "or create one with channel_create")
+        raise RaccoltaError("the open project is not in a collection: give collection= (name or "
+                            "folder), or create one with collection_create")
     p = Path(rif).expanduser()
-    if p.is_dir() and _e_canale(p):
+    if p.is_dir() and _e_raccolta(p):
         return p.resolve()
     if p.is_file() and p.name == FILE:
         return p.parent.resolve()
-    noti = elenco()
+    note = elenco()
     cerca = rif.strip().lower()
-    for c in noti:
+    for c in note:
         if c["name"].lower() == cerca or Path(c["path"]).name.lower() == cerca:
             return Path(c["path"])
-    nomi = ", ".join(c["name"] for c in noti) or "none yet"
-    raise CanaleError(f"unknown channel {rif!r}. Channels: {nomi}")
+    nomi = ", ".join(c["name"] for c in note) or "none yet"
+    raise RaccoltaError(f"unknown collection {rif!r}. Collections: {nomi}")
 
 
 # --------------------------------------------------------------------------
-# il canale
+# la raccolta
 # --------------------------------------------------------------------------
 
 
@@ -178,20 +181,19 @@ def _scrivi_dati(cartella: Path, dati: dict) -> None:
 
 
 def crea(nome: str, cartella: str | None = None, descrizione: str = "") -> dict:
-    """Crea un canale. Una cartella che esiste gia' diventa canale con i progetti
-    che contiene; una che e' gia' un canale si riapre senza toccarla."""
+    """Crea una raccolta. Una cartella che esiste gia' diventa raccolta con i
+    progetti che contiene; una che e' gia' una raccolta si riapre senza toccarla."""
     nome = " ".join((nome or "").split())
     if not nome:
-        raise CanaleError("give the channel a name")
+        raise RaccoltaError("give the collection a name")
     c = (Path(cartella).expanduser() if cartella else cartella_video() / nome_file(nome)).resolve()
     if c.is_file():
-        raise CanaleError(f"{c} is a file, not a folder")
-    if dentro := di_progetto(str(c / "x")):
-        if dentro != c:
-            raise CanaleError(f"{c} is inside the channel {_dati(dentro).get('name') or dentro.name}: "
-                              "channels do not nest")
+        raise RaccoltaError(f"{c} is a file, not a folder")
+    if (sopra := di_progetto(str(c / "x"))) and sopra != c:
+        raise RaccoltaError(f"{c} is inside the collection {_dati(sopra).get('name') or sopra.name}: "
+                            "collections do not nest")
     c.mkdir(parents=True, exist_ok=True)
-    if not _e_canale(c):
+    if not _e_raccolta(c):
         _scrivi_dati(c, {"name": nome, "description": (descrizione or "").strip(),
                          "created": time.strftime("%Y-%m-%d")})
     (c / CARTELLA_RIF).mkdir(exist_ok=True)
@@ -205,12 +207,12 @@ def modifica(cartella: str, nome: str | None = None, descrizione: str | None = N
         d = _dati(c)
         if nome is not None:
             if not (nome := " ".join(nome.split())):
-                raise CanaleError("the channel name cannot be empty")
+                raise RaccoltaError("the collection name cannot be empty")
             d["name"] = nome
         if descrizione is not None:
             if len(descrizione) > 4000:
-                raise CanaleError("the description is at most 4000 characters: "
-                                  "details go in the channel memory")
+                raise RaccoltaError("the description is at most 4000 characters: "
+                                    "details go in the collection memory")
             d["description"] = descrizione.strip()
         _scrivi_dati(c, d)
     return info(str(c))
@@ -241,7 +243,7 @@ def _e_progetto(f: Path) -> dict | None:
 
 
 def video(cartella: str | Path) -> list[dict]:
-    """I progetti dentro il canale, dal piu' recente."""
+    """I progetti dentro la raccolta, dal piu' recente."""
     c = Path(cartella)
     out = []
     for radice, dirs, files in os.walk(c):
@@ -267,7 +269,7 @@ def file_memoria(cartella: str | Path) -> Path:
 
 
 def info(cartella: str) -> dict:
-    """Tutto il canale: dati, memoria, riferimenti, video."""
+    """Tutta la raccolta: dati, memoria, riferimenti, video."""
     c = trova(cartella)
     d = _dati(c)
     return {"path": str(c), "name": d.get("name") or c.name,
@@ -282,13 +284,13 @@ def breve(cartella: Path) -> dict:
 
 
 def elenco() -> list[dict]:
-    """I canali conosciuti, dall'ultimo aperto o creato; quelli spariti no."""
-    out, visti = [], set()
+    """Le raccolte conosciute, dall'ultima aperta o creata; quelle sparite no."""
+    out, viste = [], set()
     for v in _letti():
         c = Path(v)
-        if str(c) in visti or not _e_canale(c):
+        if str(c) in viste or not _e_raccolta(c):
             continue
-        visti.add(str(c))
+        viste.add(str(c))
         d = _dati(c)
         rif = cartella_rif(c)
         out.append({"path": str(c), "name": d.get("name") or c.name,
@@ -298,9 +300,9 @@ def elenco() -> list[dict]:
     return out
 
 
-def usa(cartella: Path) -> None:
-    """Il canale torna in cima all'elenco: e' quello su cui si sta lavorando."""
-    if _e_canale(cartella):
+def usa(cartella: Path | None) -> None:
+    """La raccolta torna in cima all'elenco: e' quella su cui si sta lavorando."""
+    if cartella and _e_raccolta(cartella):
         _registra(cartella)
 
 
@@ -316,13 +318,13 @@ def percorso_video(cartella: str, nome: str) -> str:
 
 
 def dentro(cartella: Path, path: str) -> str:
-    """``path`` relativo al canale, o assoluto ma dentro il canale."""
+    """``path`` relativo alla raccolta, o assoluto ma dentro la raccolta."""
     p = Path(path).expanduser()
     if not p.is_absolute():
         p = cartella / p
     p = p.resolve()
     if not p.is_relative_to(cartella):
-        raise CanaleError(f"{p} is outside the channel folder {cartella}")
+        raise RaccoltaError(f"{p} is outside the collection folder {cartella}")
     return str(p)
 
 
@@ -368,7 +370,7 @@ def libero(cartella: str | Path, nome: str) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     nome = Path(nome).name
     if Path(nome).suffix.lower() not in IMMAGINI:
-        raise CanaleError(f"{nome}: references are images ({', '.join(sorted(IMMAGINI))})")
+        raise RaccoltaError(f"{nome}: references are images ({', '.join(sorted(IMMAGINI))})")
     base, ext = Path(nome_file(Path(nome).stem)).name, Path(nome).suffix.lower()
     f, i = d / f"{base}{ext}", 2
     while f.exists():
@@ -377,15 +379,15 @@ def libero(cartella: str | Path, nome: str) -> Path:
 
 
 def aggiungi(cartella: str, paths: list[str], nota: str = "") -> dict:
-    """Copia le immagini in riferimenti/: il canale non dipende da dove stavano."""
+    """Copia le immagini in riferimenti/: la raccolta non dipende da dove stavano."""
     c = trova(cartella)
     if not paths:
-        raise CanaleError("give the images to add in paths")
+        raise RaccoltaError("give the images to add in paths")
     nuovi = []
     for p in paths:
         src = Path(p).expanduser()
         if not src.is_file():
-            raise CanaleError(f"file not found: {p}")
+            raise RaccoltaError(f"file not found: {p}")
         dest = libero(c, src.name)
         shutil.copy2(src, dest)
         nuovi.append(dest.name)
@@ -402,11 +404,11 @@ def annota(cartella: str, note: dict[str, str]) -> dict:
         tutte = _note(c)
         for f, n in note.items():
             if f not in presenti:
-                raise CanaleError(f"no reference called {f!r}. References: "
-                                  f"{', '.join(sorted(presenti)) or 'none'}")
+                raise RaccoltaError(f"no reference called {f!r}. References: "
+                                    f"{', '.join(sorted(presenti)) or 'none'}")
             n = " ".join((n or "").split())
             if len(n) > 500:
-                raise CanaleError("a reference note is at most 500 characters")
+                raise RaccoltaError("a reference note is at most 500 characters")
             if n:
                 tutte[f] = n
             else:
@@ -423,7 +425,7 @@ def togli(cartella: str, files: list[str]) -> dict:
         note = _note(c)
         for f in files:
             if (p := presenti.get(Path(f).name)) is None:
-                raise CanaleError(f"no reference called {f!r}")
+                raise RaccoltaError(f"no reference called {f!r}")
             p.unlink()
             note.pop(p.name, None)
             tolti.append(p.name)
@@ -437,7 +439,7 @@ def immagine(cartella: str, file: str) -> Path:
     for r in riferimenti(c):
         if r["file"] == file:
             return Path(r["path"])
-    raise CanaleError(f"no reference called {file!r}")
+    raise RaccoltaError(f"no reference called {file!r}")
 
 
 def foglio(cartella: str | Path, lato: int = 360, colonne: int = 4) -> str | None:
@@ -448,10 +450,11 @@ def foglio(cartella: str | Path, lato: int = 360, colonne: int = 4) -> str | Non
         return None
     from PIL import Image, ImageDraw, ImageOps
 
+    from .proxy import cache_dir
+
     firma = hashlib.sha1("|".join(f"{r['path']}:{Path(r['path']).stat().st_mtime_ns}"
                                   for r in rif).encode()).hexdigest()[:16]
-    from .proxy import cache_dir
-    out = cache_dir("canali") / f"{firma}.jpg"
+    out = cache_dir("raccolte") / f"{firma}.jpg"
     if out.is_file():
         return str(out)
     rif = rif[:24]
@@ -489,7 +492,7 @@ def ricorda(cartella: str | None, nota: str, sezione: str = "general",
             progetto: str | None = None) -> dict:
     c = trova(cartella, progetto)
     return {**memoria.ricorda(nota, sezione, file_memoria(c), _INTESTAZIONE),
-            "canale": _dati(c).get("name") or c.name}
+            "raccolta": _dati(c).get("name") or c.name}
 
 
 def dimentica(cartella: str | None, testo: str, progetto: str | None = None) -> dict:
@@ -501,21 +504,23 @@ def scrivi_memoria(cartella: str, testo: str) -> dict:
 
 
 def contesto(progetto: str | None, limite: int = memoria.MAX_CONTESTO) -> str:
-    """Il canale del progetto come blocco di contesto, o "" se non ne fa parte."""
+    """La raccolta del progetto come blocco di contesto, o "" se non ne fa parte."""
     c = di_progetto(progetto)
     if c is None:
         return ""
     d = _dati(c)
-    righe = [f"Questo video fa parte del canale \"{d.get('name') or c.name}\" ({c}). Cio' che "
-             "segue vale per tutti i suoi video: seguilo se la richiesta non dice altro."]
+    righe = [f"Questo video fa parte della raccolta \"{d.get('name') or c.name}\" ({c}): un "
+             "gruppo di video con qualcosa in comune (un canale, una serie, una famiglia, un "
+             "cliente...). Cio' che segue vale per tutti i suoi video: seguilo se la richiesta "
+             "non dice altro."]
     if desc := (d.get("description") or "").strip():
-        righe += ["", "Descrizione del canale:", desc]
+        righe += ["", "Descrizione della raccolta:", desc]
     if m := memoria.corpo(file_memoria(c), limite):
-        righe += ["", "Memoria del canale:", m]
+        righe += ["", "Memoria della raccolta:", m]
     if rif := riferimenti(c):
-        righe += ["", "Riferimenti visivi del canale (immagini da rispettare per grafica, colori, "
-                      "personaggi, miniature; si importano come media se servono in timeline):"]
+        righe += ["", "Riferimenti visivi della raccolta (immagini da rispettare per grafica, "
+                      "colori, persone, miniature; si importano come media se servono in timeline):"]
         righe += [f"- {r['path']}" + (f" — {r['nota']}" if r["nota"] else "") for r in rif]
-    righe += ["", "Le preferenze che valgono per questo canale (e non per tutti i video "
-                  "dell'utente) si salvano con remember(scope=\"channel\")."]
+    righe += ["", "Le preferenze che valgono per questa raccolta (e non per tutti i video "
+                  "dell'utente) si salvano con remember(scope=\"collection\")."]
     return "\n".join(righe)

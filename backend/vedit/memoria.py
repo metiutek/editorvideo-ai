@@ -41,7 +41,7 @@ def percorso() -> Path:
 
 
 # Ogni funzione lavora su ``file`` se c'e': e' cosi' che la memoria di un canale
-# (canali.py, ``<canale>/MEMORIA.md``) usa lo stesso formato e le stesse regole.
+# (raccolte.py, ``<raccolta>/MEMORIA.md``) usa lo stesso formato e le stesse regole.
 
 
 def leggi(file: Path | None = None) -> str:

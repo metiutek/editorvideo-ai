@@ -22,8 +22,8 @@ const paths = {
   espandi: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   // memoria fra i progetti: un segnalibro
   memoria: <path d="M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1z" />,
-  // canale: uno schermo con l'antenna, tanti video sotto un nome
-  canale: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="m8 3 4 4 4-4" /></>,
+  // raccolta: una pila di riquadri, tanti video sotto un nome
+  raccolta: <><rect x="3" y="9" width="18" height="11" rx="2" /><path d="M6 6h12M9 3h6" /></>,
   // voce generata: microfono
   voce: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
   // pubblicare: freccia che esce verso l'alto da una nuvola

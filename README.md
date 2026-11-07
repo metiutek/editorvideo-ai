@@ -743,14 +743,15 @@ lasting preferences there (usual format, style, voice, channel, things you don't
 `remember` / `forget`, and read them back at every project. Edit it by hand, or from the
 bookmark button in the assistant tab.
 
-**Channels** — a YouTube channel, a series, a client: one folder that holds all its videos
-(one project each), plus a **channel memory** and **reference images** (logo, thumbnails,
-palette, characters, graphics, each with a note). Every video inside the channel brings that
-context to the assistant and to the MCP agent — description, memory and the reference sheet
-as an image — so the channel's look, tone and audience don't have to be repeated video after
-video. Create and open channels from the start screen; the channel badge in the top bar opens
-it from any of its videos. For agents: `channel_create`, `channel_list`, `channel_info`,
-`channel_update`, `project_create(channel=...)` and `remember(scope="channel")`.
+**Collections** — one folder for any group of videos that belong together: a YouTube or
+TikTok channel, family videos, a client, a series, a course. It holds all its videos (one
+project each), plus a **collection memory** and **reference images** (logo, thumbnails,
+palette, people, graphics, each with a note). Every video inside brings that context to the
+assistant and to the MCP agent — description, memory and the reference sheet as an image — so
+the look, tone, people and audience don't have to be repeated video after video. Create and
+open collections from the start screen; the collection badge in the top bar opens it from any
+of its videos. For agents: `collection_create`, `collection_list`, `collection_info`,
+`collection_update`, `project_create(collection=...)` and `remember(scope="collection")`.
 
 ---
 
@@ -786,7 +787,7 @@ backend/vedit/
   tts.py         voice from text: OpenAI-compatible, ElevenLabs, Piper, system voice
   social.py      publishing: YouTube (OAuth, resumable upload), TikTok inbox
   memoria.py     memory across projects (~/.vedit/MEMORIA.md)
-  canali.py      channels: many videos sharing a memory and reference images
+  raccolte.py    collections: many videos sharing a memory and reference images
   allinea.py     when the voice says what, in timeline seconds (speech_times)
   conversazioni.py  the chat of each project, saved next to it
   web.py         web search, page reading, media download from any site

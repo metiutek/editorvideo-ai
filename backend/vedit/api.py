@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_mod
 from . import effects as fx
-from . import (blocchi, canali, captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy,
+from . import (blocchi, captions, domande, ffmpeg, figli, generativo, htmlclip, hw, interscambio, llm, memoria, particelle, presets, proxy, raccolte,
                render, review, social, stili, tts, web)
 from . import piano as piano_mod
 from . import probe as probe_mod
@@ -129,11 +129,11 @@ class Session:
 
     def state_of_project(self) -> dict:
         """Progetto, percorso e revisione: quello che la UI applica a ogni cambio."""
-        c = canali.di_progetto(self.store.path) if self.store else None
+        c = raccolte.di_progetto(self.store.path) if self.store else None
         return {"project": self.store.summary("full") if self.store else None,
                 "path": self.store.path if self.store else None,
-                # il canale di cui fa parte il video: la testata lo mostra
-                "canale": canali.breve(c) if c else None,
+                # la raccolta di cui fa parte il video: la testata lo mostra
+                "raccolta": raccolte.breve(c) if c else None,
                 "revision": self.revision(), "seq": self.seq}
 
     def revision(self) -> str:
@@ -368,7 +368,7 @@ def state() -> dict:
         # l'editor per la prima volta non deve inventarsi un percorso
         "home": _cartella_video(),
         "recenti": recenti(),
-        "canali": canali.elenco(),
+        "raccolte": raccolte.elenco(),
         "effects": fx.describe(),
         "transitions": list(TRANSITIONS),
         "library": presets.describe(),
@@ -385,7 +385,7 @@ def state() -> dict:
 
 def _cartella_video() -> str:
     """Dove proporre i nuovi progetti: la cartella Video dell'utente se c'e'."""
-    return str(canali.cartella_video())
+    return str(raccolte.cartella_video())
 
 
 @app.get("/api/project")
@@ -411,10 +411,10 @@ def project_create(body: CreateBody) -> dict:
 def _aperto() -> dict:
     """Dopo aver creato o aperto un progetto: recenti, canale in cima, evento."""
     ricorda_recente(S.store)
-    if c := canali.di_progetto(S.store.path):
-        canali.usa(c)
+    if c := raccolte.di_progetto(S.store.path):
+        raccolte.usa(c)
     S.publish({"type": "project"})
-    return {**S.state_of_project(), "recenti": recenti(), "canali": canali.elenco()}
+    return {**S.state_of_project(), "recenti": recenti(), "raccolte": raccolte.elenco()}
 
 
 @app.post("/api/project/open")
@@ -427,40 +427,40 @@ def project_open(body: OpenBody) -> dict:
 
 
 # --------------------------------------------------------------------------
-# canali: tanti video con memoria e riferimenti comuni (canali.py)
+# raccolte: tanti video con memoria e riferimenti comuni (raccolte.py)
 # --------------------------------------------------------------------------
 
 
-class CanaleBody(BaseModel):
+class RaccoltaBody(BaseModel):
     nome: str
     cartella: str | None = None
     descrizione: str = ""
 
 
-class CanaleModBody(BaseModel):
+class RaccoltaModBody(BaseModel):
     path: str
     nome: str | None = None
     descrizione: str | None = None
 
 
-class CanaleMemoriaBody(BaseModel):
+class RaccoltaMemoriaBody(BaseModel):
     path: str
     testo: str
 
 
-class CanaleRifBody(BaseModel):
+class RaccoltaRifBody(BaseModel):
     path: str
     files: list[str]
     nota: str = ""
 
 
-class CanaleNotaBody(BaseModel):
+class RaccoltaNotaBody(BaseModel):
     path: str
     file: str
     nota: str
 
 
-class CanaleVideoBody(BaseModel):
+class RaccoltaVideoBody(BaseModel):
     path: str
     nome: str = "new video"
     preset: str = "1080p"
@@ -468,88 +468,88 @@ class CanaleVideoBody(BaseModel):
     fps: float | None = None
 
 
-def _canale(fn, *args):
+def _raccolta(fn, *args):
     try:
         return fn(*args)
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-@app.get("/api/canali")
-def canali_elenco() -> dict:
-    return {"canali": canali.elenco(), "home": _cartella_video()}
+@app.get("/api/raccolte")
+def raccolte_elenco() -> dict:
+    return {"raccolte": raccolte.elenco(), "home": _cartella_video()}
 
 
-@app.post("/api/canali")
-def canale_crea(body: CanaleBody) -> dict:
-    return _canale(canali.crea, body.nome, body.cartella, body.descrizione)
+@app.post("/api/raccolte")
+def raccolta_crea(body: RaccoltaBody) -> dict:
+    return _raccolta(raccolte.crea, body.nome, body.cartella, body.descrizione)
 
 
-@app.delete("/api/canali")
-def canale_dimentica(path: str) -> dict:
-    """Toglie il canale dall'elenco; la cartella e i video restano."""
-    canali.dimentica_canale(path)
-    return {"canali": canali.elenco()}
+@app.delete("/api/raccolte")
+def raccolta_dimentica(path: str) -> dict:
+    """Toglie la raccolta dall'elenco; la cartella e i video restano."""
+    raccolte.dimentica_raccolta(path)
+    return {"raccolte": raccolte.elenco()}
 
 
-@app.get("/api/canale")
-def canale_info(path: str) -> dict:
-    return _canale(canali.info, path)
+@app.get("/api/raccolta")
+def raccolta_info(path: str) -> dict:
+    return _raccolta(raccolte.info, path)
 
 
-@app.put("/api/canale")
-def canale_modifica(body: CanaleModBody) -> dict:
-    return _canale(canali.modifica, body.path, body.nome, body.descrizione)
+@app.put("/api/raccolta")
+def raccolta_modifica(body: RaccoltaModBody) -> dict:
+    return _raccolta(raccolte.modifica, body.path, body.nome, body.descrizione)
 
 
-@app.put("/api/canale/memoria")
-def canale_memoria(body: CanaleMemoriaBody) -> dict:
-    _canale(canali.scrivi_memoria, body.path, body.testo)
-    return _canale(canali.info, body.path)
+@app.put("/api/raccolta/memoria")
+def raccolta_memoria(body: RaccoltaMemoriaBody) -> dict:
+    _raccolta(raccolte.scrivi_memoria, body.path, body.testo)
+    return _raccolta(raccolte.info, body.path)
 
 
-@app.post("/api/canale/riferimenti")
-def canale_riferimenti(body: CanaleRifBody) -> dict:
-    """Immagini scelte sul disco: si copiano nella cartella del canale."""
-    _canale(canali.aggiungi, body.path, body.files, body.nota)
-    return _canale(canali.info, body.path)
+@app.post("/api/raccolta/riferimenti")
+def raccolta_riferimenti(body: RaccoltaRifBody) -> dict:
+    """Immagini scelte sul disco: si copiano nella cartella della raccolta."""
+    _raccolta(raccolte.aggiungi, body.path, body.files, body.nota)
+    return _raccolta(raccolte.info, body.path)
 
 
-@app.post("/api/canale/riferimenti/carica")
-async def canale_riferimenti_carica(path: str = Form(...),
+@app.post("/api/raccolta/riferimenti/carica")
+async def raccolta_riferimenti_carica(path: str = Form(...),
                                     files: list[UploadFile] = File(...)) -> dict:
     """Immagini trascinate dal desktop: il browser non dice da dove vengono."""
-    c = _canale(canali.trova, path)
+    c = _raccolta(raccolte.trova, path)
     for f in files:
-        dest = _canale(canali.libero, c, f.filename or "image.png")
+        dest = _raccolta(raccolte.libero, c, f.filename or "image.png")
         with dest.open("wb") as out:
             while chunk := await f.read(1 << 20):
                 out.write(chunk)
-    return _canale(canali.info, str(c))
+    return _raccolta(raccolte.info, str(c))
 
 
-@app.put("/api/canale/riferimento")
-def canale_nota(body: CanaleNotaBody) -> dict:
-    _canale(canali.annota, body.path, {body.file: body.nota})
-    return _canale(canali.info, body.path)
+@app.put("/api/raccolta/riferimento")
+def raccolta_nota(body: RaccoltaNotaBody) -> dict:
+    _raccolta(raccolte.annota, body.path, {body.file: body.nota})
+    return _raccolta(raccolte.info, body.path)
 
 
-@app.delete("/api/canale/riferimento")
-def canale_togli(path: str, file: str) -> dict:
-    _canale(canali.togli, path, [file])
-    return _canale(canali.info, path)
+@app.delete("/api/raccolta/riferimento")
+def raccolta_togli(path: str, file: str) -> dict:
+    _raccolta(raccolte.togli, path, [file])
+    return _raccolta(raccolte.info, path)
 
 
-@app.get("/api/canale/immagine")
-def canale_immagine(path: str, file: str) -> FileResponse:
-    f = _canale(canali.immagine, path, file)
+@app.get("/api/raccolta/immagine")
+def raccolta_immagine(path: str, file: str) -> FileResponse:
+    f = _raccolta(raccolte.immagine, path, file)
     return FileResponse(f, media_type=mimetypes.guess_type(f.name)[0] or "image/png")
 
 
-@app.post("/api/canale/video")
-def canale_video(body: CanaleVideoBody) -> dict:
-    """Un video nuovo dentro il canale, nella sua cartella."""
-    dove = _canale(canali.percorso_video, body.path, body.nome)
+@app.post("/api/raccolta/video")
+def raccolta_video(body: RaccoltaVideoBody) -> dict:
+    """Un video nuovo dentro la raccolta, nella sua cartella."""
+    dove = _raccolta(raccolte.percorso_video, body.path, body.nome)
     try:
         attach(Store.create(name=body.nome, preset=body.preset, path=dove,
                             size=body.size, fps=body.fps))

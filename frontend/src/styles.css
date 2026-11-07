@@ -1351,8 +1351,8 @@ button.copertina-grande { display: block; width: 100%; padding: 0; border: 0; cu
 .blockform .campo span { text-transform: capitalize; }
 .blockform input[type=color] { width: 100%; height: 28px; padding: 0; }
 
-/* ------------------------------------------------------ canali (Canali.jsx) */
-.benvenuto-canali { display: flex; flex-direction: column; gap: 6px; }
+/* ------------------------------------------------------ raccolte (Raccolte.jsx) */
+.benvenuto-raccolte { display: flex; flex-direction: column; gap: 6px; }
 .ch-testa { display: flex; align-items: center; justify-content: space-between; }
 .ch-griglia { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
 .ch-scheda {
@@ -1393,3 +1393,6 @@ button.copertina-grande { display: block; width: 100%; padding: 0; border: 0; cu
   display: flex; flex-direction: column; gap: 6px; align-items: stretch; justify-content: center;
   min-height: 120px; text-align: center;
 }
+
+.ch-esempi { display: flex; flex-wrap: wrap; gap: 4px; margin: -1px 0 7px 85px; }
+.ch-esempi button { height: 22px; padding: 0 8px; font-size: 11px; }

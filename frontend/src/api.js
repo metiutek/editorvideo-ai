@@ -33,25 +33,25 @@ export const api = {
   project: () => req('/api/project'),
   recenti: () => req('/api/recenti'),
 
-  // canali: tanti video con memoria e riferimenti comuni (canali.py)
-  canali: () => req('/api/canali'),
-  creaCanale: (nome, cartella, descrizione) => req('/api/canali', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome, cartella, descrizione }) }),
-  dimenticaCanale: (path) => req(`/api/canali?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
-  canale: (path) => req(`/api/canale?path=${encodeURIComponent(path)}`),
-  modificaCanale: (path, nome, descrizione) => req('/api/canale', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, nome, descrizione }) }),
-  memoriaCanale: (path, testo) => req('/api/canale/memoria', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, testo }) }),
-  aggiungiRiferimenti: (path, files) => req('/api/canale/riferimenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, files }) }),
+  // raccolte: tanti video con memoria e riferimenti comuni (raccolte.py)
+  raccolte: () => req('/api/raccolte'),
+  creaRaccolta: (nome, cartella, descrizione) => req('/api/raccolte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome, cartella, descrizione }) }),
+  dimenticaRaccolta: (path) => req(`/api/raccolte?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  raccolta: (path) => req(`/api/raccolta?path=${encodeURIComponent(path)}`),
+  modificaRaccolta: (path, nome, descrizione) => req('/api/raccolta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, nome, descrizione }) }),
+  memoriaRaccolta: (path, testo) => req('/api/raccolta/memoria', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, testo }) }),
+  aggiungiRiferimenti: (path, files) => req('/api/raccolta/riferimenti', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, files }) }),
   caricaRiferimenti: (path, files) => {
     const fd = new FormData()
     fd.append('path', path)
     for (const f of files) fd.append('files', f)
-    return req('/api/canale/riferimenti/carica', { method: 'POST', body: fd })
+    return req('/api/raccolta/riferimenti/carica', { method: 'POST', body: fd })
   },
-  notaRiferimento: (path, file, nota) => req('/api/canale/riferimento', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, file, nota }) }),
-  togliRiferimento: (path, file) => req(`/api/canale/riferimento?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
+  notaRiferimento: (path, file, nota) => req('/api/raccolta/riferimento', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, file, nota }) }),
+  togliRiferimento: (path, file) => req(`/api/raccolta/riferimento?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
   // v: cambia quando cambiano i riferimenti, cosi' un file sostituito non resta in cache
-  immagineCanale: (path, file, v = 0) => `/api/canale/immagine?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}&v=${v}`,
-  videoCanale: (body) => req('/api/canale/video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  immagineRaccolta: (path, file, v = 0) => `/api/raccolta/immagine?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}&v=${v}`,
+  videoRaccolta: (body) => req('/api/raccolta/video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
 
   // preset: un nome ('1080p') o un formato ('9:16'); extra: { size, fps }
   createProject: (path, name, preset, extra = {}) =>

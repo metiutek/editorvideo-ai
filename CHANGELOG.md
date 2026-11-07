@@ -5,16 +5,18 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
-- **Canali** (`canali.py`): un canale YouTube, una serie o un cliente e' una cartella che
-  raccoglie tutti i suoi video, con una memoria propria (`MEMORIA.md` del canale) e immagini di
-  riferimento con una nota ciascuna (logo, miniature, palette, personaggi). Ogni video del
-  canale porta quel contesto all'agente MCP (`canale` in `project_create`/`project_open`) e
-  all'assistente della chat (una volta per conversazione, col foglio dei riferimenti come
-  immagine). Strumenti MCP `channel_create`, `channel_list`, `channel_info` (con il foglio),
-  `channel_update`; `project_create(channel=...)` mette il video nella cartella del canale;
-  `remember`/`forget`/`memory` con `scope="channel"`. Nella UI: canali nella schermata iniziale,
-  finestra del canale (video, nuovo video, riferimenti trascinabili, memoria), nome del canale
-  nella testata. Una cartella che ha gia' dei progetti diventa canale con tutti dentro.
+- **Raccolte** (`raccolte.py`): una cartella per qualunque gruppo di video che stanno insieme
+  (un canale YouTube o TikTok, i video di famiglia, un cliente, una serie), con una memoria
+  propria (`MEMORIA.md` della raccolta) e immagini di riferimento con una nota ciascuna (logo,
+  miniature, palette, persone). Ogni video della raccolta porta quel contesto all'agente MCP
+  (`raccolta` in `project_create`/`project_open`) e all'assistente della chat (una volta per
+  conversazione, col foglio dei riferimenti come immagine). Strumenti MCP `collection_create`,
+  `collection_list`, `collection_info` (con il foglio), `collection_update`;
+  `project_create(collection=...)` mette il video nella cartella della raccolta;
+  `remember`/`forget`/`memory` con `scope="collection"`. Nella UI: raccolte nella schermata
+  iniziale, finestra della raccolta (video, nuovo video, riferimenti trascinabili, memoria),
+  nome della raccolta nella testata. Una cartella che ha gia' dei progetti diventa raccolta
+  con tutti dentro.
 
 ## v0.5.3 — 2026-11-02 · 52 blocchi, movimenti di camera, piano, skill incluse
 

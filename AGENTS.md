@@ -119,7 +119,7 @@ backend/vedit/
   generativo.py  immagini e video generati (OpenAI e compatibili, fal.ai), chiavi in ~/.vedit/gen.json
   social.py      pubblicare su YouTube e TikTok
   memoria.py     memoria comune a tutti i progetti (~/.vedit/MEMORIA.md)
-  canali.py      canali: cartella di video con memoria e riferimenti comuni
+  raccolte.py    raccolte: cartella di video con memoria e riferimenti comuni
   allinea.py     tempi della voce in timeline (speech_times) e metodo dei video a voce
   conversazioni.py  chat di ogni progetto, salvata in <progetto>.chat.json
   web.py         ricerca web, lettura di pagine, download di media da qualunque sito
@@ -426,17 +426,20 @@ dalla pastiglia in cima (`/api/llm/rapido`, `llm.imposta_rapido`): Claude Code r
 chat la passa al modello una volta per conversazione. Ci va solo cio' che vale oltre il
 progetto aperto.
 
-**Canali.** `canali.py`: un canale e' una cartella con `canale.json` (nome, descrizione),
-`MEMORIA.md` (stesso formato e stesse funzioni di `memoria.py`, che prendono `file=`) e
-`riferimenti/` (immagini piu' `note.json`); i video stanno in `<canale>/<video>/<video>.json`.
-Un progetto e' del canale se il suo file sta sotto la cartella (`canali.di_progetto` risale fino
-a `canale.json`): nessun indice da tenere allineato. `~/.vedit/canali.json` ricorda solo quali
-cartelle sono canali. Il contesto (`canali.contesto`) entra in `project_create`/`project_open`
-come `canale` (`mcp_server._con_memoria`) e nella chat una volta per conversazione
-(`chat.blocco_canale`, col foglio dei riferimenti come immagine per i modelli via API, solo
-percorsi per Claude Code). `remember`/`forget`/`memory` prendono `scope="channel"`. UI:
-`Canali.jsx` (schermata iniziale, finestra del canale, pulsante in testata), API
-`/api/canali`, `/api/canale*`. Test in `tests/test_canali.py`.
+**Raccolte.** `raccolte.py`: una raccolta e' una cartella per qualunque gruppo di video
+(canale YouTube o TikTok, video di famiglia, cliente, serie) con `raccolta.json` (nome,
+descrizione), `MEMORIA.md` (stesso formato e stesse funzioni di `memoria.py`, che prendono
+`file=`) e `riferimenti/` (immagini piu' `note.json`); i video stanno in
+`<raccolta>/<video>/<video>.json`. Un progetto e' della raccolta se il suo file sta sotto la
+cartella (`raccolte.di_progetto` risale fino a `raccolta.json`): nessun indice da tenere
+allineato. `~/.vedit/raccolte.json` ricorda solo quali cartelle sono raccolte. Il contesto
+(`raccolte.contesto`) entra in `project_create`/`project_open` come `raccolta`
+(`mcp_server._con_memoria`) e nella chat una volta per conversazione (`chat.blocco_raccolta`,
+col foglio dei riferimenti come immagine per i modelli via API, solo percorsi per Claude
+Code). `remember`/`forget`/`memory` prendono `scope="collection"`. Non chiamarle "canali" nei
+testi: servono anche per i video di famiglia. UI: `Raccolte.jsx` (schermata iniziale,
+finestra della raccolta, pulsante in testata), API `/api/raccolte`, `/api/raccolta*`. Test in
+`tests/test_raccolte.py`.
 
 ### Stile da un video di riferimento
 
