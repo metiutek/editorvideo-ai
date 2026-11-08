@@ -1497,3 +1497,9 @@ button.link:hover { color: var(--text); background: none; }
 .recap ol { padding-left: 22px; }
 .recap li { padding: 10px 0; border-bottom: 1px solid #555; cursor: grab; }
 .recap progress { width: 100%; }
+.language-switch { width: 88px; flex-shrink: 0; font: inherit; }
+.recap .file-picker { position: relative; padding: 9px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.recap .file-picker input[type=file] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.recap .file-picker:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dialog-heading { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding-right: 16px; }
+.dialog-heading h3 { border: 0; flex: 1; min-width: 0; }

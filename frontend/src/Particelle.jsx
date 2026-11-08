@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import { Modal } from './Dialogs.jsx'
 import Icon from './Icons.jsx'
+import { translateLabel, translateMessage } from './i18n.js'
 
 // particelle.KINDS, con il nome che si legge nel menu
 export const PARTICELLE = [['snow', 'snow'], ['rain', 'rain'], ['sparks', 'sparks'],
@@ -39,7 +40,7 @@ export function MenuParticelle({ disabled, onAggiungi, onSuMisura }) {
         else if (v) onAggiungi(v)
       }}>
       <option value="">+ particles</option>
-      {PARTICELLE.map(([k, nome]) => <option key={k} value={k}>{nome}</option>)}
+      {PARTICELLE.map(([k, nome]) => <option key={k} value={k}>{translateLabel(nome)}</option>)}
       {mie.length > 0 && (
         <optgroup label="mine">
           {mie.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
@@ -139,7 +140,7 @@ export function EditorParticelle({ iniziale, titolo, applica, onApplica, onClose
         <span className="spacer" />
         <button onClick={onClose}>cancel</button>
         <button className="primary" disabled={!!errore}
-          onClick={() => { onApplica(spec); onClose() }}>{applica}</button>
+          onClick={() => { onApplica(spec); onClose() }}>{translateLabel(applica)}</button>
       </>}>
       <div className="particelle-anteprima"
         style={anteprima ? { width: anteprima.width * scala, height: anteprima.height * scala } : undefined}>
@@ -148,7 +149,7 @@ export function EditorParticelle({ iniziale, titolo, applica, onApplica, onClose
             style={{ width: anteprima.width, height: anteprima.height, transform: `scale(${scala})` }} />
         )}
       </div>
-      {errore && <div className="hint errore">{errore}</div>}
+      {errore && <div className="hint errore">{translateMessage(errore)}</div>}
 
       {info.personali.length > 0 && (
         <div className="row"><label>start from</label>
@@ -159,7 +160,7 @@ export function EditorParticelle({ iniziale, titolo, applica, onApplica, onClose
       )}
       <div className="row"><label>shape</label>
         <select value={spec.shape} onChange={(e) => set('shape', e.target.value)}>
-          {Object.entries(info.forme).map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+          {Object.entries(info.forme).map(([k, n]) => <option key={k} value={k}>{translateLabel(n)}</option>)}
         </select><span /></div>
       {spec.shape === 'text' && (
         <div className="row"><label>symbols</label>
@@ -168,7 +169,7 @@ export function EditorParticelle({ iniziale, titolo, applica, onApplica, onClose
       )}
       <div className="row"><label>motion</label>
         <select value={moto} onChange={(e) => set('motion', e.target.value)}>
-          {Object.entries(info.moti).map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+          {Object.entries(info.moti).map(([k, n]) => <option key={k} value={k}>{translateLabel(n)}</option>)}
         </select><span /></div>
       <div className="row"><label>colours</label>
         <div className="particelle-colori">
@@ -237,7 +238,7 @@ function Cursore({ label, value, lim, step, onChange }) {
     if (Number.isFinite(n)) onChange(n)
   }
   return (
-    <div className="row"><label>{label}</label>
+    <div className="row"><label>{translateLabel(label)}</label>
       <input type="range" min={lim[0]} max={lim[1]} step={step} value={value}
         onChange={(e) => num(e.target.value)} />
       <input className="particelle-num" type="number" step={step} value={value}
@@ -253,7 +254,7 @@ function Coppia({ label, value, lim, step, onChange }) {
     if (Number.isFinite(n)) onChange(i, n)
   }
   return (
-    <div className="row"><label>{label}</label>
+    <div className="row"><label>{translateLabel(label)}</label>
       <div className="particelle-coppia">
         {[0, 1].map((i) => (
           <input key={i} type="range" min={lim[0]} max={lim[1]} step={step} value={value[i]}

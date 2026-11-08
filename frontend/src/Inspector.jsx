@@ -3,6 +3,7 @@ import Icon from './Icons.jsx'
 import { Anim, Check, EffectParams, Num, Row, Select, Text } from './Params.jsx'
 import { EditorParticelle, PARTICELLE, parametriParticelle } from './Particelle.jsx'
 import { FORMATI_VIDEO, formatoDi, natura } from './util.js'
+import { translateLabel } from './i18n.js'
 
 // come la clip si fonde con le tracce sotto (model.BLEND_MODES)
 const BLEND = ['normal', 'screen', 'add', 'multiply', 'overlay', 'softlight', 'hardlight',
@@ -437,7 +438,7 @@ function Catalogo({ kind, effects, onProva, onAdd }) {
       {effects.filter((e) => e.kind === kind).map((e) => (
         <button
           key={e.name} className="fxcard"
-          title={`${e.label}${e.desc ? ` — ${e.desc}` : ''}`
+          title={`${translateLabel(e.label)}${e.desc ? ` — ${translateLabel(e.desc)}` : ''}`
             + (kind === 'video' ? '\nHover to preview it, click to apply it.' : '\nClick to apply it.')}
           onMouseEnter={() => prova(e)}
           onMouseLeave={() => prova(null)}
@@ -446,7 +447,7 @@ function Catalogo({ kind, effects, onProva, onAdd }) {
           onClick={() => { prova(null); onAdd(e) }}
         >
           <Icon name={e.name} fallback={kind === 'audio' ? 'audio' : 'fx'} size={20} />
-          <span>{e.label}</span>
+          <span>{translateLabel(e.label)}</span>
         </button>
       ))}
     </div>
@@ -484,7 +485,7 @@ function Effects({ target, list, effects, clipTime, call, onProva, ha = { video:
             <header>
               <Check value={e.enabled !== false} title="Turn the effect on or off"
                 onChange={(v) => call('update_effect', args({ index: e.i, enabled: v }))} />
-              <b>{spec.label}</b>
+              <b>{translateLabel(spec.label)}</b>
               <span className="spacer" />
               {/* l'ordine della catena cambia il risultato: denoise prima di
                   sharpen pulisce e poi incide, al contrario incide il rumore */}
@@ -505,7 +506,7 @@ function Effects({ target, list, effects, clipTime, call, onProva, ha = { video:
             </header>
             <EffectParams spec={spec} params={e.params} clipTime={clipTime}
               onChange={(patch) => call('update_effect', args({ index: e.i, params: patch }))} />
-            {spec.desc && <div className="hint">{spec.desc}</div>}
+            {spec.desc && <div className="hint">{translateLabel(spec.desc)}</div>}
             {!ha[spec.kind] && (
               <div className="hint">this clip has no {spec.kind === 'audio' ? 'sound' : 'picture'}: the effect changes nothing</div>
             )}
@@ -549,7 +550,7 @@ function ProjectPanel({ project, effects, call, setBusy, setError, onProva }) {
         <Row label="format"><select value={formatoDi(...s.resolution.split('x').map(Number)) || ''}
           onChange={(e) => call('set_format', { format: e.target.value })}>
           {!formatoDi(...s.resolution.split('x').map(Number)) && <option value="">custom</option>}
-          {FORMATI_VIDEO.map((f) => <option key={f.id} value={f.id}>{f.id} · {f.uso}</option>)}
+          {FORMATI_VIDEO.map((f) => <option key={f.id} value={f.id}>{f.id} · {translateLabel(f.uso)}</option>)}
         </select></Row>
         <Row label="resolution"><Text value={s.resolution} onChange={(v) => {
           const [w, h] = v.split('x').map((n) => parseInt(n, 10))

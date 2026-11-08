@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import { mandaFile } from './caricamento.js'
+import { translateMessage, translateLabel } from './i18n.js'
 
 async function richiesta(path, method = 'GET', body) {
   const r = await fetch(`/api/recap${path}`, { method, headers: { 'Content-Type': 'application/json' },
@@ -107,7 +108,7 @@ export default function Recap({ project, path, run, setError }) {
     <h3>Activity recap</h3>
     <p>Start in an empty, saved project. Import activity folders separately, or choose a parent containing several activity folders.</p>
     <fieldset disabled={!!busy}>
-      <label>Import activity folders<input type="file" webkitdirectory="" multiple onChange={(e) => { importa([...e.target.files]); e.target.value = '' }} /></label>
+      <label className="file-picker">Import activity folders<input type="file" webkitdirectory="" multiple onChange={(e) => { importa([...e.target.files]); e.target.value = '' }} /></label>
       <button onClick={dalBin}>Use folders from media bin</button>
       <ol>{activities.map((e, i) => <li key={e.id} draggable={!busy} onDragStart={(ev) => {
         drag.current = i; ev.dataTransfer.setData('text/vedit-activity', String(i))
@@ -121,19 +122,19 @@ export default function Recap({ project, path, run, setError }) {
         <label>Target seconds (optional)<input type="number" min="0.5" step="0.1" value={e.target} onChange={(ev) => aggiorna(e.id, 'target', ev.target.value)} /></label>
         <label>Weight<input type="number" min="0.1" step="0.1" value={e.weight} onChange={(ev) => aggiorna(e.id, 'weight', ev.target.value)} /></label>
       </li>)}</ol>
-      <label>Upload your music<input type="file" accept="audio/*" onChange={(e) => { if (e.target.files.length) importa([...e.target.files], true); e.target.value = '' }} /></label>
+      <label className="file-picker">Upload your music<input type="file" accept="audio/*" onChange={(e) => { if (e.target.files.length) importa([...e.target.files], true); e.target.value = '' }} /></label>
       <label>Music<select value={music} onChange={(e) => setMusic(e.target.value)}><option value="">Choose music</option>
         {media.filter((m) => m.kind === 'audio').map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
       <label>Duration in seconds<input type="number" min="0.5" step="0.1" value={duration} onChange={(e) => setDuration(e.target.value)} /></label>
-      <label>Aspect ratio<select value={format} onChange={(e) => setFormat(e.target.value)}>{['16:9', '9:16', '1:1', '4:5'].map((f) => <option key={f}>{f}</option>)}</select></label>
-      <label>Pace<select value={pace} onChange={(e) => setPace(e.target.value)}>{['calm', 'balanced', 'fast'].map((p) => <option key={p}>{p}</option>)}</select></label>
+      <label>Aspect ratio<select value={format} onChange={(e) => setFormat(e.target.value)}>{['16:9', '9:16', '1:1', '4:5'].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
+      <label>Pace<select value={pace} onChange={(e) => setPace(e.target.value)}>{['calm', 'balanced', 'fast'].map((p) => <option key={p} value={p}>{translateLabel(p)}</option>)}</select></label>
       <p>Configure a vision-capable model in Assistant settings first. Analysis sends contact sheets (three sampled frames per candidate, up to eight candidates per request) to that provider. No source audio or full video is sent. Provider fees may apply; the total depends on footage length and model pricing. Successful file analyses are cached locally.</p>
       <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />Allow sampled-frame analysis with my configured model and any provider charges</label>
       <button className="primary" disabled={!consent || !music || !activities.length} onClick={genera}>Generate recap video</button>
     </fieldset>
-    {uploading && <p role="status">{uploading}</p>}
-    {job && <div role="status"><progress max="100" value={job.percent} /><p>{job.message}</p>
-      {job.error && <p role="alert">{job.error}</p>}
+    {uploading && <p role="status">{translateMessage(uploading)}</p>}
+    {job && <div role="status"><progress max="100" value={job.percent} /><p>{translateMessage(job.message)}</p>
+      {job.error && <p role="alert">{translateMessage(job.error)}</p>}
       {job.state === 'done' && <p>Ready on the timeline. Select any clip to trim, replace, animate, or add graphics. Save and export using the editor controls.</p>}
       {job.state === 'error' && <button onClick={genera}>Retry using cached analysis</button>}
     </div>}

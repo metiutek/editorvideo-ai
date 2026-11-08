@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import Icon from './Icons.jsx'
+import { translateLabel } from './i18n.js'
 
 const TIPI = [
   { id: 'images', nome: 'images' },
@@ -75,7 +76,7 @@ export default function Web({ run, setError, flash }) {
       <div className="webtipi">
         {TIPI.map((t) => (
           <button key={t.id} className={tipo === t.id ? 'on' : ''}
-            onClick={() => { setTipo(t.id); if (query.trim()) cerca(t.id) }}>{t.nome}</button>
+            onClick={() => { setTipo(t.id); if (query.trim()) cerca(t.id) }}>{translateLabel(t.nome)}</button>
         ))}
       </div>
       {cercando && <div className="hint">searching…</div>}
@@ -134,7 +135,7 @@ function MotoreWeb({ stato, setError, onSalvato, onClose }) {
           </button>
         ))}
       </div>
-      {m && <div className="hint">{m.nota}</div>}
+      {m && <div className="hint">{translateLabel(m.nota)}</div>}
       {m?.vuole_chiave && (
         <label className="campo"><span>API key</span>
           <input type="password" autoComplete="off" value={chiave}

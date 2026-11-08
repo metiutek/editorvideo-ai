@@ -476,6 +476,8 @@ The final render **always uses the originals**, never the proxies.
 
 ### Ordered activity recaps
 
+**Interface language:** choose **English / 中文** beside the logo or in dialog headers. The selection is remembered locally and applies across the editor; your content and project data remain unchanged. [Language support and verification](docs/interface-language.md).
+
 The **recap** tab imports activity folders, lets you drag them into order, selects footage with your configured vision model, and builds independent editable clips plus a music track. Set duration, aspect ratio, pace and per-activity targets/weights before generating. Sampled frames are sent only after explicit consent; provider charges may apply. See [setup, privacy, usage and limitations](docs/activity-recap.md).
 
 ## Keyboard shortcuts

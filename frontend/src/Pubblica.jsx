@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import { FileBrowser, Modal } from './Dialogs.jsx'
 import Icon from './Icons.jsx'
+import { translateLabel } from './i18n.js'
 
 const PIATTAFORME = [
   { id: 'youtube', nome: 'YouTube' },
@@ -108,7 +109,7 @@ export default function Pubblica({ file: fileIniziale, nome, setError, flash, on
               <button className="ghost" onClick={() => api.scollegaSocial('youtube').then(setStato)}>sign out</button>
             </div>
           ) : (<>
-            <div className="hint">{yt.nota}</div>
+            <div className="hint">{translateLabel(yt.nota)}</div>
             <label className="campo"><span>OAuth client id</span>
               <input value={clientId} placeholder={yt.client ? 'saved' : '…apps.googleusercontent.com'}
                 onChange={(e) => setClientId(e.target.value)} /></label>
@@ -121,7 +122,7 @@ export default function Pubblica({ file: fileIniziale, nome, setError, flash, on
           </>))}
 
           {pid === 'tiktok' && (<>
-            <div className="hint">{tt.nota}</div>
+            <div className="hint">{translateLabel(tt.nota)}</div>
             {tt.scaduto && <div className="hint warn">The saved token is older than 24 hours: it has probably expired.</div>}
             <label className="campo"><span>access token</span>
               <input type="password" autoComplete="off" value={token}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { translateLabel } from './i18n.js'
 import { api } from './api.js'
 import { Modal } from './Dialogs.jsx'
 import Icon from './Icons.jsx'
@@ -90,13 +91,13 @@ export default function Generazione({ run, setError, flash, onClose }) {
           {stato.motori.map((x) => (
             <button key={x.id} className={`prov ${x.id === sid ? 'on' : ''}`} onClick={() => setSid(x.id)}>
               <span className={`dot ${Object.values(x.pronto).some(Boolean) ? 'ok' : ''}`} />
-              <span className="pnome">{x.nome}</span>
+              <span className="pnome">{translateLabel(x.nome)}</span>
             </button>
           ))}
         </div>
         {m && (
           <div className="provform" style={{ marginTop: 10 }}>
-            <div className="hint">{m.nota}</div>
+            <div className="hint">{translateLabel(m.nota)}</div>
             {m.chiave && (
               <label className="campo"><span>API key</span>
                 <input type="password" autoComplete="off" value={chiave}
@@ -120,7 +121,7 @@ export default function Generazione({ run, setError, flash, onClose }) {
         <div className="row">
           {['image', 'video'].map((t) => (
             <button key={t} className={`ghost ${t === tipo ? 'on' : ''}`}
-              disabled={!m?.tipi.includes(t)} onClick={() => setTipo(t)}>{t}</button>
+              disabled={!m?.tipi.includes(t)} onClick={() => setTipo(t)}>{translateLabel(t)}</button>
           ))}
           <select value={formato} onChange={(e) => setFormato(e.target.value)}>
             {['16:9', '9:16', '1:1'].map((f) => <option key={f} value={f}>{f}</option>)}

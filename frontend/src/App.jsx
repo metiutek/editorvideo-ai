@@ -13,6 +13,8 @@ import Inspector from './Inspector.jsx'
 import Library from './Library.jsx'
 import MediaBin from './MediaBin.jsx'
 import Recap from './Recap.jsx'
+import { useLanguage, translateMessage } from './i18n.js'
+import LanguageSelect from './LanguageSelect.jsx'
 import Mixer from './Mixer.jsx'
 import { EditorParticelle, MenuParticelle } from './Particelle.jsx'
 import Preview from './Preview.jsx'
@@ -48,6 +50,7 @@ const loadSizes = () => {
 }
 
 export default function App() {
+  useLanguage()
   const [sys, setSys] = useState(null)
   const [project, setProject] = useState(null)
   const [path, setPath] = useState(null)
@@ -500,6 +503,7 @@ export default function App() {
     >
       <div className="topbar">
         <span className="name"><img src="/logo.svg" alt="" className="marchio" />vedit</span>
+        <LanguageSelect />
         <button className="ghost" onClick={() => setDialog('new')}>
           <Icon name="nuovo" />new</button>
         <button className="ghost" onClick={() => setDialog('open')}>
@@ -842,12 +846,12 @@ Its memory and reference images reach the assistant in every video`}
 
       {dropping && <div className="dropzone">drop the files to import here</div>}
       {busy && (
-        <div className="toast ok"><Icon name="attesa" className="spin" />{busy}</div>
+        <div className="toast ok"><Icon name="attesa" className="spin" />{translateMessage(busy)}</div>
       )}
       {error && (
         <div className="toast" onMouseEnter={() => setErroreFermo(true)}
           onMouseLeave={() => setErroreFermo(false)}>
-          <span>{error}</span>
+          <span>{translateMessage(error)}</span>
           <CopiaErrore testo={error} />
           <button className="icon sm" title="Close" onClick={() => setError(null)}>
             <Icon name="chiudi" size={13} />
