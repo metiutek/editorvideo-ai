@@ -43,6 +43,13 @@ Le voci più recenti stanno in cima.
   nome della raccolta nella testata. Una cartella che ha gia' dei progetti diventa raccolta
   con tutti dentro.
 
+### Corretto
+- **Copie fantasma di un video nella raccolta**: un salvataggio interrotto (processo chiuso,
+  file bloccato su Windows) lasciava accanto al progetto il temporaneo `~xxxxxxxx_<nome>.json`,
+  con il progetto intero, e la raccolta lo elencava come un altro video con lo stesso nome.
+  I temporanei non contano piu' come progetti, e il salvataggio cancella quelli rimasti da
+  piu' di un minuto.
+
 ## v0.5.3 — 2026-11-02 · 52 blocchi, movimenti di camera, piano, skill incluse
 
 ### Aggiunto

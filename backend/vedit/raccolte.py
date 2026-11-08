@@ -236,6 +236,11 @@ def _e_progetto(f: Path) -> dict | None:
     """Nome e durata se ``f`` e' un progetto vedit, altrimenti None."""
     if f.name in (FILE, NOTE) or f.name.endswith((".chat.json", ".piano.json")):
         return None
+    # "~..." sono i temporanei dei salvataggi atomici (Store.save): uno rimasto
+    # da un salvataggio interrotto ha lo stesso contenuto del progetto e
+    # compariva nella raccolta come una sua copia
+    if f.name.startswith("~"):
+        return None
     try:
         if f.stat().st_size > 50_000_000:
             return None

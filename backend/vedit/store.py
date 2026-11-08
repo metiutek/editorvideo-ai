@@ -159,6 +159,34 @@ def porta_percorsi(dati: Any, old: str, new: str) -> tuple[Any, int]:
     return porta(dati), cambiati
 
 
+# un temporaneo di salvataggio vive millisecondi: piu' vecchio di cosi' e'
+# rimasto da un salvataggio interrotto (processo chiuso, file bloccato su Windows)
+_TEMP_ABBANDONATO_S = 60.0
+
+
+def _togli_temporanei(target: Path) -> None:
+    """Cancella i ``~xxxxxxxx_<nome>`` rimasti accanto al progetto.
+
+    Contengono un progetto intero: lasciati li' si accumulano e chi elenca i
+    progetti di una cartella li vedeva come copie. Quelli recenti no: possono
+    essere il salvataggio in corso di un altro processo sullo stesso file.
+    """
+    limite = time.time() - _TEMP_ABBANDONATO_S
+    forma = re.compile(r"~[0-9a-f]{8}_" + re.escape(target.name) + r"\Z")
+    try:
+        vicini = list(target.parent.iterdir())
+    except OSError:
+        return
+    for f in vicini:
+        if not forma.match(f.name):
+            continue
+        try:
+            if f.stat().st_mtime < limite:
+                f.unlink()
+        except OSError:
+            pass    # al prossimo salvataggio
+
+
 class Store:
     def __init__(self, project: Project, path: str | None = None, autosave: bool = True):
         self.project = project
@@ -250,6 +278,7 @@ class Store:
         else:
             raise EditError(f"saving to {target} failed: {last}")
 
+        _togli_temporanei(target)
         self.path = str(target.resolve())
         return self.path
 

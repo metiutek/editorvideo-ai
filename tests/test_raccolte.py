@@ -108,6 +108,31 @@ def test_riferimenti_note_e_foglio(tmp_path):
     assert raccolte.foglio(c) == f   # stessa impronta, stesso file
 
 
+def test_temporanei_di_salvataggio_non_sono_video(tmp_path):
+    # un salvataggio interrotto lascia "~xxxxxxxx_<nome>.json" con il progetto
+    # intero: la raccolta lo mostrava come una copia del video
+    cartella = Path(raccolte.crea("Next", str(tmp_path / "next"))["path"])
+    p = Path(raccolte.percorso_video(str(cartella), "Video 1"))
+    s = Store.create("Video 1", path=str(p))
+    rimasto = p.with_name(f"~3008629d_{p.name}")
+    rimasto.write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
+    assert [x["name"] for x in raccolte.video(cartella)] == ["Video 1"]
+
+    # il salvataggio dopo li spazza, ma non quelli appena scritti (un altro
+    # processo potrebbe star salvando proprio ora)
+    import os
+    import time
+    fresco = p.with_name(f"~a0008d24_{p.name}")
+    fresco.write_text("{}", encoding="utf-8")
+    vecchio = time.time() - 3600
+    os.utime(rimasto, (vecchio, vecchio))
+    altro = p.with_name("~deadbeef_Altro.json")      # di un altro progetto: non si tocca
+    altro.write_text("{}", encoding="utf-8")
+    os.utime(altro, (vecchio, vecchio))
+    s.save()
+    assert not rimasto.exists() and fresco.exists() and altro.exists()
+
+
 def test_memoria_e_contesto(tmp_path):
     c = raccolte.crea("Famiglia", str(tmp_path / "famiglia"), "i video di famiglia: Anna e Luca")["path"]
     p = raccolte.percorso_video(c, "Natale 2026")
