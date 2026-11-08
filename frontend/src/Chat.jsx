@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { translateLabel, translateMessage } from './i18n.js'
 import { api, chat as sendChat } from './api.js'
 import { FileBrowser, Modal } from './Dialogs.jsx'
 import { useFineTrascinamento } from './trascina.js'
@@ -412,7 +413,7 @@ export default function Chat({
             {stili.filter((s) => !s.personale).map((s) => (
               <button key={s.id} className={`stilevoce ${stile === s.id ? 'on' : ''}`}
                 onClick={() => { setStile(s.id); setMenu(null) }}>
-                <b>{s.nome}</b><span>{s.breve}</span>
+                <b>{translateLabel(s.nome)}</b><span>{translateLabel(s.breve)}</span>
               </button>
             ))}
             <div className="libgroup stiligruppo">your styles</div>
@@ -618,7 +619,7 @@ export default function Chat({
                 // mousedown: il clic non deve togliere il fuoco alla casella
                 onMouseDown={(e) => { e.preventDefault(); completa(v) }}>
                 <b>/{v.name}</b>
-                <span>{v.description}</span>
+                <span>{v.locale ? translateLabel(v.description) : v.description}</span>
                 {!v.locale && <small>skill</small>}
               </button>
             ))}
@@ -741,7 +742,7 @@ function Passo({ passo, project }) {
         onClick={() => setAperto((v) => !v)}>
         <Icon size={13} className={passo.state === 'run' ? 'spin' : ''}
           name={passo.state === 'run' ? 'attesa' : passo.state === 'ok' ? 'spunta' : 'chiudi'} />
-        <span className="toolname">{TOOL_LABEL[passo.name] || passo.name.replace(/_/g, ' ')}</span>
+        <span className="toolname">{translateLabel(TOOL_LABEL[passo.name] || passo.name.replace(/_/g, ' '))}</span>
         {det && <span className="tooldet">{det}</span>}
       </button>
       {passo.message && <div className="toolmsg">{passo.message}</div>}
@@ -789,19 +790,19 @@ function ModelSettings({ available, setError, onSaved }) {
   return (
     <div className="modelset">
       {available?.motivo && !available?.ok && (
-        <div className="avviso">{available.motivo}</div>
+        <div className="avviso">{translateMessage(available.motivo)}</div>
       )}
       <div className="provgrid">
         {list.map((x) => (
           <button key={x.id} className={`prov ${x.id === pid ? 'on' : ''}`} onClick={() => setPid(x.id)}>
             <span className={`dot ${x.pronto ? 'ok' : ''}`} />
-            <span className="pnome">{x.nome}</span>
+            <span className="pnome">{translateLabel(x.nome)}</span>
           </button>
         ))}
       </div>
       {p && (
         <div className="provform">
-          {p.nota && <div className="hint">{p.nota}</div>}
+          {p.nota && <div className="hint">{translateLabel(p.nota)}</div>}
           {p.vuole_chiave && (
             <label className="campo">
               <span>API key</span>
@@ -833,7 +834,7 @@ function ModelSettings({ available, setError, onSaved }) {
               appear in the timeline as it makes it.
             </div>
           )}
-          {!p.pronto && p.motivo && <div className="hint warn">{p.motivo}</div>}
+          {!p.pronto && p.motivo && <div className="hint warn">{translateMessage(p.motivo)}</div>}
           <div className="azioni">
             <button className="primary" disabled={saving} onClick={save}>
               <Icon name="spunta" />{saving ? 'saving…' : 'use this'}
@@ -937,7 +938,7 @@ function Accesso({ claudeCode, setError }) {
           <button key={l.id} className={`opzione ${st.accesso === l.id ? 'on' : ''}`}
             onClick={() => imposta({ accesso: l.id })}>
             <span className="spunta" />
-            <span className="otesto"><b>{l.nome}</b><small>{l.desc}</small></span>
+            <span className="otesto"><b>{translateLabel(l.nome)}</b><small>{translateLabel(l.desc)}</small></span>
           </button>
         ))}
       </div>
@@ -1190,7 +1191,7 @@ function ImparaStile({ setError, onClose, onImparato }) {
         <input value={nome} disabled={!!lavoro} placeholder="e.g. Like my favourite channel"
           onChange={(e) => setNome(e.target.value)} />
       </label>
-      {lavoro && <div className="hint">{lavoro} it can take a minute.</div>}
+      {lavoro && <div className="hint">{translateMessage(lavoro)} it can take a minute.</div>}
       <div className="editorstile-azioni">
         <button className="ghost" disabled={!!lavoro} onClick={() => fileRef.current?.click()}>upload a video</button>
         <input ref={fileRef} type="file" accept="video/*" hidden onChange={carica}
@@ -1229,7 +1230,7 @@ function EditorStile({ stile, setError, onClose, onSalvato, onEliminato }) {
       </label>
       <label>base pace
         <select value={f.piano} onChange={set('piano')}>
-          {PIANI.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          {PIANI.map(([v, l]) => <option key={v} value={v}>{translateLabel(l)}</option>)}
         </select>
       </label>
       <div className="hint">The instructions reach the assistant with every message, like a system prompt. The base pace sets how long the cuts are when it plans an edit from the footage.</div>

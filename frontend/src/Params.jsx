@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import { EASINGS, isKf, sampleKf } from './util.js'
 import { EqGraph, PluginFile, PluginParams } from './AudioPro.jsx'
+import { translateLabel } from './i18n.js'
 
 /**
  * Riga del pannello proprieta'.
@@ -12,7 +13,7 @@ import { EqGraph, PluginFile, PluginParams } from './AudioPro.jsx'
 export function Row({ label, children, extra, onReset, modificato }) {
   return (
     <div className="row">
-      <label>{label}</label>
+      <label>{translateLabel(label)}</label>
       <div>{children}</div>
       <div className="rowextra">
         {extra}
@@ -132,9 +133,12 @@ export function Text({ value, onChange, placeholder }) {
 }
 
 export function Select({ value, onChange, options }) {
+  const adatta = options.includes('contain') && options.includes('stretch')
+  const fusione = options.includes('multiply') && options.includes('overlay')
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}>
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      {options.map((o) => <option key={o} value={o}>{translateLabel(
+        adatta && o === 'cover' ? 'Fill frame (crop)' : fusione && o === 'add' ? 'Additive' : o)}</option>)}
     </select>
   )
 }
@@ -197,7 +201,7 @@ export function Anim({ label, value, onChange, min, max, step, animatable, clipT
                 onChange={(v) => setKey(i, { v })} />
               <select value={k.ease || 'linear'} title="easing towards the next one"
                 onChange={(e) => setKey(i, { ease: e.target.value })}>
-                {EASINGS.map((x) => <option key={x} value={x}>{x}</option>)}
+                {EASINGS.map((x) => <option key={x} value={x}>{translateLabel(x)}</option>)}
               </select>
               <button className="icon sm danger" title="Remove the keyframe"
                 disabled={value.kf.length <= 1}
@@ -234,7 +238,7 @@ export function EffectParams({ spec, params, onChange, clipTime }) {
     if (p.type === 'bool') return <Row key={p.name} label={p.name} {...reset}><Check value={value} onChange={set} /></Row>
     if (p.type === 'enum') return <Row key={p.name} label={p.name} {...reset}><Select value={value} onChange={set} options={p.choices} /></Row>
     if (p.type === 'string' || p.type === 'color' || p.type === 'file') {
-      return <Row key={p.name} label={p.name} {...reset}><Text value={value} onChange={set} placeholder={p.desc} /></Row>
+      return <Row key={p.name} label={p.name} {...reset}><Text value={value} onChange={set} placeholder={translateLabel(p.desc)} /></Row>
     }
     return (
       <Anim key={p.name} label={p.name} value={value} onChange={set} clipTime={clipTime}

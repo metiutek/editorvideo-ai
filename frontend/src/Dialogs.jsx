@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import Icon from './Icons.jsx'
 import { FORMATI_VIDEO, dimensioni, formatoDi } from './util.js'
+import { translateMessage } from './i18n.js'
+import LanguageSelect from './LanguageSelect.jsx'
 
 /**
  * Finestra modale.
@@ -82,8 +84,10 @@ export function Modal({ title, children, onClose, actions, narrow, wide }) {
   return (
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`dialog ${narrow ? 'narrow' : ''} ${wide ? 'wide' : ''}`} ref={box}
-        role="dialog" aria-modal="true" aria-label={title}>
-        <h3>{title}</h3>
+        role="dialog" aria-modal="true" aria-label={translateMessage(title)}>
+        <div className="dialog-heading">
+          <h3>{translateMessage(title)}</h3><LanguageSelect />
+        </div>
         <div className="body">{children}</div>
         <div className="foot">{actions}</div>
       </div>
@@ -98,10 +102,10 @@ export function Confirm({ title, message, ok = 'confirm', danger, onOk, onClose 
       actions={<>
         <button onClick={onClose}>cancel</button>
         <button className="primary" onClick={() => { onOk(); onClose() }}>
-          {danger && <Icon name="cestino" />}{ok}
+          {danger && <Icon name="cestino" />}{translateMessage(ok)}
         </button>
       </>}>
-      <div style={{ lineHeight: 1.6 }}>{message}</div>
+      <div style={{ lineHeight: 1.6 }}>{translateMessage(message)}</div>
     </Modal>
   )
 }
@@ -243,17 +247,17 @@ export function SceltaFormato({ formato, lato, onFormato, onLato }) {
           const k = 26 / Math.max(f.a, f.b)
           return (
             <button key={f.id} type="button" role="radio" aria-checked={formato === f.id}
-              className={`formato${formato === f.id ? ' on' : ''}`} title={f.uso}
+              className={`formato${formato === f.id ? ' on' : ''}`} title={translateMessage(f.uso)}
               onClick={() => onFormato(f.id)}>
               <span className="sagoma"><i style={{ width: f.a * k, height: f.b * k }} /></span>
-              <b>{f.id}</b><small>{f.uso}</small>
+              <b>{f.id}</b><small>{translateMessage(f.uso)}</small>
             </button>
           )
         })}
       </div>
       <div className="row"><label>quality</label>
         <select value={lato} onChange={(e) => onLato(Number(e.target.value))}>
-          {QUALITA.map((q) => <option key={q.lato} value={q.lato}>{q.nome}</option>)}
+          {QUALITA.map((q) => <option key={q.lato} value={q.lato}>{translateMessage(q.nome)}</option>)}
         </select>
         <span className="hint">{(dimensioni(formato, lato) || []).join(' x ')}</span></div>
     </>
@@ -453,7 +457,7 @@ export function RenderDialog({ project, path, job, onStart, onClose, onTimeline,
       )}
       <div className="row"><label>format</label>
         <select value={formato} onChange={(e) => setFormato(e.target.value)}>
-          {FORMATI.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+          {FORMATI.map((f) => <option key={f.id} value={f.id}>{translateMessage(f.nome)}</option>)}
         </select><span /></div>
       {testi.length > 0 && (<>
         <div className="row"><label>subtitles</label>

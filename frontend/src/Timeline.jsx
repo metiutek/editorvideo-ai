@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon from './Icons.jsx'
 import useMediaAssets from './mediaAssets.js'
 import { clamp, fmt } from './util.js'
+import { useLanguage } from './i18n.js'
 
 // Larghezza della colonna con i nomi delle tracce. Deve restare uguale a
 // --tl-head in styles.css: righello, testina e clip si posizionano da qui.
@@ -12,6 +13,7 @@ export default function Timeline({
   project, playhead, seek, pxPerSec, selected, setSelected, run, setError,
   onPreset, onTransition, trackH = 72, ask,
 }) {
+  const [language] = useLanguage()
   const scrollRef = useRef(null)
   const [drag, setDrag] = useState(null)   // modifica in corso, mostrata in anteprima
   // il rilascio legge qui: leggere lo stato dentro un aggiornatore significa
@@ -532,7 +534,7 @@ export default function Timeline({
           </div>
       </>
     )
-  }, [project, lanes, drag, assets, selected, linkSel, setSelected, pxPerSec, trackH,
+  }, [language, project, lanes, drag, assets, selected, linkSel, setSelected, pxPerSec, trackH,
       renaming, mediaById, run, setError, onPreset, onTransition, ask, giunzione, giunzioni,
       shiftTrack, soloOn, startDrag])
 

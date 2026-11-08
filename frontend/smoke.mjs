@@ -421,6 +421,79 @@ checks.push(
   ['stacco: lasciarci una transizione la applica', applicata],
 )
 
+// ---- recap: consenso, import dal bin, ordinamento e stato del lavoro --------
+globalThis.sessionStorage = dom.window.sessionStorage
+FAKE['/api/recap'] = { id: 'recap-test', state: 'running', percent: 10, message: 'Analyzing' }
+FAKE['/api/recap/recap-test'] = { id: 'recap-test', state: 'cancelled', percent: 10, cancel: true }
+const recapTab = [...root.querySelectorAll('.bin .tabs button')].find((b) => b.textContent === 'recap')
+FAKE['/api/state'].project.media.push({ id: 'm3', name: 'second.mp4', kind: 'video', duration: 6, folder: 'Second activity' })
+recapTab.click()
+await attendi('recap panel', () => root.querySelector('.recap'))
+const panel = root.querySelector('.recap')
+const generate = [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Generate recap video')
+checks.push(['recap: consenso obbligatorio', generate.disabled && panel.textContent.includes('Provider fees')])
+;[...panel.querySelectorAll('button')].find((b) => b.textContent === 'Use folders from media bin').click()
+await attendi('activity from media bin', () => panel.querySelector('li'))
+const activities = panel.querySelectorAll('li')
+const data = { setData() {}, types: [], files: [] }
+for (const [type, el] of [['dragstart', activities[0]], ['drop', activities[1]]]) {
+  const ev = new dom.window.Event(type, { bubbles: true, cancelable: true })
+  ev.dataTransfer = data
+  el.dispatchEvent(ev)
+}
+await attendi('reordered activity', () => panel.querySelector('li strong')?.textContent === 'Second activity')
+const selects = panel.querySelectorAll('select')
+const sceltaMusica = selects[0]
+Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(sceltaMusica, 'm2')
+sceltaMusica.dispatchEvent(new dom.window.Event('change', { bubbles: true }))
+panel.querySelector('input[type=checkbox]').click()
+await new Promise((r) => setTimeout(r, 30))
+generate.click()
+await attendi('recap generation request', () => chiamate.find((c) => c.url === '/api/recap' && c.method === 'POST'))
+const payload = JSON.parse(chiamate.find((c) => c.url === '/api/recap' && c.method === 'POST').body)
+checks.push(['recap: ordine trascinato e musica inviati', payload.activities[0].media[0] === 'm3' && payload.activities[1].media[0] === 'm1' && payload.music === 'm2' && payload.consent])
+const cancel = await attendi('recap cancel button', () => [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Cancel'))
+cancel.click()
+await attendi('recap cancellation', () => chiamate.find((c) => c.url === '/api/recap/recap-test' && c.method === 'DELETE'))
+checks.push(['recap: cancellazione inviata', true])
+
+// La lingua cambia la presentazione, senza rimontare il progetto o perdere input.
+const durataRecap = [...panel.querySelectorAll('label')].find((l) => l.textContent.startsWith('Duration in seconds')).querySelector('input')
+Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(durataRecap, '27.5')
+durataRecap.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+const primaLingua = chiamate.filter((c) => c.url.includes('/api/op/')).length
+const lingua = root.querySelector('.language-switch')
+const cambiaLingua = async (value) => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(lingua, value)
+  lingua.dispatchEvent(new dom.window.Event('change', { bubbles: true }))
+  await attendi(`lingua ${value}`, () => dom.window.document.documentElement.lang === value)
+}
+await cambiaLingua('zh-CN')
+checks.push(
+  ['i18n: toolbar, recap e consenso in cinese', root.textContent.includes('新建') && panel.textContent.includes('目标时长') && panel.textContent.includes('服务商可能收取费用')],
+  ['i18n: lingua ricordata', localStorage.getItem('vedit.language') === 'zh-CN'],
+  ['i18n: nomi e input preservati', panel.textContent.includes('Second activity') && durataRecap.value === '27.5' && panel.contains(durataRecap)],
+  ['i18n: nessuna modifica al progetto', chiamate.filter((c) => c.url.includes('/api/op/')).length === primaLingua],
+  ['i18n: anche le tracce memorizzate cambiano lingua', !!root.querySelector('.timeline button[title="隐藏轨道"]') || !![...root.querySelectorAll('[title]')].find((el) => el.title === '隐藏轨道')],
+  ['i18n: ritmo tradotto con valore API stabile', panel.querySelectorAll('select')[2].value === 'balanced' && panel.querySelectorAll('select')[2].selectedOptions[0].textContent === '均衡'],
+)
+await cambiaLingua('en')
+checks.push(['i18n: ritorno inglese senza perdere lo stato', panel.textContent.includes('Target seconds (optional)') && durataRecap.value === '27.5'])
+
+const nuovoProgetto = [...root.querySelectorAll('.topbar button')].find((b) => b.textContent.trim() === 'new')
+nuovoProgetto.click()
+const dialogo = await attendi('new project dialog', () => root.querySelector('[role=dialog]'))
+const inputProgetto = dialogo.querySelector('input')
+Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(inputProgetto, 'C:\\视频\\my-project.json')
+inputProgetto.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+const linguaDialogo = dialogo.querySelector('.language-switch')
+Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(linguaDialogo, 'zh-CN')
+linguaDialogo.dispatchEvent(new dom.window.Event('change', { bubbles: true }))
+await attendi('Chinese dialog title', () => dialogo.querySelector('h3').textContent === '新建工程')
+checks.push(['i18n: dialogo tradotto senza perdere il percorso inserito', dialogo.contains(inputProgetto) && inputProgetto.value === 'C:\\视频\\my-project.json'])
+await cambiaLingua('en')
+;[...dialogo.querySelectorAll('button')].find((b) => b.textContent.trim() === 'cancel').click()
+
 let bad = 0
 for (const [name, ok] of checks) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}`)

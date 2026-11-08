@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import Icon from './Icons.jsx'
+import { translateLabel, translateMessage, useLanguage } from './i18n.js'
 
 /**
  * Libreria di look, catene audio e transizioni gia' pronte.
@@ -9,6 +10,7 @@ import Icon from './Icons.jsx'
  * su cui lasci il mouse.
  */
 export default function Library({ library, blocks, clip, onPreset, onTransition, onBlock, setError, onProva }) {
+  const [language] = useLanguage()
   const [q, setQ] = useState('')
   const [tab, setTab] = useState('video')   // video | audio | transitions | graphics
   const [scelto, setScelto] = useState(null) // blocco aperto nel modulo
@@ -23,7 +25,7 @@ export default function Library({ library, blocks, clip, onPreset, onTransition,
       : (library?.[tab] || [])
     const needle = q.trim().toLowerCase()
     const hit = needle
-      ? list.filter((p) => `${p.name} ${p.desc || ''} ${p.group}`.toLowerCase().includes(needle))
+      ? list.filter((p) => `${p.name} ${p.desc || ''} ${p.group} ${translateLabel(p.name)} ${translateLabel(p.desc)} ${translateLabel(p.group)}`.toLowerCase().includes(needle))
       : list
     const groups = new Map()
     for (const p of hit) {
@@ -31,7 +33,7 @@ export default function Library({ library, blocks, clip, onPreset, onTransition,
       groups.get(p.group).push(p)
     }
     return [...groups.entries()]
-  }, [library, blocks, tab, q])
+  }, [library, blocks, tab, q, language])
 
   const isTransition = tab === 'transitions'
   const isGraphics = tab === 'graphics'
@@ -86,15 +88,15 @@ export default function Library({ library, blocks, clip, onPreset, onTransition,
       {isGraphics && blocco ? (
         <div className="blockform">
           <button className="ghost" onClick={() => setScelto(null)}>‹ all graphics</button>
-          <div className="pname">{blocco.id.replace(/_/g, ' ')}</div>
-          <div className="pdesc">{blocco.descrizione}</div>
+          <div className="pname">{translateLabel(blocco.id.replace(/_/g, ' '))}</div>
+          <div className="pdesc">{translateLabel(blocco.descrizione)}</div>
           {Object.entries(blocco.parametri).map(([k, p]) => (
-            <label key={k} className="campo" title={p.descrizione}>
-              <span>{k.replace(/_/g, ' ')}</span>
+            <label key={k} className="campo" title={translateLabel(p.descrizione)}>
+              <span>{translateLabel(k.replace(/_/g, ' '))}</span>
               {p.tipo === 'scelta' ? (
                 <select value={vals[k] ?? p.default}
                   onChange={(e) => setVals((v) => ({ ...v, [k]: e.target.value }))}>
-                  {p.scelte.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {p.scelte.map((c) => <option key={c} value={c}>{translateLabel(c)}</option>)}
                 </select>
               ) : p.tipo === 'numero' ? (
                 <input type="number" min={p.min} max={p.max} step="any" value={vals[k] ?? p.default}
@@ -103,7 +105,7 @@ export default function Library({ library, blocks, clip, onPreset, onTransition,
                 <input type="color" value={vals[k] ?? p.default}
                   onChange={(e) => setVals((v) => ({ ...v, [k]: e.target.value }))} />
               ) : (
-                <input type="text" value={vals[k] ?? p.default} placeholder={p.descrizione}
+                <input type="text" value={vals[k] ?? p.default} placeholder={translateLabel(p.descrizione)}
                   onChange={(e) => setVals((v) => ({ ...v, [k]: e.target.value }))} />
               )}
             </label>
@@ -121,7 +123,7 @@ export default function Library({ library, blocks, clip, onPreset, onTransition,
       {!(isGraphics && blocco) && <div className="medialist">
         {items.map(([group, list]) => (
           <div key={group}>
-            <div className="libgroup">{group}</div>
+            <div className="libgroup">{translateLabel(group)}</div>
             {list.map((p) => (
               <div
                 key={p.id}
@@ -137,7 +139,7 @@ export default function Library({ library, blocks, clip, onPreset, onTransition,
                 // passaggio *fra* due clip, e un istante solo non direbbe nulla
                 onMouseEnter={() => !isTransition && !isGraphics && clip && onProva?.({ preset: p.id, label: p.name })}
                 onMouseLeave={() => onProva?.(null)}
-                title={`${p.desc || ''}`
+                title={`${translateLabel(p.desc || '')}`
                   + (isTransition || !clip ? '' : '\nhover to preview it')
                   + '\nclick: apply · drag: drop on the clip'}
               >
@@ -145,8 +147,8 @@ export default function Library({ library, blocks, clip, onPreset, onTransition,
                     quindi non serve una tabella di conversione qui */}
                 <div className="picon">{isGraphics ? <Icon name="immagine" size={18} /> : <Icon name={p.id} size={18} />}</div>
                 <div className="ptesto">
-                  <div className="pname">{p.name}</div>
-                  {p.desc && <div className="pdesc">{p.desc}</div>}
+                  <div className="pname">{translateLabel(p.name)}</div>
+                  {p.desc && <div className="pdesc">{translateLabel(p.desc)}</div>}
                 </div>
               </div>
             ))}
@@ -155,7 +157,7 @@ export default function Library({ library, blocks, clip, onPreset, onTransition,
         {!items.length && <div className="hint" style={{ padding: 12 }}>No results.</div>}
       </div>}
 
-      <div className="libfoot hint">{isGraphics ? 'graphics go on a track above the footage' : target}</div>
+      <div className="libfoot hint">{isGraphics ? 'graphics go on a track above the footage' : translateMessage(target)}</div>
     </div>
   )
 }

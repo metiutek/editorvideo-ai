@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import Icon from './Icons.jsx'
 import { rispostaEq } from './util.js'
+import { translateLabel } from './i18n.js'
 
 /**
  * Editor delle parti audio "da studio": il grafico dell'equalizzatore
@@ -115,7 +116,7 @@ export function EqGraph({ bands, onChange }) {
               onChange={(e) => cambia(i, { on: e.target.checked })} />
             <select value={b.type} title={TIPI.find((t) => t[0] === b.type)?.[2]}
               onChange={(e) => cambia(i, { type: e.target.value })}>
-              {TIPI.map(([v, l, d]) => <option key={v} value={v} title={d}>{l}</option>)}
+              {TIPI.map(([v, l, d]) => <option key={v} value={v} title={translateLabel(d)}>{translateLabel(l)}</option>)}
             </select>
             <input type="number" value={Math.round(b.freq)} min={20} max={20000} title="frequency (Hz)"
               onChange={(e) => cambia(i, { freq: Math.max(20, Math.min(20000, +e.target.value || 20)) })} />

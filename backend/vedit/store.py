@@ -1734,6 +1734,54 @@ class Store:
                     it.get("duration"), it.get("name")))
         return out
 
+    def apply_recap(self, plan: dict, format: str = "16:9") -> dict:
+        """Applica il piano verificato come una sola modifica annullabile."""
+        import math
+        eventi = plan["activities"]
+        ordine = [e["id"] for e in eventi]
+        appartenenza = {e["id"]: set(e["media"]) for e in eventi}
+        if not ordine or len(set(ordine)) != len(ordine):
+            raise EditError("Activity IDs must be unique")
+        ultimo, t, visti, intervalli = -1, 0.0, set(), {}
+        for c in plan["clips"]:
+            if c["activity"] not in ordine:
+                raise EditError("Unknown activity")
+            idx = ordine.index(c["activity"])
+            m = self.media_or_die(c["media"])
+            a, d, start = c["in"], c["duration"], c["start"]
+            if not all(math.isfinite(x) for x in (a, d, start)) or a < 0 or d <= 0 or a+d > m.duration+1e-6:
+                raise EditError("Source range is outside available footage")
+            if idx < ultimo or abs(start-t) > 1e-6 or m.id not in appartenenza[c["activity"]] or m.kind != "video":
+                raise EditError("The recap must preserve activity order and contiguous cuts")
+            path = str(Path(m.path).resolve()).casefold()
+            if any(a < y-1e-6 and a+d > x+1e-6 for x, y in intervalli.get(path, [])):
+                raise EditError("Overlapping source ranges are not allowed")
+            intervalli.setdefault(path, []).append((a, a+d))
+            ultimo, t = idx, t+d
+            visti.add(c["activity"])
+        if visti != set(ordine) or abs(t-plan["duration"]) > 1e-6:
+            raise EditError("Every activity needs a clip and durations must match")
+        music = self.media_or_die(plan["music"])
+        if music.kind != "audio" or music.duration < t-1e-6:
+            raise EditError("Music is shorter than the recap")
+        if any(tr.clips for tr in self.project.tracks):
+            raise EditError("Create an empty project for the recap; existing edits will not be overwritten")
+        with self.batch():
+            self.set_format(format)
+            video = self.add_track("video", "Activity recap")
+            audio = self.add_track("audio", "Recap music")
+            clips = self.add_clips(plan["clips"], video.id)
+            for clip, item in zip(clips, plan["clips"]):
+                clip.audio.mute = True
+                clip.provenance = {"activity": item["activity"], "activity_name": item["activity_name"],
+                                   "source": self.media_or_die(clip.media).path,
+                                   "in": item["in"], "out": item["in"]+item["duration"],
+                                   "subject": item.get("subject", "")}
+            song = self.add_clip(music.id, audio.id, 0, 0, t)
+            song.provenance = {"activity": "music", "activity_name": "Background music",
+                               "source": music.path, "in": 0.0, "out": t}
+        return {"clips": [c.id for c in clips], "duration": t}
+
     def add_voiceover(self, items: list[dict], track_id: str | None = None) -> list[Clip]:
         """Mette in timeline battute di voce gia' generate (``tts.genera``).
 
@@ -2067,6 +2115,8 @@ class Store:
                     item["in"] = round(c.in_, 3)
                 if c.link:
                     item["link"] = c.link
+                if c.provenance:
+                    item["provenance"] = copy.deepcopy(c.provenance)
                 if abs(c.speed - 1.0) > 1e-6:
                     item["speed"] = c.speed
                 if c.reverse:

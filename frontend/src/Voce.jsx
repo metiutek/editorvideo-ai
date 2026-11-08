@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api } from './api.js'
 import { Modal } from './Dialogs.jsx'
 import Icon from './Icons.jsx'
+import { translateLabel, translateMessage } from './i18n.js'
 
 /**
  * Voce fuori campo dal testo (tts.py). Ogni paragrafo e' una battuta: la
@@ -85,13 +86,13 @@ export default function Voce({ playhead, run, setError, flash, onClose }) {
           {stato.motori.map((x) => (
             <button key={x.id} className={`prov ${x.id === mid ? 'on' : ''}`} onClick={() => setMid(x.id)}>
               <span className={`dot ${x.pronto ? 'ok' : ''}`} />
-              <span className="pnome">{x.nome}</span>
+              <span className="pnome">{translateLabel(x.nome)}</span>
             </button>
           ))}
         </div>
         {m && (
           <div className="provform" style={{ marginTop: 10 }}>
-            <div className="hint">{m.nota}</div>
+            <div className="hint">{translateLabel(m.nota)}</div>
             {m.vuole_chiave && (
               <label className="campo"><span>API key</span>
                 <input type="password" autoComplete="off" value={chiave}
@@ -111,7 +112,7 @@ export default function Voce({ playhead, run, setError, flash, onClose }) {
                 onChange={(e) => setVoce(e.target.value)} />
               <datalist id="voci-tts">{voci.map((v) => <option key={v} value={v} />)}</datalist>
             </label>
-            {!m.pronto && m.motivo && <div className="hint warn">{m.motivo}</div>}
+            {!m.pronto && m.motivo && <div className="hint warn">{translateMessage(m.motivo)}</div>}
           </div>
         )}
         <label className="campo"><span>text — one paragraph per line, separated by an empty line</span>

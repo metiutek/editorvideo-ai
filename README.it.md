@@ -486,6 +486,12 @@ Il render finale usa **sempre gli originali**, mai i proxy.
 
 ---
 
+### Riepiloghi delle attivita' in ordine
+
+**Lingua dell'interfaccia:** scegli **English / 中文** accanto al logo o nelle finestre di dialogo. La scelta resta nel browser e vale per tutto l'editor, senza cambiare contenuti o dati del progetto. [Supporto delle lingue e verifiche](docs/interface-language.md).
+
+La scheda **recap** importa cartelle di attivita', permette di riordinarle trascinandole, sceglie il girato con il modello visivo configurato e costruisce clip indipendenti modificabili con una traccia musicale. Prima di generare si impostano durata, formato, ritmo e durate/pesi delle attivita'. I fotogrammi campionati vengono inviati solo dopo il consenso esplicito; il servizio puo' addebitare costi. Vedi [configurazione, privacy, uso e limiti](docs/activity-recap.md).
+
 ## Scorciatoie da tastiera
 
 | Tasto | Azione |

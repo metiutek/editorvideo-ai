@@ -953,6 +953,63 @@ def stream(media_id: str, request: Request):
     return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "video/mp4")
 
 
+@app.post("/api/recap")
+def recap_start(body: dict) -> dict:
+    from . import recap
+    store = S.need()
+    if not body.get("consent"):
+        raise HTTPException(400, "Explicit consent to sampled-frame model analysis is required")
+    # Verifica subito la configurazione: nessun upload implicito di fallback.
+    try:
+        recap.identita()
+    except RuntimeError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    with S.lock:
+        if any(j.get("kind") == "recap" and j["state"] == "running" for j in S.jobs.values()):
+            raise HTTPException(409, "A recap is already running")
+        if any(t.clips for t in store.project.tracks):
+            raise HTTPException(400, "Start the recap in an empty project")
+        progetto, versione = copy.deepcopy(store.project), store.version
+        jid = uuid.uuid4().hex
+        job = {"id": jid, "kind": "recap", "state": "running", "percent": 0, "message": "Starting", "cancel": False}
+        S.jobs[jid] = job
+
+    def work():
+        try:
+            def progresso(f, testo):
+                job.update(percent=round(f*100), message=testo)
+            plan = recap.pianifica(progetto, body["activities"], body["music"], body["duration"],
+                                   body.get("pace", "balanced"), True, progresso, lambda: job["cancel"])
+            with S.lock:
+                recap.controlla(lambda: job["cancel"])
+                if S.store is not store or store.version != versione:
+                    raise ValueError("Project changed during analysis; retry to use cached results")
+                result = store.apply_recap(plan, body.get("format", "16:9"))
+                job.update(state="done", percent=100, result=result, message="Ready to edit")
+                _avvisa(store)
+        except Exception as exc:
+            job.update(state="cancelled" if job["cancel"] else "error", error=str(exc))
+    threading.Thread(target=work, daemon=True, name=f"recap-{jid}").start()
+    return dict(job)
+
+
+@app.get("/api/recap/{jid}")
+def recap_status(jid: str) -> dict:
+    job = S.jobs.get(jid)
+    if not job or job.get("kind") != "recap":
+        raise HTTPException(404, "Recap job not found")
+    return dict(job)
+
+
+@app.delete("/api/recap/{jid}")
+def recap_cancel(jid: str) -> dict:
+    with S.lock:
+        job = recap_status(jid)
+        if job["state"] == "running":
+            S.jobs[jid]["cancel"] = True
+    return recap_status(jid)
+
+
 @app.post("/api/upload")
 async def upload(files: list[UploadFile] = File(...), folder: str = Form("")) -> dict:
     """Riceve i file trascinati dal desktop.

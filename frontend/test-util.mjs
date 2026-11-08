@@ -291,4 +291,18 @@ test('formati: stesso conto del backend (store.risoluzione)', () => {
   assert.equal(formatoDi(1000, 1234), null)
 })
 
+{
+  const nomi = []
+  const api = { uploadStato: async (q) => { nomi.push(q.nome); return { completo: true, path: q.nome, ricevuti: 4 } } }
+  const file = { name: 'C0001.mp4', size: 4, lastModified: 100 }
+  const a = await mandaFile(api, file, { namespace: 'activity-a' })
+  const b = await mandaFile(api, file, { namespace: 'activity-b' })
+  const retry = await mandaFile(api, file, { namespace: 'activity-a' })
+  test('recap: omonimi fra attivita distinti, retry riprende lo stesso file', () => {
+    assert.notEqual(a, b)
+    assert.equal(a, retry)
+    assert.deepEqual(nomi, ['activity-a--C0001.mp4', 'activity-b--C0001.mp4', 'activity-a--C0001.mp4'])
+  })
+}
+
 console.log(`\n${ok} verifiche superate`)
