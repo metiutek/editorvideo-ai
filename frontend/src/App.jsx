@@ -12,6 +12,7 @@ import Icon from './Icons.jsx'
 import Inspector from './Inspector.jsx'
 import Library from './Library.jsx'
 import MediaBin from './MediaBin.jsx'
+import Recap from './Recap.jsx'
 import Mixer from './Mixer.jsx'
 import { EditorParticelle, MenuParticelle } from './Particelle.jsx'
 import Preview from './Preview.jsx'
@@ -576,6 +577,8 @@ Its memory and reference images reach the assistant in every video`}
         <div className="colonna bin" style={{ width: sizes.bin, flex: '0 1 auto', display: 'flex', minWidth: 190 }}>
           <div className="panel">
             <div className="tabs">
+              <button className={leftTab === 'recap' ? 'on' : ''} disabled={!project}
+                onClick={() => setLeftTab('recap')}>recap</button>
               <button className={leftTab === 'media' ? 'on' : ''}
                 onClick={() => setLeftTab('media')}><Icon name="video" />media</button>
               <button className={leftTab === 'libreria' ? 'on' : ''}
@@ -584,7 +587,9 @@ Its memory and reference images reach the assistant in every video`}
                 title="Search the web for images, videos and facts"
                 onClick={() => setLeftTab('web')}><Icon name="cerca" />web</button>
             </div>
-            {leftTab === 'web' && project ? (
+            {leftTab === 'recap' && project ? (
+              <Recap key={path || project.name} path={path} project={project} run={run} setError={setError} />
+            ) : leftTab === 'web' && project ? (
               <Web run={run} setError={setError} flash={flash} />
             ) : leftTab === 'media' ? (
               <MediaBin project={project} run={run} setError={setError} uploading={uploading}

@@ -486,6 +486,10 @@ Il render finale usa **sempre gli originali**, mai i proxy.
 
 ---
 
+### Riepiloghi delle attivita' in ordine
+
+La scheda **recap** importa cartelle di attivita', permette di riordinarle trascinandole, sceglie il girato con il modello visivo configurato e costruisce clip indipendenti modificabili con una traccia musicale. Prima di generare si impostano durata, formato, ritmo e durate/pesi delle attivita'. I fotogrammi campionati vengono inviati solo dopo il consenso esplicito; il servizio puo' addebitare costi. Vedi [configurazione, privacy, uso e limiti](docs/activity-recap.md).
+
 ## Scorciatoie da tastiera
 
 | Tasto | Azione |

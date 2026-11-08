@@ -474,6 +474,10 @@ The final render **always uses the originals**, never the proxies.
 
 ---
 
+### Ordered activity recaps
+
+The **recap** tab imports activity folders, lets you drag them into order, selects footage with your configured vision model, and builds independent editable clips plus a music track. Set duration, aspect ratio, pace and per-activity targets/weights before generating. Sampled frames are sent only after explicit consent; provider charges may apply. See [setup, privacy, usage and limitations](docs/activity-recap.md).
+
 ## Keyboard shortcuts
 
 | Key | Action |

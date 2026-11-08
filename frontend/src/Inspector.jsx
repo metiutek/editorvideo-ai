@@ -48,6 +48,12 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
 
       <div className="group">
         <h4>clip</h4>
+        {clip.provenance && <div className="hint">
+          Activity: {clip.provenance.activity_name}<br />
+          Source: {clip.provenance.source}<br />
+          Original range: {clip.provenance.in.toFixed(3)}–{clip.provenance.out.toFixed(3)} s<br />
+          {clip.provenance.subject}
+        </div>}
         <Row label="name"><Text value={clip.name} onChange={(v) => set({ name: v })} /></Row>
         <Row label="start"><Num value={clip.start} step={0.05}
           onChange={(v) => call('move_clip', { clip_id: clip.id, start: v })} /></Row>

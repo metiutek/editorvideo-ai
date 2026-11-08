@@ -210,6 +210,8 @@ class Transition:
 
 @dataclass
 class Clip:
+    # Provenienza originale del montaggio automatico; in_/duration restano editabili.
+    provenance: dict = field(default_factory=dict)
     id: str = field(default_factory=lambda: new_id("c"))
     type: str = "media"  # media | text | color | html
     media: str | None = None  # id del Media, per type=media

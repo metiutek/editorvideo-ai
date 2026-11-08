@@ -75,8 +75,11 @@ function contatore(fase, file, byte, onProgress) {
 }
 
 /** Manda un file a pezzi, riprendendo da quello che il server ha gia'. Torna il percorso. */
-export async function mandaFile(api, file, { signal, onByte } = {}) {
-  const q = { nome: file.name, size: file.size, mtime: Math.floor(file.lastModified || 0) }
+export async function mandaFile(api, file, { signal, onByte, namespace = '' } = {}) {
+  // Se i file arrivano da cartelle diverse, il chiamante puo' distinguere
+  // omonimi con la stessa dimensione e data senza perdere la ripresa dell'upload.
+  const nome = namespace ? `${namespace}--${file.name.slice(-200)}` : file.name
+  const q = { nome, size: file.size, mtime: Math.floor(file.lastModified || 0) }
   let st = await api.uploadStato(q)
   let off = st.ricevuti
   onByte?.(off)

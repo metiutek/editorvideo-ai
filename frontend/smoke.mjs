@@ -421,6 +421,42 @@ checks.push(
   ['stacco: lasciarci una transizione la applica', applicata],
 )
 
+// ---- recap: consenso, import dal bin, ordinamento e stato del lavoro --------
+globalThis.sessionStorage = dom.window.sessionStorage
+FAKE['/api/recap'] = { id: 'recap-test', state: 'running', percent: 10, message: 'Analyzing' }
+FAKE['/api/recap/recap-test'] = { id: 'recap-test', state: 'cancelled', percent: 10, cancel: true }
+const recapTab = [...root.querySelectorAll('.bin .tabs button')].find((b) => b.textContent === 'recap')
+FAKE['/api/state'].project.media.push({ id: 'm3', name: 'second.mp4', kind: 'video', duration: 6, folder: 'Second activity' })
+recapTab.click()
+await attendi('recap panel', () => root.querySelector('.recap'))
+const panel = root.querySelector('.recap')
+const generate = [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Generate recap video')
+checks.push(['recap: consenso obbligatorio', generate.disabled && panel.textContent.includes('Provider fees')])
+;[...panel.querySelectorAll('button')].find((b) => b.textContent === 'Use folders from media bin').click()
+await attendi('activity from media bin', () => panel.querySelector('li'))
+const activities = panel.querySelectorAll('li')
+const data = { setData() {}, types: [], files: [] }
+for (const [type, el] of [['dragstart', activities[0]], ['drop', activities[1]]]) {
+  const ev = new dom.window.Event(type, { bubbles: true, cancelable: true })
+  ev.dataTransfer = data
+  el.dispatchEvent(ev)
+}
+await attendi('reordered activity', () => panel.querySelector('li strong')?.textContent === 'Second activity')
+const selects = panel.querySelectorAll('select')
+const sceltaMusica = selects[0]
+Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(sceltaMusica, 'm2')
+sceltaMusica.dispatchEvent(new dom.window.Event('change', { bubbles: true }))
+panel.querySelector('input[type=checkbox]').click()
+await new Promise((r) => setTimeout(r, 30))
+generate.click()
+await attendi('recap generation request', () => chiamate.find((c) => c.url === '/api/recap' && c.method === 'POST'))
+const payload = JSON.parse(chiamate.find((c) => c.url === '/api/recap' && c.method === 'POST').body)
+checks.push(['recap: ordine trascinato e musica inviati', payload.activities[0].media[0] === 'm3' && payload.activities[1].media[0] === 'm1' && payload.music === 'm2' && payload.consent])
+const cancel = await attendi('recap cancel button', () => [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Cancel'))
+cancel.click()
+await attendi('recap cancellation', () => chiamate.find((c) => c.url === '/api/recap/recap-test' && c.method === 'DELETE'))
+checks.push(['recap: cancellazione inviata', true])
+
 let bad = 0
 for (const [name, ok] of checks) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}`)
