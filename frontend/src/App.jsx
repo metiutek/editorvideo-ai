@@ -622,14 +622,7 @@ Its memory and reference images reach the assistant in every video`}
               <Icon name="attesa" className="spin" /> connecting to the server…
             </div></div>
           ) : !project ? (
-            <Benvenuto recenti={sys.recenti} onNew={() => setDialog('new')}
-              onOpen={() => setDialog('open')} onRecent={openProject}
-              raccolte={sys.raccolte} onRaccolta={setRaccoltaAperta} onNuovaRaccolta={() => setDialog('nuova-raccolta')}
-              onCestino={() => setDialog('cestino')}
-              menu={(r) => (
-                <MenuProgetto path={r.path} name={r.name} raccolte={sys.raccolte} setError={setError}
-                  flash={flash} onFatto={progettiCambiati} onApri={() => openProject(r.path)} />
-              )} />
+            <div className="preview" />
           ) : tab === 'source' && source ? (
             <SourceMonitor media={source} tracks={project?.tracks || []} run={run}
               setError={setError} playhead={playhead}
@@ -700,7 +693,7 @@ Its memory and reference images reach the assistant in every video`}
             <Timeline project={project} playhead={playhead} seek={seek} pxPerSec={pxPerSec}
               selected={selected} setSelected={setSelected} run={run} setError={setError}
               onPreset={applyPreset} onTransition={applyTransition} trackH={sizes.trackH}
-              ask={ask} />
+              ask={ask} playing={playing} />
           </div>
         </div>
 
@@ -769,6 +762,17 @@ Its memory and reference images reach the assistant in every video`}
             api.raccolte().then((r) => setSys((x) => (x ? { ...x, raccolte: r.raccolte } : x))).catch(() => {})
             setRaccoltaAperta(c.path)
           }} />
+      )}
+      {/* la prima schermata copre l'editor vuoto: dentro il monitor la timeline la tagliava a meta' */}
+      {sys && !project && (
+        <Benvenuto recenti={sys.recenti} onNew={() => setDialog('new')}
+          onOpen={() => setDialog('open')} onRecent={openProject}
+          raccolte={sys.raccolte} onRaccolta={setRaccoltaAperta} onNuovaRaccolta={() => setDialog('nuova-raccolta')}
+          onCestino={() => setDialog('cestino')}
+          menu={(r) => (
+            <MenuProgetto path={r.path} name={r.name} raccolte={sys.raccolte} setError={setError}
+              flash={flash} onFatto={progettiCambiati} onApri={() => openProject(r.path)} />
+          )} />
       )}
       {raccoltaAperta && (
         <SpazioRaccolta path={raccoltaAperta} setError={setError} flash={flash}
@@ -860,7 +864,7 @@ Its memory and reference images reach the assistant in every video`}
  */
 function Benvenuto({ recenti, onNew, onOpen, onRecent, raccolte, onRaccolta, onNuovaRaccolta, onCestino, menu }) {
   return (
-    <div className="preview benvenuto">
+    <div className="benvenuto">
       <div className="benvenuto-box">
         <img src="/logo.svg" alt="vedit" className="benvenuto-logo" />
         <div className="benvenuto-titolo">Hi! Let's make a video.</div>

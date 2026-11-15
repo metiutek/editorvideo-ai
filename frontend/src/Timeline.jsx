@@ -10,9 +10,10 @@ const SNAP_PX = 8        // tolleranza di aggancio
 
 export default function Timeline({
   project, playhead, seek, pxPerSec, selected, setSelected, run, setError,
-  onPreset, onTransition, trackH = 72, ask,
+  onPreset, onTransition, trackH = 72, ask, playing = false,
 }) {
   const scrollRef = useRef(null)
+  const scrubbing = useRef(false)   // testina trascinata a mano: niente inseguimento
   const [drag, setDrag] = useState(null)   // modifica in corso, mostrata in anteprima
   // il rilascio legge qui: leggere lo stato dentro un aggiornatore significa
   // mettere un effetto collaterale dove React puo' rieseguirlo
@@ -228,11 +229,39 @@ export default function Timeline({
 
   // ---- righello ------------------------------------------------------------
   const scrub = (e) => {
+    scrubbing.current = true
     seek(timeAt(e.clientX))
     const onMove = (ev) => seek(timeAt(ev.clientX))
     window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', () => window.removeEventListener('pointermove', onMove), { once: true })
+    window.addEventListener('pointerup', () => {
+      window.removeEventListener('pointermove', onMove)
+      scrubbing.current = false
+    }, { once: true })
   }
+
+  /**
+   * La timeline segue la testina. In riproduzione la testina usciva dal bordo
+   * destro e non si vedeva piu' a che punto fosse il video: quando arriva vicino
+   * al bordo la vista gira pagina e la rimette a sinistra, come negli altri
+   * montaggi. Da ferma (Home, salto a un marcatore) la si riporta in vista solo
+   * se e' fuori. Mai mentre la si trascina: scorrere sotto il puntatore
+   * cambierebbe il tempo letto da timeAt e la testina scapperebbe in avanti.
+   */
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || scrubbing.current) return
+    const x = HEAD + playhead * pxPerSec
+    const sinistra = el.scrollLeft + HEAD          // primo pixel visibile dopo i nomi
+    const destra = el.scrollLeft + el.clientWidth
+    const visibile = destra - sinistra
+    if (visibile <= 0) return
+    const margine = Math.min(60, visibile * 0.1)
+    if (playing) {
+      if (x > destra - margine || x < sinistra) el.scrollLeft = Math.max(0, x - HEAD - margine)
+    } else if (x < sinistra || x > destra) {
+      el.scrollLeft = Math.max(0, x - HEAD - visibile / 2)
+    }
+  }, [playhead, pxPerSec, playing])
 
   const ticks = useMemo(() => {
     const target = 90 / pxPerSec   // circa una tacca ogni 90px

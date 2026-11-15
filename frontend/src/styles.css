@@ -1075,7 +1075,11 @@ button.comando.on { background: var(--accent-soft); border-color: rgba(255,138,9
 /* il logo non e' un fotogramma: niente fondo nero ne' ombra del monitor */
 .preview img.benvenuto-logo { background: transparent; box-shadow: none; width: 84px; height: 84px; }
 /* con poco spazio la prima schermata scorre invece di perdere la testa */
-.preview.benvenuto { overflow-y: auto; place-items: safe center; }
+.benvenuto {
+  position: fixed; inset: 0; z-index: 30;   /* sotto raccolta (40) e dialoghi (50) */
+  background: var(--bg); overflow-y: auto; place-items: safe center; padding: 24px 16px;
+}
+.benvenuto img.benvenuto-logo { background: transparent; box-shadow: none; width: 84px; height: 84px; }
 
 /* invito a importare: con l'accento dell'app, non con il blu di prima */
 .dropzone { background: rgba(255,138,92,.07); border-radius: 18px; font-weight: 800; }

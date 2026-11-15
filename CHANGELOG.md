@@ -44,6 +44,11 @@ Le voci più recenti stanno in cima.
   con tutti dentro.
 
 ### Corretto
+- **La timeline segue la testina**: in riproduzione la testina usciva dal bordo destro e non si
+  vedeva piu' a che punto fosse il video. Vicino al bordo la vista gira pagina; da ferma
+  (Home, salto) la testina torna in vista se e' fuori. Mai mentre la si trascina.
+- **Prima schermata a pagina intera**: stava dentro il monitor e la timeline la copriva a
+  meta'. Ora copre l'editor vuoto (sotto raccolta e dialoghi) e scorre se manca spazio.
 - **Copie fantasma di un video nella raccolta**: un salvataggio interrotto (processo chiuso,
   file bloccato su Windows) lasciava accanto al progetto il temporaneo `~xxxxxxxx_<nome>.json`,
   con il progetto intero, e la raccolta lo elencava come un altro video con lo stesso nome.
