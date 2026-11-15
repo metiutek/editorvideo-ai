@@ -62,7 +62,7 @@ const URL_SOLO = /^https?:\/\/\S+$/i
 export default function Chat({
   available, onAvailable, onProject, setError, project, playhead, seek, selected,
   refs, setRefs, pickArea, setPickArea, stili = [], onStili, domanda, onRisposta, nuovoProgetto = 0,
-  visibile = true,
+  visibile = true, richiesta = null,
 }) {
   const [turns, setTurns] = useState([])   // {role, text, tools:[], refs}
   const [input, setInput] = useState('')
@@ -145,6 +145,13 @@ export default function Chat({
     avvia(primo.text, primo.refs || [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy, coda, chatVisibile])
+
+  // una richiesta che arriva da un altro pannello (la copertina): va in coda
+  // come un messaggio scritto qui, e parte appena l'assistente e' libero
+  useEffect(() => {
+    if (!richiesta?.text) return
+    setCoda((c) => [...c, { text: richiesta.text, refs: richiesta.refs || [] }])
+  }, [richiesta])
 
   // ogni progetto ha la sua chat, salvata accanto al file: aprendolo torna
   const percorso = project?.path || ''

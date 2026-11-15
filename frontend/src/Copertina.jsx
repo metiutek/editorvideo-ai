@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from './api.js'
 import { FileBrowser } from './Dialogs.jsx'
@@ -17,6 +17,101 @@ function Scarica({ path, label }) {
       title={`Download ${nome(path)}`} aria-label={`Download ${nome(path)}`}>
       <Icon name="scarica" size={14} />{label}
     </a>
+  )
+}
+
+/**
+ * Richiesta libera per l'assistente: un prompt e le immagini che servono
+ * (la propria faccia, il prodotto, una miniatura da imitare). Le immagini si
+ * caricano dal computer, si trascinano o si incollano; restano accanto al
+ * progetto (``/api/chat/allega``), quindi possono anche diventare subito
+ * opzioni di copertina senza passare dall'assistente.
+ */
+function Chiedi({ cover, run, setError, onChiedi }) {
+  const [testo, setTesto] = useState('')
+  const [immagini, setImmagini] = useState([])   // allegati: {name, path, size, tipo}
+  const [caricando, setCaricando] = useState(0)
+  const [sopra, setSopra] = useState(false)
+  const fileRef = useRef(null)
+
+  const carica = async (lista) => {
+    const files = [...(lista || [])].filter((f) => IMMAGINE.test(f.name) || f.type?.startsWith('image/'))
+    if (!files.length) return
+    setCaricando((n) => n + files.length)
+    try {
+      const r = await api.allega(files)
+      setImmagini((xs) => [...xs, ...r.allegati])
+    } catch (e) { setError(e.message) } finally { setCaricando((n) => Math.max(0, n - files.length)) }
+  }
+
+  const invia = () => {
+    const q = testo.trim()
+    if (!q) return
+    const nota = immagini.length
+      ? `
+
+The attached ${immagini.length === 1 ? 'image is' : 'images are'} for the cover: material to use or a reference to follow, as the request says.`
+      : ''
+    onChiedi?.(`Cover (thumbnail) for this video, not part of the edit. Make the options and add them with add_covers${cover ? '' : ', choosing the best one'}.
+
+${q}${nota}`,
+      immagini.map((a) => ({ kind: 'file', ...a })))
+    setTesto('')
+    setImmagini([])
+  }
+
+  const comeOpzioni = () => {
+    if (!immagini.length) return
+    run('add_covers', { paths: immagini.map((a) => a.path), choose: !cover })
+      .then(() => setImmagini([])).catch((e) => setError(e.message))
+  }
+
+  return (
+    <div className={`copertina-chiedi ${sopra ? 'sopra' : ''}`}
+      onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); e.stopPropagation(); setSopra(true) } }}
+      onDragLeave={() => setSopra(false)}
+      onDrop={(e) => {
+        if (!e.dataTransfer?.files?.length) return
+        // il file e' per la copertina: App lo vede e non lo importa nel progetto
+        e.preventDefault(); setSopra(false)
+        carica(e.dataTransfer.files)
+      }}>
+      <textarea rows={3} value={testo}
+        placeholder="Describe the cover: e.g. close-up of my face on the right, big yellow title “30 DAYS”, dark background like the image I attached"
+        onChange={(e) => setTesto(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); invia() } }}
+        onPaste={(e) => {
+          const files = [...(e.clipboardData?.files || [])]
+          if (files.length) { e.preventDefault(); carica(files) }
+        }} />
+      {(immagini.length > 0 || caricando > 0) && (
+        <div className="copertina-allegati">
+          {immagini.map((a) => (
+            <div key={a.path} className="copertina-allegato" title={a.path}>
+              <img src={url(a.path)} alt={a.name} />
+              <button className="icon sm" title="Remove" aria-label={`Remove ${a.name}`}
+                onClick={() => setImmagini((xs) => xs.filter((x) => x.path !== a.path))}>
+                <Icon name="chiudi" size={12} /></button>
+            </div>
+          ))}
+          {caricando > 0 && <div className="copertina-allegato attesa"><Icon name="attesa" className="spin" size={16} /></div>}
+        </div>
+      )}
+      <div className="copertina-crea-riga">
+        <button className="ghost" disabled={caricando > 0} onClick={() => fileRef.current?.click()}
+          title="Images from your computer: you can also drop or paste them here">
+          <Icon name="graffetta" size={14} />images</button>
+        {immagini.length > 0 && (
+          <button className="ghost" onClick={comeOpzioni} title="Use the images as they are, as cover options">
+            <Icon name="piu" size={14} />as options</button>
+        )}
+        <button className="primary" disabled={!testo.trim() || caricando > 0} onClick={invia}
+          title="The assistant makes the covers (Ctrl+Enter)">
+          <Icon name="invia" size={14} />ask the assistant</button>
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" multiple hidden
+        onChange={(e) => { carica(e.target.files); e.target.value = '' }} />
+    </div>
   )
 }
 
@@ -67,7 +162,7 @@ function SchermoIntero({ opzioni, indice, scelta, onIndice, onScegli, onClose })
  * titolo e durata. Le opzioni (Store.add_covers, make_covers) stanno sotto:
  * si guardano a schermo intero, si sceglie, si scarica. Il render non la usa.
  */
-export default function Copertina({ project, revision, run, applyState, setError }) {
+export default function Copertina({ project, revision, run, applyState, setError, onChiedi }) {
   const [info, setInfo] = useState(null)
   const [sfoglia, setSfoglia] = useState(false)
   const [giro, setGiro] = useState(0)   // "reload": l'immagine rifatta fuori dall'editor
@@ -184,6 +279,9 @@ export default function Copertina({ project, revision, run, applyState, setError
         </div>
       </>)}
 
+      <div className="section-title">ask for a cover</div>
+      <Chiedi cover={cover} run={run} setError={setError} onChiedi={onChiedi} />
+
       <div className="section-title">make options</div>
       <div className="copertina-crea">
         <label className="hint" htmlFor="copertina-titolo">title on the cover (optional)</label>
@@ -200,7 +298,6 @@ export default function Copertina({ project, revision, run, applyState, setError
         </div>
         <button className="ghost" onClick={() => setSfoglia(true)}>
           <Icon name="piu" size={14} />add images made elsewhere</button>
-        <div className="hint">You can also ask the assistant: "make 6 covers with the title …".</div>
       </div>
 
       {intera !== null && opzioni[intera] && (

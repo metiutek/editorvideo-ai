@@ -1326,6 +1326,24 @@ button.copertina-grande { display: block; width: 100%; padding: 0; border: 0; cu
 .copertina-crea-riga { display: flex; align-items: center; gap: 6px; }
 .copertina-crea-riga input { width: 56px; }
 .copertina-crea-riga button { margin-left: auto; }
+/* richiesta all'assistente: prompt piu' immagini caricate, trascinate o incollate */
+.copertina-chiedi { display: flex; flex-direction: column; gap: 6px; border-radius: var(--r); }
+.copertina-chiedi.sopra { outline: 2px dashed var(--accent); outline-offset: 4px; }
+.copertina-chiedi textarea { resize: vertical; font-size: 12px; min-height: 64px; }
+.copertina-chiedi .copertina-crea-riga { flex-wrap: wrap; }
+.copertina-chiedi .copertina-crea-riga button:first-child { margin-left: 0; }
+.copertina-chiedi .copertina-crea-riga button.primary { margin-left: auto; }
+.copertina-chiedi .copertina-crea-riga button.ghost + button.ghost { margin-left: 0; }
+.copertina-allegati { display: flex; flex-wrap: wrap; gap: 6px; }
+.copertina-allegato {
+  position: relative; width: 64px; height: 64px; border-radius: var(--r-sm); overflow: hidden;
+  border: 1px solid var(--line-soft); background: var(--panel-2); display: grid; place-items: center;
+}
+.copertina-allegato img { width: 100%; height: 100%; object-fit: cover; }
+.copertina-allegato button {
+  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0;
+  background: rgba(0,0,0,.65); color: #fff; border: none;
+}
 .copertina-intera { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; padding: 24px; background: rgba(0, 0, 0, .92); }
 .copertina-intera img { max-width: 100%; max-height: calc(100vh - 110px); object-fit: contain;

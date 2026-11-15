@@ -5,6 +5,9 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Copertina su richiesta**: nella scheda *cover* un campo per descrivere la copertina e
+  allegare immagini (dal computer, trascinate o incollate). "ask the assistant" la passa alla
+  chat con le immagini come riferimenti; "as options" le mette subito fra le opzioni.
 - **File di informazioni nelle raccolte** (`<raccolta>/documenti/`): brief, copioni, note,
   dati, pdf. I testi brevi entrano interi nel contesto di ogni video della raccolta, gli altri
   si leggono con `collection_file` (MCP e chat). Nella raccolta: "new note" per scriverne

@@ -449,6 +449,14 @@ export default function App() {
     progettoAperto(r)
   }, [progettoAperto])
 
+  // un messaggio per l'assistente scritto altrove (scheda cover): la chat lo
+  // mette in coda; oggetto nuovo a ogni invio, anche se il testo e' lo stesso
+  const [richiestaChat, setRichiestaChat] = useState(null)
+  const chiediAssistente = useCallback((text, allegati = []) => {
+    setRichiestaChat({ text, refs: allegati })
+    setRightTab('chat')
+  }, [setRightTab])
+
   /** Aggiunge un riferimento e porta l'assistente in primo piano. */
   const aggiungiRif = useCallback((r) => {
     setRefs((xs) => [...xs, r])
@@ -491,7 +499,11 @@ export default function App() {
       }}
       onDragEnd={() => setDropping(false)}
       onDrop={(e) => {
-        if (!e.dataTransfer.files?.length || e.target.closest?.('.overlay')) return
+        // nei dialoghi e nella richiesta di copertina il file e' loro, non da importare
+        if (!e.dataTransfer.files?.length || e.target.closest?.('.overlay, .copertina-chiedi')) {
+          setDropping(false)
+          return
+        }
         e.preventDefault()
         setDropping(false)
         importFiles(leggiTrascinati(e.dataTransfer))
@@ -716,7 +728,8 @@ Its memory and reference images reach the assistant in every video`}
               <Mixer project={project} playhead={playhead} revision={revision} run={run} setError={setError} />
             )}
             {rightTab === 'cover' && (
-              <Copertina project={project} revision={revision} run={run} applyState={applyState} setError={setError} />
+              <Copertina project={project} revision={revision} run={run} applyState={applyState} setError={setError}
+                onChiedi={chiediAssistente} />
             )}
             {rightTab === 'scope' && (
               <Scopes project={project} playhead={playhead} playing={playing} revision={revision} />
@@ -732,7 +745,7 @@ Its memory and reference images reach the assistant in every video`}
                 in corso, il testo scritto e la coda non si perdono cambiando scheda */}
             <Chat visibile={rightTab === 'chat'} available={llmSt || sys?.chat} onAvailable={setLlmSt} setError={setError}
                 onProject={applyState} project={project} playhead={playhead} seek={seek}
-                selected={selected} refs={refs} setRefs={setRefs}
+                selected={selected} refs={refs} setRefs={setRefs} richiesta={richiestaChat}
                 stili={sys?.stili || []} domanda={domanda} nuovoProgetto={nuovi}
                 onStili={(l) => setSys((x) => (x ? { ...x, stili: l } : x))}
                 onRisposta={(risposte) => {
