@@ -1070,6 +1070,17 @@ button.comando.on { background: var(--accent-soft); border-color: rgba(255,138,9
 /* il logo: nella barra prende il posto del pallino, nella prima schermata saluta */
 .topbar .name::before { content: none; }
 .topbar .name .marchio { width: 26px; height: 26px; display: block; }
+.topbar .name .marchio {
+  transform-origin: 50% 100%;
+  animation: marchio-salta .7s cubic-bezier(.3, 1.4, .5, 1) both;
+}
+@keyframes marchio-salta {
+  0%   { transform: scale(.6) rotate(-14deg); opacity: .3; }
+  45%  { transform: translateY(-4px) scale(1.14) rotate(7deg); opacity: 1; }
+  70%  { transform: translateY(0) scale(1.06, .94) rotate(-3deg); }
+  100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .topbar .name .marchio { animation: none; } }
 .benvenuto-logo { width: 96px; height: 96px; display: block; margin: 0 auto 4px; }
 
 /* il logo non e' un fotogramma: niente fondo nero ne' ombra del monitor */

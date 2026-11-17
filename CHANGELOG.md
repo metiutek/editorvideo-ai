@@ -5,6 +5,9 @@ Le voci più recenti stanno in cima.
 ## Non ancora rilasciato
 
 ### Aggiunto
+- **Logo animato in testata**: un piccolo salto al caricamento, a ogni cambio di scheda
+  (monitor, pannello sinistro e destro) e quando si torna sulla scheda del browser. Spento con
+  "riduci movimento" del sistema.
 - **Copertina su richiesta**: nella scheda *cover* un campo per descrivere la copertina e
   allegare immagini (dal computer, trascinate o incollate). "ask the assistant" la passa alla
   chat con le immagini come riferimenti; "as options" le mette subito fra le opzioni.

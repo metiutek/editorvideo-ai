@@ -75,6 +75,14 @@ export default function App() {
   const [source, setSource] = useState(null)     // media aperto nel monitor
   const [tab, setTab] = useState('program')      // program | source
   const [leftTab, setLeftTab] = useState('media')      // media | libreria | web
+  // il logo saluta al caricamento, a ogni cambio di scheda e quando si torna
+  // sulla scheda del browser: una chiave nuova rimonta l'img e riparte l'animazione
+  const [ritorni, setRitorni] = useState(0)
+  useEffect(() => {
+    const torna = () => { if (document.visibilityState === 'visible') setRitorni((n) => n + 1) }
+    document.addEventListener('visibilitychange', torna)
+    return () => document.removeEventListener('visibilitychange', torna)
+  }, [])
   // L'assistente e' il cuore dell'app: e' la scheda aperta di default. Se
   // l'utente preferisce le proprieta' la scelta resta fra una sessione e l'altra.
   const [rightTab, setRightTabState] = useState(() => {
@@ -510,7 +518,8 @@ export default function App() {
       }}
     >
       <div className="topbar">
-        <span className="name"><img src="/logo.svg" alt="" className="marchio" />vedit</span>
+        <span className="name"><img key={`${tab}.${leftTab}.${rightTab}.${ritorni}`}
+          src="/logo.svg" alt="" className="marchio" />vedit</span>
         <button className="ghost" onClick={() => setDialog('new')}>
           <Icon name="nuovo" />new</button>
         <button className="ghost" onClick={() => setDialog('open')}>
