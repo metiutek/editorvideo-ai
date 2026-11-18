@@ -2,7 +2,7 @@
 
 Le voci più recenti stanno in cima.
 
-## Non ancora rilasciato
+## v0.6.0 — 2026-11-18 · Raccolte, gestione dei progetti, memoria del progetto
 
 ### Aggiunto
 - **Logo animato in testata**: un piccolo salto al caricamento, a ogni cambio di scheda
