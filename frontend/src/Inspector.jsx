@@ -10,21 +10,22 @@ const BLEND = ['normal', 'screen', 'add', 'multiply', 'overlay', 'softlight', 'h
 
 /** Pannello proprieta': clip selezionata, oppure progetto e master. */
 export default function Inspector({
-  project, effects, transitions, clip, playhead, run, setError, setBusy, onProva, onRif,
+  project, effects, transitions, clip, playhead, run, setError, setBusy, onProva, onRif, onRitocco,
 }) {
   const call = (op, args) => run(op, args).catch((e) => setError(e.message))
   return (
     <div className="inspector">
       {clip
         ? <ClipPanel clip={clip} effects={effects} transitions={transitions}
-            project={project} playhead={playhead} call={call} onProva={onProva} onRif={onRif} />
+            project={project} playhead={playhead} call={call} onProva={onProva} onRif={onRif}
+            onRitocco={onRitocco} />
         : <ProjectPanel project={project} effects={effects} call={call} setBusy={setBusy}
             setError={setError} onProva={onProva} />}
     </div>
   )
 }
 
-function ClipPanel({ clip, effects, transitions, project, playhead, call, onProva, onRif }) {
+function ClipPanel({ clip, effects, transitions, project, playhead, call, onProva, onRif, onRitocco }) {
   const clipTime = Math.max(0, playhead - clip.start)
   const set = (patch) => call('set_clip', { clip_id: clip.id, ...patch })
   const tr = clip.transform || {}
@@ -124,7 +125,7 @@ function ClipPanel({ clip, effects, transitions, project, playhead, call, onProv
       </div>
       </>)}
 
-      {clip.type === 'text' && <TextPanel clip={clip} call={call} />}
+      {clip.type === 'text' && <TextPanel clip={clip} call={call} onRitocco={onRitocco} />}
       {clip.type === 'html' && parametriParticelle(clip.html) && <ParticellePanel clip={clip} call={call} />}
       {clip.type === 'html' && <HtmlPanel clip={clip} call={call} />}
 
@@ -276,14 +277,58 @@ function TransitionPanel({ clip, transitions, project, call }) {
   )
 }
 
-function TextPanel({ clip, call }) {
+/**
+ * Il testo si scrive in una bozza locale: il monitor la mostra subito
+ * (`onRitocco`, sovrapposta al progetto da App) e la modifica parte quando si
+ * smette di scrivere un attimo, o uscendo dal campo. Prima ogni tasto era un
+ * set_text: la casella e il monitor aspettavano il server, e con le risposte
+ * in volo le lettere tornavano indietro o si perdevano.
+ */
+function TextPanel({ clip, call, onRitocco }) {
   const t = clip.text || {}
   const set = (patch) => call('set_text', { clip_id: clip.id, ...patch })
+  const [bozza, setBozza] = useState(t.text || '')
+  const sporca = useRef(false)
+  const timer = useRef(null)
+  const ultima = useRef({ id: clip.id, testo: bozza })
+
+  // testo cambiato da fuori (undo, agente) e qui niente in sospeso: si prende
+  useEffect(() => {
+    if (!sporca.current) { setBozza(t.text || ''); onRitocco?.(null) }
+  }, [clip.id, t.text])
+
+  const applica = (testo) => {
+    clearTimeout(timer.current)
+    if (!sporca.current) return
+    sporca.current = false
+    // a risposta arrivata la bozza e' nel documento (o e' fallita): via la sovrapposizione
+    if (testo !== (t.text || '')) set({ text: testo }).finally(() => { if (!sporca.current) onRitocco?.(null) })
+    else onRitocco?.(null)
+  }
+  // cambio di clip o pannello chiuso con una bozza in sospeso: parte lo stesso
+  useEffect(() => () => {
+    clearTimeout(timer.current)
+    if (sporca.current) {
+      sporca.current = false
+      call('set_text', { clip_id: ultima.current.id, text: ultima.current.testo })
+    }
+  }, [clip.id])
+
+  const scrivi = (testo) => {
+    setBozza(testo)
+    sporca.current = true
+    ultima.current = { id: clip.id, testo }
+    onRitocco?.({ id: clip.id, text: { text: testo } })
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => applica(testo), 400)
+  }
+
   return (
     <div className="group">
       <h4>text</h4>
       <div className="row wide">
-        <textarea rows={3} value={t.text || ''} onChange={(e) => set({ text: e.target.value })} />
+        <textarea rows={3} value={bozza} onChange={(e) => scrivi(e.target.value)}
+          onBlur={() => applica(bozza)} />
       </div>
       <Row label="size"><Num value={t.font_size ?? 64} min={8} max={400} step={2}
         onChange={(v) => set({ font_size: Math.round(v) })} /></Row>

@@ -111,8 +111,18 @@ globalThis.fetch = async (url, opts) => {
   if (path.endsWith('/waveform')) {
     return { ok: true, status: 200, json: async () => ({ peaks: Array.from({ length: 300 }, (_, i) => Math.abs(Math.sin(i / 9))), duration: 30 }) }
   }
+  // set_text cambia davvero il testo nella risposta: serve a vedere che la
+  // diretta disegna la clip di adesso, non quella di quando e' entrata in scena
+  if (path.endsWith('/api/op/set_text')) {
+    const a = JSON.parse(opts.body)
+    const project = structuredClone(FAKE['/api/state'].project)
+    for (const tr of project.tracks) for (const c of tr.clips) {
+      if (c.id === a.clip_id && 'text' in a) c.text = { ...c.text, text: a.text }
+    }
+    return { ok: true, status: 200, json: async () => ({ result: null, project, revision: 'abc124' }) }
+  }
   // le operazioni di editing rimandano semplicemente il progetto invariato
-  const body = FAKE[path] ?? { result: { id: 'c1' }, project: FAKE['/api/state'].project, revision: 'abc123' }
+  const body =FAKE[path] ?? { result: { id: 'c1' }, project: FAKE['/api/state'].project, revision: 'abc123' }
   return { ok: true, status: 200, json: async () => body }
 }
 
@@ -398,6 +408,44 @@ checks.push(
   ['proprieta: si conferma uscendo', dopoUscita.length === 1],
   ['proprieta: frecce su e giu', frecce.length >= 2],
   ['proprieta: tasto per rimettere il valore', !!root.querySelector('.inspector .reset')],
+)
+
+// ---- testo di una clip: il monitor lo mostra mentre si scrive ----------------
+// Prima ogni tasto era un set_text e il monitor aspettava il server; e anche a
+// risposta arrivata la diretta disegnava ancora la clip di quando era entrata
+// sotto la testina, quindi il testo nuovo non si vedeva affatto.
+for (let i = 0; i < 4; i++) {
+  dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }))
+}
+await new Promise((r) => setTimeout(r, 120))
+const clipTesto = [...root.querySelectorAll('.clip')].find((c) => c.textContent.includes('Titolo'))
+clipTesto?.dispatchEvent(new dom.window.PointerEvent('pointerdown', { bubbles: true, clientX: 40, clientY: 40 }))
+dom.window.document.dispatchEvent(new dom.window.PointerEvent('pointerup', { bubbles: true }))
+const casella = await attendi('casella del testo', () => root.querySelector('.inspector textarea'), 3000)
+  .catch(() => null)
+const livetext = () => root.querySelector('.livetext span')?.textContent
+const testoPrima = livetext()
+const primaTesto = chiamate.length
+if (casella) {
+  const scriviTa = Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set
+  for (const t of ['C', 'Ci', 'Cia', 'Ciao a tutti']) {
+    scriviTa.call(casella, t)
+    casella.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 20))
+  }
+}
+const testoSubito = livetext()
+const setTextSubito = chiamate.slice(primaTesto).filter((c) => c.url.includes('/api/op/set_text')).length
+await new Promise((r) => setTimeout(r, 700))
+const setText = chiamate.slice(primaTesto).filter((c) => c.url.includes('/api/op/set_text'))
+checks.push(
+  ['testo: la clip e in scena', testoPrima === 'Ciao'],
+  ['testo: il monitor mostra la bozza subito', testoSubito === 'Ciao a tutti'],
+  ['testo: niente operazione per tasto', setTextSubito === 0],
+  ['testo: una modifica sola a fine scrittura', setText.length === 1
+    && JSON.parse(setText[0].body).text === 'Ciao a tutti'],
+  ['testo: a risposta arrivata resta quello nuovo', livetext() === 'Ciao a tutti'
+    && casella?.value === 'Ciao a tutti'],
 )
 
 // ---- transizione lasciata sullo stacco -------------------------------------

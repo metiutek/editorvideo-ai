@@ -298,6 +298,11 @@ export default function LivePlayer({
   }, [])
 
   const media = Object.fromEntries((project?.media || []).map((m) => [m.id, m]))
+  // `attivi` cambia solo quando cambia l'insieme delle clip visibili: le clip
+  // vanno riprese dal progetto di adesso, se no testo, colore, fit e html
+  // restavano quelli di quando la clip e' entrata sotto la testina
+  const fresche = new Map()
+  for (const tr of project?.tracks || []) for (const c of tr.clips) fresche.set(c.id, c)
   const registra = (id) => (el) => { if (el) elementi.current.set(id, el); else elementi.current.delete(id) }
   const registraFrame = (id) => (el) => {
     if (el) frames.current.set(id, el)
@@ -308,7 +313,8 @@ export default function LivePlayer({
     <div className="live" ref={hostRef}>
       {box && (
         <div className="livecanvas" style={{ width: box.w, height: box.h }}>
-          {attivi.map(({ clip, track }) => {
+          {attivi.map(({ clip: vecchia, track }) => {
+            const clip = fresche.get(vecchia.id) || vecchia
             const m = clip.media ? media[clip.media] : null
             const chiave = clip.id
             if (track.kind === 'audio') {

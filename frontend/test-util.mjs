@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { leggiTrascinati } from './src/trascina.js'
 import { BLOCCO, PEZZO, caricaTrascinati, importaPercorsi, mandaFile } from './src/caricamento.js'
 import { IN_PARALLELO, _azzera, chiedi } from './src/mediaAssets.js'
-import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura, mostraEsatto,
+import { dettaglioStrumento, impronta, rispostaEq, isKf, sampleKf, transformBox, natura, mostraEsatto, conRitocco,
   dimensioni, formatoDi, vociComando } from './src/util.js'
 
 let ok = 0
@@ -29,6 +29,20 @@ test('menu "/": comandi dell\'editor, poi le skill', () => {
   assert.deepEqual(vociComando('/st', skill).map((v) => v.name), ['stop', 'style'])
   assert.deepEqual(vociComando('/man', skill).map((v) => v.name), ['caveman:caveman'])
   assert.deepEqual(vociComando('/big', skill).map((v) => v.name), ['titoli'])
+})
+
+test('testo in scrittura: la bozza va sopra al documento solo nella sua clip', () => {
+  const p = { tracks: [
+    { id: 'V1', clips: [{ id: 'c1', type: 'media' }] },
+    { id: 'V2', clips: [{ id: 't1', type: 'text', text: { text: 'Text', font_size: 80 } }] },
+  ] }
+  assert.equal(conRitocco(p, null), p)
+  assert.equal(conRitocco(p, { id: 'nessuna', text: { text: 'x' } }), p)
+  const v = conRitocco(p, { id: 't1', text: { text: 'Ciao' } })
+  assert.deepEqual(v.tracks[1].clips[0].text, { text: 'Ciao', font_size: 80 })
+  // il documento del server non si tocca, le tracce estranee restano le stesse
+  assert.equal(p.tracks[1].clips[0].text.text, 'Text')
+  assert.equal(v.tracks[0], p.tracks[0])
 })
 
 test('diretta: fotogramma esatto da fermi dove il browser non basta', () => {

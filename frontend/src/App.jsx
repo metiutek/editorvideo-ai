@@ -21,7 +21,7 @@ import SourceMonitor from './SourceMonitor.jsx'
 import Timeline from './Timeline.jsx'
 import { caricaTrascinati, importaPercorsi } from './caricamento.js'
 import { leggiTrascinati, useFineTrascinamento } from './trascina.js'
-import { clamp, findClip, fmt } from './util.js'
+import { clamp, conRitocco, findClip, fmt } from './util.js'
 
 const round3 = (v) => Math.round(v * 1000) / 1000
 
@@ -211,6 +211,17 @@ export default function App() {
   }, [project?.duration, playing])
 
   const selectedClip = project && selected ? findClip(project, selected) : null
+
+  // testo che si sta scrivendo nell'inspector: l'anteprima lo mostra subito,
+  // prima che set_text torni dal server (Inspector.TextPanel)
+  const [ritocco, setRitocco] = useState(null)
+  useEffect(() => {
+    if (!ritocco) return
+    const c = project ? findClip(project, ritocco.id) : null
+    // clip sparita, o il documento ha raggiunto la bozza: non serve piu'
+    if (!c || (c.text?.text ?? '') === ritocco.text.text) setRitocco(null)
+  }, [project, ritocco])
+  const projectVisto = conRitocco(project, ritocco)
 
   // ---- libreria -------------------------------------------------------------
   const applyPreset = useCallback((presetId, clipId) =>
@@ -520,6 +531,9 @@ export default function App() {
       <div className="topbar">
         <span className="name"><img key={`${tab}.${leftTab}.${rightTab}.${ritorni}`}
           src="/logo.svg" alt="" className="marchio" />vedit</span>
+        {/* gli strumenti si restringono (etichette via, poi scorrimento) invece
+            di spingere fuori dallo schermo export, che sta in fondo alla riga */}
+        <div className="strumenti">
         <button className="ghost" onClick={() => setDialog('new')}>
           <Icon name="nuovo" />new</button>
         <button className="ghost" onClick={() => setDialog('open')}>
@@ -562,6 +576,7 @@ export default function App() {
           onAggiungi={(kind) => run('add_particles', { kind, start: playhead, duration: 5 })
             .then((c) => setSelected(c.id)).catch((err) => setError(err.message))}
           onSuMisura={() => setDialog('particelle')} />
+        </div>
 
         <span className="spacer" />
         {project && raccolta && (
@@ -589,7 +604,8 @@ Its memory and reference images reach the assistant in every video`}
         <button className="ghost" disabled={!project}
           title="Publish an exported video to YouTube or TikTok"
           onClick={() => setDialog('pubblica')}><Icon name="pubblica" />publish</button>
-        <button className="primary" disabled={!project || !project.duration}
+        <button className="primary esporta" disabled={!project || !project.duration}
+          title={project && !project.duration ? 'Nothing to export: the timeline is empty' : 'Export the video'}
           onClick={() => setDialog('render')}><Icon name="esporta" />export</button>
       </div>
 
@@ -649,7 +665,8 @@ Its memory and reference images reach the assistant in every video`}
               setError={setError} playhead={playhead}
               onClose={() => { setSource(null); setTab('program') }} />
           ) : (
-            <Preview project={project} revision={revision} playhead={playhead} seek={seek}
+            <Preview project={projectVisto} revision={revision} playhead={playhead} seek={seek}
+              ritocco={!!ritocco}
               playing={playing} setPlaying={setPlaying} clip={selectedClip}
               run={run} setError={setError}
               pickArea={pickArea}
@@ -747,7 +764,7 @@ Its memory and reference images reach the assistant in every video`}
               <Inspector project={project} effects={sys?.effects || []}
                 transitions={sys?.transitions || []} clip={selectedClip}
                 playhead={playhead} run={run} setError={setError} setBusy={setBusy}
-                onProva={setProvaFx}
+                onProva={setProvaFx} onRitocco={setRitocco}
                 onRif={(id) => aggiungiRif({ kind: 'clip', id })} />
             )}
             {/* l'assistente resta montato anche dietro le altre schede: un turno

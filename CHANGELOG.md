@@ -50,6 +50,16 @@ Le voci più recenti stanno in cima.
   con tutti dentro.
 
 ### Corretto
+- **Il testo di una clip si vede mentre lo si scrive**: in diretta il monitor disegnava la clip
+  com'era quando era entrata sotto la testina, quindi testo, colore, fit e html cambiati
+  dall'inspector non comparivano finche' non si spostava la testina fuori e dentro. In piu' la
+  casella del testo mandava un `set_text` a ogni tasto e aspettava il server: ora scrive in una
+  bozza che il monitor mostra subito, e la modifica parte quando ci si ferma (un passo di undo
+  per pausa).
+- **Il tasto export non sparisce piu'**: la testata non andava a capo e la pagina non scorre,
+  quindi con raccolta, nome del video o finestra stretta export finiva fuori dallo schermo.
+  Ora gli strumenti si restringono (sotto i 1500 px restano solo icone, poi scorrono) ed
+  export, publish e il progetto restano sempre a vista.
 - **La timeline segue la testina**: in riproduzione la testina usciva dal bordo destro e non si
   vedeva piu' a che punto fosse il video. Vicino al bordo la vista gira pagina; da ferma
   (Home, salto) la testina torna in vista se e' fuori. Mai mentre la si trascina.

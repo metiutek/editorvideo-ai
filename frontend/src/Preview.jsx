@@ -19,7 +19,7 @@ const PRIMO = 4
  */
 export default function Preview({
   project, revision, playhead, seek, playing, setPlaying, clip, run, setError, prova,
-  diretta = true, pickArea = false, onArea, onCancelArea,
+  diretta = true, pickArea = false, onArea, onCancelArea, ritocco = false,
 }) {
   const videoRef = useRef(null)
   const imgRef = useRef(null)
@@ -113,7 +113,9 @@ export default function Preview({
   )
   // il fotogramma esatto copre la diretta solo se e' quello della testina: uno
   // vecchio mentre si trascina mostrerebbe l'istante sbagliato
-  const esatto = mostraEsatto({ diretta, prova, approssimato, playing, url: frame.url, pending: frame.pending })
+  // e mentre si scrive un testo il fotogramma e' quello di prima: coprirebbe la bozza
+  const esatto = !ritocco
+    && mostraEsatto({ diretta, prova, approssimato, playing, url: frame.url, pending: frame.pending })
 
   return (
     <div className="preview">

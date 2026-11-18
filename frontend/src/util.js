@@ -213,6 +213,28 @@ export function mostraEsatto({ diretta, prova, approssimato, playing, url, pendi
 }
 
 /**
+ * Il progetto come lo vede l'anteprima mentre si scrive un testo: la bozza
+ * dell'inspector (`{ id, text: {...} }`) sopra al documento del server, che
+ * arriva solo quando la modifica e' partita. Senza, il monitor restava fermo
+ * al testo di prima per tutto il tempo di un giro di rete per tasto.
+ * Ritorna lo stesso oggetto se non c'e' niente da sovrapporre.
+ */
+export function conRitocco(project, ritocco) {
+  if (!project || !ritocco?.id) return project
+  let trovato = false
+  const tracks = project.tracks.map((tr) => {
+    if (!tr.clips.some((c) => c.id === ritocco.id)) return tr
+    trovato = true
+    return {
+      ...tr,
+      clips: tr.clips.map((c) => (c.id === ritocco.id
+        ? { ...c, text: { ...(c.text || {}), ...ritocco.text } } : c)),
+    }
+  })
+  return trovato ? { ...project, tracks } : project
+}
+
+/**
  * Formati del video per rapporto d'aspetto. Il lato corto e' la qualita':
  * 9:16 a 1080 fa 1080x1920 (lo stesso conto di ``store.risoluzione``).
  */

@@ -1506,7 +1506,7 @@ button.link:hover { color: var(--text); background: none; }
   .sp-percorso { display: none; }
 }
 /* testata: il menu delle particelle non si allarga, raccolta e nome del video restano leggibili */
-.topbar > select { flex: 0 0 auto; width: auto; }
+.topbar select { flex: 0 0 auto; width: auto; }
 .topbar .ch-badge { flex: 0 1 auto; min-width: 70px; }
 .topbar .path.nome-progetto { flex: 0 1 auto; min-width: 60px; }
 
@@ -1523,3 +1523,22 @@ button.link:hover { color: var(--text); background: none; }
 .sp-nuova-skill { display: flex; flex-direction: column; gap: 6px; }
 .sp-nuova-skill textarea { min-height: 110px; }
 .memoria-tabs { margin: -4px 0 10px; }
+
+/* testata: gli strumenti stanno in un contenitore che si restringe. Sotto i
+   1500 px le azioni colorate restano solo icona (il nome e' nel title), poi
+   scorrono; export, publish e il progetto restano sempre a vista. Prima la riga
+   non andava a capo, il body e' overflow hidden e export finiva fuori schermo
+   appena c'erano raccolta e nome del video. */
+.topbar .strumenti {
+  display: flex; align-items: center; gap: 4px; min-width: 0; flex: 0 1 auto;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding: 2px 0;
+}
+.topbar .strumenti::-webkit-scrollbar { display: none; }
+.topbar .strumenti > * { flex: none; }
+.topbar > .spacer { min-width: 8px; }
+.topbar > button, .topbar > .menu-progetto { flex: none; }
+.topbar > button.ch-badge { flex: 0 1 auto; }
+.topbar .esporta { flex: none; margin-left: 2px; }
+@media (max-width: 1500px) {
+  .topbar .strumenti button.act { font-size: 0; gap: 0; padding: 0 3px; }
+}
